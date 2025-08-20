@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Linq;
 using userspace_backend.Common;
 using userspace_backend.Display;
+using userspace_backend.Logging;
 using userspace_backend.Model.AccelDefinitions;
 using userspace_backend.Model.EditableSettings;
 using userspace_backend.Model.ProfileComponents;
@@ -15,6 +16,13 @@ namespace userspace_backend.Model
 {
     public class ProfileModel : EditableSettingsCollection<DATA.Profile>
     {
+        private static ILoggingService? loggingService;
+
+        public static void InitializeLogging(ILoggingService? logger)
+        {
+            loggingService = logger;
+        }
+
         public ProfileModel(DATA.Profile dataObject, IModelValueValidator<string> nameValidator) : base(dataObject)
         {
             NameValidator = nameValidator;
@@ -40,6 +48,10 @@ namespace userspace_backend.Model
         public ICurvePreview XCurvePreview { get; protected set; }
 
         public ICurvePreview YCurvePreview { get; protected set; }
+
+        public ObservableCollection<CurvePoint> XLUTPoints { get; private set; } = new ObservableCollection<CurvePoint>();
+
+        public ObservableCollection<CurvePoint> YLUTPoints { get; private set; } = new ObservableCollection<CurvePoint>();
 
         [Obsolete("Use XCurvePreview instead")]
         public ICurvePreview CurvePreview => XCurvePreview;
@@ -77,6 +89,7 @@ namespace userspace_backend.Model
         protected void AnyCurveSettingCollectionChangedEventHandler(object? sender, EventArgs e)
         {
             // All settings collections currently require curve preview to be re-generated
+            loggingService?.LogDebug(LogSource.LUT, "AnyCurveSettingCollectionChangedEventHandler called for: {SenderType}", sender?.GetType().Name);
             RecalculateDriverDataAndCurvePreview();
         }
 
@@ -87,13 +100,19 @@ namespace userspace_backend.Model
 
         protected void RecalculateDriverDataAndCurvePreview()
         {
+            loggingService?.LogDebug(LogSource.LUT, "RecalculateDriverDataAndCurvePreview called");
             RecalculateDriverData();
 
             // Generate X curve points (original behavior)
+            loggingService?.LogDebug(LogSource.LUT, "Generating X curve points");
             XCurvePreview.GeneratePoints(CurrentValidatedDriverProfile);
 
             // Generate Y curve points by multiplying X curve outputs by YX ratio
             GenerateYCurvePoints();
+            loggingService?.LogDebug(LogSource.LUT, "Generated {PointCount} X curve points", XCurvePreview.Points?.Count);
+
+            // Update LUT points if acceleration type is LUT
+            UpdateLUTPoints();
         }
 
         private void GenerateYCurvePoints()
@@ -109,6 +128,43 @@ namespace userspace_backend.Model
                 MouseSpeed = xPoint.MouseSpeed,
                 Output = xPoint.Output * yxRatio
             }).ToList();
+        }
+
+        private void UpdateLUTPoints()
+        {
+            XLUTPoints.Clear();
+            YLUTPoints.Clear();
+
+            // Check if current acceleration type is LUT
+            if (Acceleration?.DefinitionType?.CurrentValidatedValue == DATA.Profiles.Acceleration.AccelerationDefinitionType.LookupTable)
+            {
+                var lutAccel = Acceleration.LookupTableAccel;
+                if (lutAccel?.Data?.CurrentValidatedValue?.Data != null)
+                {
+                    var lutData = lutAccel.Data.CurrentValidatedValue.Data;
+                    
+                    // LUT data is stored as pairs of (x, y) values
+                    for (int i = 0; i < lutData.Length - 1; i += 2)
+                    {
+                        var xPoint = new CurvePoint
+                        {
+                            MouseSpeed = lutData[i],
+                            Output = lutData[i + 1]
+                        };
+                        XLUTPoints.Add(xPoint);
+
+                        // Y points are scaled by YX ratio
+                        var yPoint = new CurvePoint
+                        {
+                            MouseSpeed = lutData[i],
+                            Output = lutData[i + 1] * YXRatio.CurrentValidatedValue
+                        };
+                        YLUTPoints.Add(yPoint);
+                    }
+
+                    loggingService?.LogDebug(LogSource.LUT, "Updated LUT points: {Count} points", XLUTPoints.Count);
+                }
+            }
         }
 
         protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()

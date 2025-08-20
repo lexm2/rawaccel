@@ -13,7 +13,7 @@ public partial class ProfilesPageView : UserControl
     {
         frameTimer = App.Services?.GetService<FrameTimerService>();
         InitializeComponent();
-        
+
         var contentControl = this.FindControl<ContentControl>("ProfileContentControl");
         if (contentControl != null)
         {
@@ -25,16 +25,14 @@ public partial class ProfilesPageView : UserControl
     {
         if (e.Property.Name == "Content" && frameTimer != null)
         {
-            Debug.WriteLine($"[PROFILES PAGE] ContentControl content changing from {e.OldValue?.GetType()?.Name} to {e.NewValue?.GetType()?.Name}");
             var stopwatch = Stopwatch.StartNew();
-            
+
             frameTimer.StartMonitoring("ProfilesPageView ContentControl content change");
-            
+
             // Stop monitoring after a longer delay to capture full rendering cycle
-            _ = System.Threading.Tasks.Task.Delay(200).ContinueWith(_ => 
+            _ = System.Threading.Tasks.Task.Delay(200).ContinueWith(_ =>
             {
                 frameTimer.StopMonitoring("ProfilesPageView ContentControl content change");
-                Debug.WriteLine($"[PROFILES PAGE] ContentControl content change completed in {stopwatch.ElapsedMilliseconds}ms");
             });
         }
     }

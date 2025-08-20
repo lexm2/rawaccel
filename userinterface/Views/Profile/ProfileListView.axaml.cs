@@ -1,10 +1,9 @@
 using Avalonia;
-using Avalonia.Animation;
-using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using Avalonia.Styling;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -12,7 +11,6 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using userinterface.Services;
 using userinterface.ViewModels.Profile;
@@ -43,7 +41,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         modalService = App.Services?.GetRequiredService<IModalService>() ?? throw new InvalidOperationException("ModalService not available");
         localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");
-        
+
         profilesModel = backEnd.Profiles ?? throw new ArgumentNullException(nameof(backEnd.Profiles));
         localizationService.PropertyChanged += OnLocalizationPropertyChanged;
         profilesModel.Profiles.CollectionChanged += OnProfilesCollectionChanged;
@@ -296,7 +294,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             Height = animationStateService.Config.ProfileHeight,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(8, 0, 8, animationStateService.Config.ProfileSpacing), // Start at collapsed position (Y=0)
+            Margin = new Thickness(8, 0, 8, animationStateService.Config.ProfileSpacing),
+            RenderTransform = TransformOperations.Parse("translate(0px, 0px)"), // Start at collapsed position
             Child = addProfileTextBlock
         };
 
@@ -338,7 +337,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             };
             deleteButton.Click += OnDeleteButtonClicked;
 
-                grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             Grid.SetColumn(deleteButton, 1);
             grid.Children.Add(deleteButton);
         }
@@ -349,7 +348,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             Height = animationStateService.Config.ProfileHeight,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(8, 0, 8, animationStateService.Config.ProfileSpacing), // Start at collapsed position (Y=0)
+            Margin = new Thickness(8, 0, 8, animationStateService.Config.ProfileSpacing),
+            RenderTransform = TransformOperations.Parse("translate(0px, 0px)"), // Start at collapsed position
             Child = grid,
             Opacity = 1.0,
             ZIndex = targetIndex
@@ -405,9 +405,13 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private async void OnDeleteButtonClicked(object? sender, RoutedEventArgs e)
     {
+        var logger = App.Services?.GetService<userspace_backend.Logging.ILoggingService>();
+        logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, "OnDeleteButtonClicked: Delete button clicked");
+
         // Prevent deletion during animations to avoid bugs
         if (animationStateService.AreAnimationsActive)
         {
+            logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, "OnDeleteButtonClicked: Animations active, returning");
             return;
         }
 
@@ -417,22 +421,41 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             grid.Parent is Border border)
         {
             var profileIndex = allItems.IndexOf(border) - 1; // Subtract 1 for add button
+            logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, $"OnDeleteButtonClicked: Profile index = {profileIndex}, Total profiles = {profilesModel.Profiles.Count}");
+
             if (profileIndex >= 0 && profileIndex < profilesModel.Profiles.Count)
             {
                 var profileToDelete = profilesModel.Profiles[profileIndex];
+                logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, $"OnDeleteButtonClicked: Profile to delete = '{profileToDelete.Name.ModelValue}'");
 
                 // Show confirmation modal
+                logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, "OnDeleteButtonClicked: Calling ShowConfirmationAsync");
                 var confirmed = await modalService.ShowConfirmationAsync(
                     "ProfileDeleteTitle",
                     "ProfileDeleteMessage",
                     "ProfileDeleteConfirm",
                     "ModalCancel");
 
+                logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, $"OnDeleteButtonClicked: Modal result = {confirmed}");
+
                 if (confirmed)
                 {
+                    logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, "OnDeleteButtonClicked: User confirmed, removing profile");
                     profilesModel.RemoveProfile(profileToDelete);
                 }
+                else
+                {
+                    logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, "OnDeleteButtonClicked: User cancelled");
+                }
             }
+            else
+            {
+                logger?.LogError(userspace_backend.Logging.LogSource.Modal, $"OnDeleteButtonClicked: Invalid profile index {profileIndex}");
+            }
+        }
+        else
+        {
+            logger?.LogError(userspace_backend.Logging.LogSource.Modal, "OnDeleteButtonClicked: Could not find parent elements");
         }
     }
 
@@ -441,13 +464,32 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         return itemIndex == 0 ? 0 : (itemIndex * (animationStateService.Config.ProfileHeight + animationStateService.Config.ProfileSpacing)) + animationStateService.Config.FirstIndexOffset;
     }
 
+    private static double ExtractYFromTransform(TransformOperations? transform)
+    {
+        if (transform == null) return 0;
+
+        // Parse the transform string to extract Y position
+        // TransformOperations typically stores as "translate(0px, YYpx)"
+        var transformString = transform.ToString();
+        if (string.IsNullOrEmpty(transformString)) return 0;
+
+        // Look for translate pattern
+        var match = System.Text.RegularExpressions.Regex.Match(transformString, @"translate\([^,]+,\s*([+-]?\d*\.?\d+)px\)");
+        if (match.Success && double.TryParse(match.Groups[1].Value, out var y))
+        {
+            return y;
+        }
+
+        return 0;
+    }
+
     private void UpdateAllZIndexes()
     {
         var itemCount = allItems.Count;
         for (int i = 0; i < itemCount; i++)
         {
             if (i >= allItems.Count) break;
-            
+
             allItems[i].ZIndex = i;
         }
     }
@@ -472,33 +514,33 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
     }
 
 
-    private async Task AnimateElementToMarginPosition(int elementIndex, int position, int staggerIndex = 0)
+    private async Task AnimateElementToTransformPosition(int elementIndex, int position, int staggerIndex = 0)
     {
         if (elementIndex >= allItems.Count) return;
 
         var element = allItems[elementIndex];
         var targetY = CalculatePositionForIndex(position);
-        var targetMargin = new Thickness(8, targetY, 8, animationStateService.Config.ProfileSpacing);
-        
-        // Get current margin to ensure we're changing from a different state
-        var currentY = element.Margin.Top;
-        
+
+        // Get current transform Y position
+        var currentTransform = element.RenderTransform as TransformOperations;
+        var currentY = ExtractYFromTransform(currentTransform);
+
         // Skip animation if already at target position
         if (Math.Abs(currentY - targetY) < 0.1)
         {
             element.ZIndex = position;
             return;
         }
-        
+
         // Add animation class to enable CSS transitions
         element.Classes.Add("animate-position");
-        
+
         if (staggerIndex > 0)
         {
             await Task.Delay(staggerIndex * animationStateService.Config.StaggerDelayMs);
         }
 
-        element.Margin = targetMargin;
+        element.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
         element.ZIndex = position;
     }
 
@@ -514,12 +556,13 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         for (int i = 0; i < itemCount; i++)
         {
             if (i >= allItems.Count) break;
-            
+
             int targetPosition = i + 1;
             var targetY = CalculatePositionForIndex(targetPosition);
-            
+
             // Check if already at target position
-            var currentY = allItems[i].Margin.Top;
+            var currentTransform = allItems[i].RenderTransform as TransformOperations;
+            var currentY = ExtractYFromTransform(currentTransform);
             if (Math.Abs(currentY - targetY) < 0.1)
             {
                 allItems[i].ZIndex = targetPosition;
@@ -538,7 +581,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
                 staggerIndex = Math.Min(i, 3);
             }
 
-            animationTasks.Add(AnimateElementToMarginPosition(i, targetPosition, staggerIndex));
+            animationTasks.Add(AnimateElementToTransformPosition(i, targetPosition, staggerIndex));
         }
 
         if (animationTasks.Count > 0)
@@ -546,7 +589,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             try
             {
                 await Task.WhenAll(animationTasks);
-                
+
                 await Task.Delay(animationStateService.Config.AnimationCompleteDelayMs);
             }
             catch (Exception)
@@ -567,7 +610,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         for (int i = 1; i < itemCount; i++)
         {
             if (i >= allItems.Count) break;
-            
+
             allItems[i].Classes.Remove("Selected");
         }
 
@@ -584,7 +627,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             if (currentIndex >= 0 && currentIndex < GetProfileCount())
             {
                 int itemIndex = currentIndex + 1; // Convert to item index
-                
+
                 if (itemIndex < allItems.Count)
                 {
                     allItems[itemIndex].Classes.Add("Selected");
@@ -604,9 +647,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         for (int i = 0; i < GetProfileCount() && i < profilesModel.Profiles.Count; i++)
         {
             int itemIndex = i + 1; // Convert to item index
-            
+
             if (itemIndex >= allItems.Count) break;
-            
+
             var border = allItems[itemIndex];
             var profile = profilesModel.Profiles[i];
 
@@ -625,7 +668,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
     {
         // Small delay to ensure elements are rendered before animating
         await Task.Delay(animationStateService.Config.ElementRenderDelayMs);
-        
+
         await AnimateAllElementsToPositions(-1);
     }
 
@@ -643,8 +686,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         for (int i = 0; i < itemCount; i++)
         {
             if (i >= allItems.Count) break;
-            
-            animationTasks.Add(CollapseElementToMarginPosition(i, i * animationStateService.Config.CollapseStaggerDelayMs));
+
+            animationTasks.Add(CollapseElementToTransformPosition(i, i * animationStateService.Config.CollapseStaggerDelayMs));
         }
 
         try
@@ -660,21 +703,21 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         }
     }
 
-    private async Task CollapseElementToMarginPosition(int elementIndex, int delayMs = 0)
+    private async Task CollapseElementToTransformPosition(int elementIndex, int delayMs = 0)
     {
         if (elementIndex >= allItems.Count) return;
 
         var element = allItems[elementIndex];
-        
+
         // Add animation class to enable CSS transitions
         element.Classes.Add("animate-position");
-        
+
         if (delayMs > 0)
         {
             await Task.Delay(delayMs);
         }
 
-        element.Margin = new Thickness(8, 0, 8, animationStateService.Config.ProfileSpacing);
+        element.RenderTransform = TransformOperations.Parse("translate(0px, 0px)");
     }
 
     public bool AreAnimationsActive => animationStateService.AreAnimationsActive;

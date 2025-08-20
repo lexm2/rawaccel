@@ -1,8 +1,21 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using System;
+using userspace_backend.Logging;
 
 namespace userspace_backend.Model.EditableSettings
 {
+    public static class EditableSettingLogging
+    {
+        private static ILoggingService? loggingService;
+
+        public static void Initialize(ILoggingService? logger)
+        {
+            loggingService = logger;
+        }
+
+        internal static ILoggingService? Logger => loggingService;
+    }
+
     public partial class EditableSetting<T> : ObservableObject, IEditableSetting where T : IComparable
     {
         /// <summary>
@@ -39,6 +52,8 @@ namespace userspace_backend.Model.EditableSettings
             UpdateModelValueFromLastKnown();
             UpdateInterfaceValue();
             AutoUpdateFromInterface = autoUpdateFromInterface;
+            
+            EditableSettingLogging.Logger?.LogDebug(LogSource.Backend, "EditableSetting '{DisplayName}' initialized with value: {InitialValue}", displayName, initialValue);
         }
 
         /// <summary>
@@ -84,12 +99,12 @@ namespace userspace_backend.Model.EditableSettings
         {
             if (string.IsNullOrEmpty(InterfaceValue))
             {
-                UpdateInterfaceValue();
                 return false;
             }
 
             if (!Parser.TryParse(InterfaceValue.Trim(), out T parsedValue))
             {
+                EditableSettingLogging.Logger?.LogDebug(LogSource.Backend, "EditableSetting '{DisplayName}' parsing failed for value: {InterfaceValue}", DisplayName, InterfaceValue);
                 UpdateInterfaceValue();
                 return false;
             }
@@ -111,10 +126,12 @@ namespace userspace_backend.Model.EditableSettings
 
             if (!Validator.Validate(parsedValue))
             {
+                EditableSettingLogging.Logger?.LogDebug(LogSource.Backend, "EditableSetting '{DisplayName}' validation failed for value: {ParsedValue}", DisplayName, parsedValue);
                 UpdateInterfaceValue();
                 return false;
             }
 
+            EditableSettingLogging.Logger?.LogDebug(LogSource.Backend, "EditableSetting '{DisplayName}' value changed from {OldValue} to {NewValue}", DisplayName, ModelValue, parsedValue);
             UpdatedModeValue(parsedValue);
             return true;
         }

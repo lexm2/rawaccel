@@ -1,5 +1,6 @@
 using Avalonia.Controls;
-using System.Diagnostics;
+using Avalonia.Input;
+using LiveChartsCore.SkiaSharpView.Avalonia;
 using userinterface.ViewModels.Profile;
 
 namespace userinterface.Views.Profile;
@@ -20,17 +21,32 @@ public partial class ProfileChartView : UserControl
             return;
 
         isChartInitialized = true;
-        
+
         try
         {
             if (!viewModel.IsInitialized)
             {
                 await viewModel.InitializeAsync();
             }
+
+            // Add click handler to the chart
+            var chart = this.FindControl<CartesianChart>("Chart");
+            if (chart != null)
+            {
+                chart.PointerPressed += OnChartPointerPressed;
+            }
         }
         catch (System.Exception ex)
         {
-            Debug.WriteLine($"[CHART INIT] Error during initialization: {ex.Message}");
         }
+    }
+
+    private void OnChartPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not CartesianChart chart || DataContext is not ProfileChartViewModel viewModel)
+            return;
+
+        var position = e.GetPosition(chart);
+        viewModel.HandleChartClick(chart, position.X, position.Y);
     }
 }

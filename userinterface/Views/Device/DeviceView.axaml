@@ -4,10 +4,17 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:userinterface.ViewModels.Device"
              xmlns:controls="using:userinterface.Controls"
+             xmlns:converters="using:userinterface.Converters"
+             xmlns:ext="using:userinterface.Extensions"
              mc:Ignorable="d"
              d:DesignWidth="800"
              x:Class="userinterface.Views.Device.DeviceView"
              x:DataType="vm:DeviceViewModel">
+
+	<UserControl.Resources>
+		<converters:DeviceNameConverter x:Key="DeviceNameConverter"/>
+		<converters:IsActiveDeviceConverter x:Key="IsActiveDeviceConverter"/>
+	</UserControl.Resources>
 
 	<UserControl.Styles>
 		<Style Selector="Button.DeleteButton">
@@ -113,10 +120,51 @@
 			<Grid ColumnDefinitions="*,*"
                   HorizontalAlignment="Stretch"
                   Margin="26,8,8,8">
-				<ContentControl Grid.Column="0"
-                                HorizontalAlignment="Stretch"
-                                Content="{Binding HWIDField}"
-                                Margin="0,0,16,0" />
+				<DockPanel Grid.Column="0"
+                           Margin="0,0,16,0">
+					<TextBlock DockPanel.Dock="Left"
+                               Text="{ext:Localized DeviceHardwareDeviceLabel}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+					<Button DockPanel.Dock="Right"
+                            Margin="8,0,0,0"
+                            Command="{Binding RefreshDevicesCommand}"
+                            ToolTip.Tip="{ext:Localized DeviceRefreshTooltip}"
+                            Width="32"
+                            Height="32"
+                            Background="Transparent"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource SystemAccentColor}"
+                            CornerRadius="4"
+                            Cursor="Hand">
+						<PathIcon Data="{StaticResource arrow_sync_circle_regular}" 
+                                  Width="16" 
+                                  Height="16"
+                                  Foreground="{DynamicResource SystemAccentColor}" />
+					</Button>
+					<ComboBox ItemsSource="{Binding AvailableDevices}"
+                              SelectedItem="{Binding SelectedDevice}"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center"
+                              Margin="0,0,8,0">
+						<ComboBox.ItemTemplate>
+							<DataTemplate>
+								<Grid ColumnDefinitions="*,Auto">
+									<TextBlock Grid.Column="0" 
+									           Text="{Binding Converter={StaticResource DeviceNameConverter}}" 
+									           VerticalAlignment="Center" />
+									<Ellipse Grid.Column="1" 
+									         Width="8" 
+									         Height="8" 
+									         Fill="#00FF00" 
+									         Margin="8,0,0,0"
+									         VerticalAlignment="Center"
+									         IsVisible="{Binding Converter={StaticResource IsActiveDeviceConverter}}" />
+								</Grid>
+							</DataTemplate>
+						</ComboBox.ItemTemplate>
+					</ComboBox>
+				</DockPanel>
 
 				<ContentControl Grid.Column="1"
                                 HorizontalAlignment="Left"

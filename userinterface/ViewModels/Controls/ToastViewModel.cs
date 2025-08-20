@@ -1,5 +1,4 @@
-﻿using Avalonia.Animation;
-using Avalonia.Threading;
+﻿using Avalonia.Threading;
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -16,6 +15,7 @@ namespace userinterface.ViewModels.Controls
     {
         private readonly INotificationService notificationService;
         private bool isVisible;
+        private bool showProgressBar = true;
         private string message = string.Empty;
         private ToastType type;
         private double progress = 100;
@@ -27,6 +27,14 @@ namespace userinterface.ViewModels.Controls
             this.notificationService.ToastRequested += OnToastRequested;
             this.notificationService.ToastDismissed += OnToastDismissed;
             CloseCommand = new RelayCommand(Close);
+            Id = Guid.NewGuid();
+        }
+
+        public ToastViewModel(INotificationService notificationService, Guid id)
+        {
+            this.notificationService = notificationService;
+            CloseCommand = new RelayCommand(Close);
+            Id = id;
         }
 
         public bool IsVisible
@@ -35,6 +43,16 @@ namespace userinterface.ViewModels.Controls
             set
             {
                 isVisible = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool ShowProgressBar
+        {
+            get => showProgressBar;
+            set
+            {
+                showProgressBar = value;
                 OnPropertyChanged();
             }
         }
@@ -70,6 +88,10 @@ namespace userinterface.ViewModels.Controls
         }
 
         public ICommand CloseCommand { get; }
+
+        public Guid Id { get; private set; }
+
+        public event EventHandler<Guid>? ToastExpired;
 
         private async void OnToastRequested(object? sender, ToastNotificationEventArgs e)
         {
@@ -120,7 +142,8 @@ namespace userinterface.ViewModels.Controls
                                 Progress = 0;
                                 if (IsVisible)
                                 {
-                                    notificationService.HideToast();
+                                    IsVisible = false;
+                                    ToastExpired?.Invoke(this, Id);
                                 }
                             });
                         }
@@ -138,9 +161,35 @@ namespace userinterface.ViewModels.Controls
             }
         }
 
-        private void Close()
+        public void SetToastData(string message, ToastType type, TimeSpan duration)
         {
-            notificationService.HideToast();
+            Message = message;
+            Type = type;
+            IsVisible = true;
+            ShowProgressBar = true;
+            Progress = 100;
+
+            _ = StartProgressAnimation(duration);
+        }
+
+        public void Close()
+        {
+            animationCancellation?.Cancel();
+            Progress = 0;
+            if (IsVisible)
+            {
+                IsVisible = false;
+                ToastExpired?.Invoke(this, Id);
+            }
+        }
+
+        public void ForceClose()
+        {
+            animationCancellation?.Cancel();
+            IsVisible = false;
+            ShowProgressBar = false;
+            Progress = 0;
+            ToastExpired?.Invoke(this, Id);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -154,12 +203,6 @@ namespace userinterface.ViewModels.Controls
         {
             animationCancellation?.Cancel();
             animationCancellation?.Dispose();
-
-            if (notificationService != null)
-            {
-                notificationService.ToastRequested -= OnToastRequested;
-                notificationService.ToastDismissed -= OnToastDismissed;
-            }
         }
     }
 }

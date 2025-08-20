@@ -1,15 +1,10 @@
 using Avalonia;
-using Avalonia.Animation;
-using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
-using Avalonia.Styling;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
-using System.Security.AccessControl;
 using System.Threading.Tasks;
 using userinterface.Services;
 using userinterface.ViewModels;
@@ -17,7 +12,7 @@ using userinterface.ViewModels.Controls;
 using userinterface.ViewModels.Settings;
 using userinterface.Views;
 using userspace_backend;
-using Windows.System;
+using userspace_backend.Hardware;
 using DATA = userspace_backend.Data;
 
 namespace userinterface;
@@ -25,6 +20,8 @@ namespace userinterface;
 public partial class App : Application
 {
     public static IServiceProvider? Services { get; private set; }
+    public static bool IsAppLoaded { get; private set; }
+    public static event Action? AppLoadCompleted;
 
     public override void Initialize()
     {
@@ -35,21 +32,9 @@ public partial class App : Application
     {
         var services = new ServiceCollection();
 
-        // Register logging
-        services.AddLogging(builder =>
-        {
-            // Change this to be "LogLevel.Debug" if you want to see logs.
-#if DEBUG
-            builder.AddDebug();
-            builder.SetMinimumLevel(LogLevel.Warning);
-#else
-            builder.SetMinimumLevel(LogLevel.Warning);
-#endif
-        });
-
         // Register services
         services.AddSingleton<INotificationService>(provider =>
-            new NotificationService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>()));
+            new NotificationService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>(), provider.GetRequiredService<userspace_backend.Logging.ILoggingService>()));
         services.AddSingleton<IModalService>(provider =>
             new ModalService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IThemeService>(provider =>
@@ -58,14 +43,27 @@ public partial class App : Application
         services.AddSingleton<LocalizationService>();
         services.AddSingleton<FrameTimerService>();
         services.AddSingleton<PreviewChartRenderer>();
+        services.AddSingleton<IMouseTracker, MouseTracker>();
         services.AddSingleton<IAnimationStateService, AnimationStateService>();
 
+        // Register logging service
+        services.AddSingleton<userspace_backend.Logging.ILoggingService>(provider =>
+        {
+            var bootstrapper = BootstrapBackEnd();
+            var settings = bootstrapper.LoadSettings();
+            var loggingConfig = settings?.LoggingConfiguration ?? new userspace_backend.Logging.LoggingConfiguration();
+            return new userspace_backend.Logging.LoggingService(loggingConfig);
+        });
+
         // Register backend services
+        services.AddSingleton<IDeviceInfoProvider, DeviceInfoProvider>();
         services.AddSingleton<Bootstrapper>(provider => BootstrapBackEnd());
         services.AddSingleton<BackEnd>(provider =>
         {
             var bootstrapper = provider.GetRequiredService<Bootstrapper>();
-            var backEnd = new BackEnd(bootstrapper);
+            var deviceInfoProvider = provider.GetRequiredService<IDeviceInfoProvider>();
+            var loggingService = provider.GetRequiredService<userspace_backend.Logging.ILoggingService>();
+            var backEnd = new BackEnd(bootstrapper, deviceInfoProvider, loggingService);
             backEnd.Load();
             return backEnd;
         });
@@ -92,19 +90,15 @@ public partial class App : Application
             };
 
             // Set up the toast control (was already created in MainWindow.axaml)
-            var toastView = mainWindow.FindControl<Views.Controls.ToastView>("ToastView");
-            if (toastView != null)
-            {
-                toastView.DataContext = Services.GetRequiredService<ToastViewModel>();
-            }
 
             desktop.MainWindow = mainWindow;
 
+            // Mark app as loaded after MainWindow is created and assigned
+            IsAppLoaded = true;
+            AppLoadCompleted?.Invoke();
+
             // Preload libraries that cause first-page stutter
             _ = PreloadLibrariesAsync();
-
-            // Show alpha build warning modal
-            _ = ShowAlphaBuildWarningAsync();
 
 #if DEBUG
             desktop.MainWindow.AttachDevTools();
@@ -122,8 +116,9 @@ public partial class App : Application
                 provider.GetRequiredService<BackEnd>(),
                 provider.GetRequiredService<IThemeService>(),
                 provider.GetRequiredService<ISettingsService>(),
-                provider.GetRequiredService<FrameTimerService>()));
-        services.AddSingleton<ToastViewModel>();
+                provider.GetRequiredService<FrameTimerService>(),
+                provider.GetRequiredService<INotificationService>()));
+        services.AddSingleton<ToastContainerViewModel>();
 
         // Device ViewModels
         services.AddTransient<ViewModels.Device.DevicesPageViewModel>(provider =>
@@ -148,7 +143,8 @@ public partial class App : Application
         services.AddTransient<ViewModels.Profile.ProfileSettingsViewModel>(provider =>
             new ViewModels.Profile.ProfileSettingsViewModel(
                 provider.GetRequiredService<INotificationService>(),
-                provider.GetRequiredService<LocalizationService>()));
+                provider.GetRequiredService<LocalizationService>(),
+                provider.GetRequiredService<IModalService>()));
         services.AddTransient<ViewModels.Profile.ProfileChartViewModel>();
         services.AddTransient<ViewModels.Profile.AccelerationFormulaSettingsViewModel>();
         services.AddTransient<ViewModels.Profile.AccelerationLUTSettingsViewModel>();
@@ -166,6 +162,9 @@ public partial class App : Application
         services.AddTransient<SettingsPageViewModel>();
         services.AddTransient<ViewModels.Settings.GeneralSettingsViewModel>();
         services.AddTransient<ViewModels.Settings.SupportViewModel>();
+        services.AddTransient<ViewModels.Settings.DevicesSettingsViewModel>();
+        services.AddTransient<ViewModels.Settings.MappingsSettingsViewModel>();
+        services.AddTransient<ViewModels.Settings.ProfilesSettingsViewModel>();
 
         // Control ViewModels
         services.AddTransient<ViewModels.Controls.DualColumnLabelFieldViewModel>(provider =>
@@ -243,20 +242,11 @@ public partial class App : Application
                 ShowToastNotifications = true,
                 ShowConfirmModals = true,
                 Theme = "Dark",
-                Language = "ja-JP"
+                Language = "en-US"
             },
         };
     }
 
-    private async Task ShowAlphaBuildWarningAsync()
-    {
-        var modalService = Services?.GetService<IModalService>();
-        if (modalService != null)
-        {
-            var warningView = new Views.Controls.AlphaBuildWarningView();
-            await modalService.ShowDialogAsync<bool>(warningView);
-        }
-    }
 
     public static void OpenBugReportUrl()
     {
@@ -270,7 +260,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to open bug report URL: {ex.Message}");
+            Services?.GetService<userspace_backend.Logging.ILoggingService>()?.LogError(userspace_backend.Logging.LogSource.System, ex, "Failed to open bug report URL");
         }
     }
 
@@ -286,7 +276,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to open Discord URL: {ex.Message}");
+            Services?.GetService<userspace_backend.Logging.ILoggingService>()?.LogError(userspace_backend.Logging.LogSource.System, ex, "Failed to open Discord URL");
         }
     }
 
@@ -305,8 +295,6 @@ public partial class App : Application
     {
         try
         {
-            Debug.WriteLine("[PRELOAD] Starting library preload...");
-
             await Task.Run(() =>
             {
                 try
@@ -320,22 +308,21 @@ public partial class App : Application
                     _ = typeof(LiveChartsCore.CartesianChart<>).Assembly;
 
                     _ = typeof(Avalonia.Controls.ItemsRepeater).Assembly;
-                    
+
                     _ = typeof(System.Security.Cryptography.MD5).Assembly;
-                    
+
                     _ = typeof(Avalonia.Media.Imaging.Bitmap).Assembly;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[PRELOAD] Library loading failed: {ex.Message}");
+                    Services?.GetService<userspace_backend.Logging.ILoggingService>()?.LogError(userspace_backend.Logging.LogSource.System, ex, "Failed to preload library during async initialization");
                 }
             });
 
-            Debug.WriteLine("[PRELOAD] All libraries preloaded successfully");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[PRELOAD] Preload task failed: {ex.Message}");
+            Services?.GetService<userspace_backend.Logging.ILoggingService>()?.LogError(userspace_backend.Logging.LogSource.System, ex, "Failed during PreloadLibrariesAsync");
         }
     }
 
@@ -361,7 +348,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[STARTUP] Failed to apply startup settings: {ex.Message}");
+            Services?.GetService<userspace_backend.Logging.ILoggingService>()?.LogError(userspace_backend.Logging.LogSource.System, ex, "Failed to apply startup settings");
         }
     }
 }

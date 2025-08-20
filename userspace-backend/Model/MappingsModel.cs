@@ -46,7 +46,13 @@ namespace userspace_backend.Model
 
         public MappingModel GetMappingToSetActive()
         {
-            return Mappings.FirstOrDefault(m => m.SetActive);
+            var activeMapping = GetActiveMapping();
+            if (activeMapping == null)
+            {
+                NotificationManager.TriggerNotification("NoActiveMappingFoundUsingDefault", NotificationType.Error);
+                return Mappings.FirstOrDefault();
+            }
+            return activeMapping;
         }
 
         public MappingModel? GetActiveMapping()

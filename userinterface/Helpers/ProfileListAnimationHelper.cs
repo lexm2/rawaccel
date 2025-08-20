@@ -1,19 +1,16 @@
+using Avalonia;
 using Avalonia.Animation;
-using Avalonia.Controls;
-using Avalonia.Media;
 using Avalonia.Animation.Easings;
+using Avalonia.Controls;
+using Avalonia.Styling;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Diagnostics;
-using Avalonia.Layout;
-using Avalonia;
-using System.Linq;
-using Avalonia.Styling;
-using System.Runtime.CompilerServices;
 using userinterface.Services;
+using userspace_backend.Logging;
 
 namespace userinterface.Helpers;
 
@@ -24,23 +21,24 @@ public class ProfileListAnimationHelper : IDisposable
     private readonly Border addProfileButton;
     private readonly IAnimationStateService animationStateService;
     private bool disposed = false;
-    
+    private readonly ILoggingService? loggingService;
+
     private readonly FrameTimerService frameTimer;
-    
+
     // Object pools for memory optimization
     private readonly ObjectPool<Animation> animationPool = new(() => new Animation());
     private readonly ObjectPool<List<Task>> taskListPool = new(() => new List<Task>());
     // CancellationTokenSource can't be reused after cancellation, so we just dispose them
-    
+
     // Caches for performance optimization
     private readonly Dictionary<int, double> positionCache = new();
     private readonly Dictionary<int, Button> deleteButtonCache = new();
     private readonly Dictionary<string, Animation> animationTemplateCache = new();
-    
+
     // Pre-built animations for common operations
     private Animation? cachedProfileMoveAnimation;
     private Animation? cachedProfileCollapseAnimation;
-    
+
     // Performance counters
     private volatile int activeAnimationCount = 0;
 
@@ -51,6 +49,7 @@ public class ProfileListAnimationHelper : IDisposable
         this.addProfileButton = addProfileButton ?? throw new ArgumentNullException(nameof(addProfileButton));
         this.frameTimer = frameTimer ?? throw new ArgumentNullException(nameof(frameTimer));
         this.animationStateService = animationStateService ?? throw new ArgumentNullException(nameof(animationStateService));
+        this.loggingService = App.Services?.GetService(typeof(ILoggingService)) as ILoggingService;
     }
 
     public bool AreAnimationsActive
@@ -66,14 +65,14 @@ public class ProfileListAnimationHelper : IDisposable
         var cacheKey = includeAddButton ? index : index + 1000;
         if (positionCache.TryGetValue(cacheKey, out var cachedPosition))
             return cachedPosition;
-            
+
         var adjustedIndex = includeAddButton ? index + 1 : index;
         var position = adjustedIndex == 0 ? 0 : (adjustedIndex * (animationStateService.Config.ProfileHeight + animationStateService.Config.ProfileSpacing)) + animationStateService.Config.FirstIndexOffset;
-        
+
         positionCache[cacheKey] = position;
         return position;
     }
-    
+
     private Animation GetOptimizedProfileMoveAnimation()
     {
         if (cachedProfileMoveAnimation == null)
@@ -87,7 +86,7 @@ public class ProfileListAnimationHelper : IDisposable
         }
         return cachedProfileMoveAnimation;
     }
-    
+
     private Animation GetOptimizedProfileCollapseAnimation()
     {
         if (cachedProfileCollapseAnimation == null)
@@ -101,7 +100,7 @@ public class ProfileListAnimationHelper : IDisposable
         }
         return cachedProfileCollapseAnimation;
     }
-    
+
     public void UpdateAllZIndexes()
     {
         for (int i = 0; i < profiles.Count; i++)
@@ -109,7 +108,7 @@ public class ProfileListAnimationHelper : IDisposable
             profiles[i].ZIndex = i;
         }
     }
-    
+
     public void UpdateDeleteButtonStates()
     {
         var isActive = animationStateService.AreAnimationsActive;
@@ -121,7 +120,7 @@ public class ProfileListAnimationHelper : IDisposable
                 cachedButton.IsEnabled = !isActive;
                 continue;
             }
-            
+
             if (profiles[i].Child is Grid grid)
             {
                 var deleteButton = grid.Children.OfType<Button>().FirstOrDefault(b => b.Classes.Contains("DeleteButton"));
@@ -133,7 +132,7 @@ public class ProfileListAnimationHelper : IDisposable
             }
         }
     }
-    
+
     public void CancelAllAnimations()
     {
         animationStateService.CancelAllAnimations("ProfileListAnimationHelper");
@@ -186,9 +185,9 @@ public class ProfileListAnimationHelper : IDisposable
                     new Setter { Property = Avalonia.Controls.Border.OpacityProperty, Value = 1.0 }
                 }
             });
-            
+
             await animation.RunAsync(profiles[profileIndex], cancellationToken);
-            
+
             if (!cancellationToken.IsCancellationRequested)
             {
                 profiles[profileIndex].Margin = targetMargin;
@@ -198,20 +197,18 @@ public class ProfileListAnimationHelper : IDisposable
         catch (OperationCanceledException)
         {
             // Silently handle cancellation - this is expected behavior
-            Debug.WriteLine($"[ANIMATION] Animation for profile {profileIndex} was canceled");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[ANIMATION] Unexpected error in animation for profile {profileIndex}: {ex.Message}");
         }
         finally
         {
             animationStateService.UnregisterAnimation("ProfileListAnimationHelper", profileIndex);
-            
+
             var remainingCount = Interlocked.Decrement(ref activeAnimationCount);
-            
+
             // Note: The service handles global animation state automatically
-            Debug.WriteLine($"[ANIMATION] Cleaned up animation for profile {profileIndex}, remaining: {remainingCount}");
+            loggingService?.LogDebug(LogSource.UI, "[ANIMATION] Cleaned up animation for profile {ProfileIndex}, remaining: {RemainingCount}", profileIndex, remainingCount);
         }
     }
 
@@ -223,47 +220,46 @@ public class ProfileListAnimationHelper : IDisposable
         {
             // Cancel any existing animations before starting new ones
             animationStateService.CancelAllAnimations("ProfileListAnimationHelper");
-            
+
             // Batch process animations for better performance
             var animationsToRun = new List<(int index, int staggerIndex)>();
-            
+
             for (int i = 0; i < profiles.Count; i++)
             {
                 var targetMargin = new Thickness(8, CalculatePositionForIndex(i + 1), 8, 0);
-                if (profiles[i].Margin == targetMargin) 
+                if (profiles[i].Margin == targetMargin)
                 {
                     profiles[i].ZIndex = i;
                     continue;
                 }
-                
+
                 int staggerIndex = (focusIndex >= 0 && i != focusIndex) ? Math.Min(Math.Abs(i - focusIndex), 3) : i;
                 animationsToRun.Add((i, staggerIndex));
             }
-            
+
             // Deduplicate animations based on target positions
             var deduplicatedAnimations = animationsToRun
                 .GroupBy(a => a.index)
                 .Select(g => g.Last()) // Take the last animation for each index
                 .OrderBy(a => a.staggerIndex)
                 .ToList();
-            
+
             foreach (var (index, staggerIndex) in deduplicatedAnimations)
             {
                 animationTasks.Add(AnimateProfileToPositionAsync(index, index, staggerIndex).AsTask());
             }
-            
+
             if (animationTasks.Count > 0)
             {
                 animationStateService.SetAnimationsActive(true);
                 UpdateDeleteButtonStates();
-                
+
                 try
                 {
                     await Task.WhenAll(animationTasks);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[ANIMATION] Error in AnimateAllProfilesToCorrectPositionsAsync: {ex.Message}");
                 }
                 finally
                 {
@@ -279,7 +275,7 @@ public class ProfileListAnimationHelper : IDisposable
             taskListPool.Return(animationTasks);
         }
     }
-    
+
     public async ValueTask ExpandProfileAnimationAsync()
     {
         var animationTasks = taskListPool.Get();
@@ -290,10 +286,10 @@ public class ProfileListAnimationHelper : IDisposable
             {
                 animationTasks.Add(AnimateAddProfileButtonToPositionAsync(0, true));
             }
-            
+
             // Animate profiles to their correct positions
             animationTasks.Add(AnimateAllProfilesToCorrectPositionsAsync(-1).AsTask());
-            
+
             if (animationTasks.Count > 0)
             {
                 await Task.WhenAll(animationTasks);
@@ -305,32 +301,32 @@ public class ProfileListAnimationHelper : IDisposable
             taskListPool.Return(animationTasks);
         }
     }
-    
+
     public async ValueTask CollapseProfileAnimationAsync()
     {
         if (profiles.Count == 0) return;
-        
+
         frameTimer.StartMonitoring("CollapseProfileAnimation");
         var animationTasks = taskListPool.Get();
         try
         {
             animationStateService.CancelAllAnimations("ProfileListAnimationHelper");
             animationStateService.SetAnimationsActive(true);
-            
+
             UpdateDeleteButtonStates();
-            
+
             // Animate Add Profile button to position 0
             if (addProfileButton != null)
             {
                 animationTasks.Add(AnimateAddProfileButtonToPositionAsync(0, false));
             }
-            
+
             // Animate all profiles to position 0
             for (int i = 0; i < profiles.Count; i++)
             {
                 animationTasks.Add(CollapseProfileAnimationForIndexAsync(i, i));
             }
-            
+
             if (animationTasks.Count > 0)
             {
                 try
@@ -351,13 +347,13 @@ public class ProfileListAnimationHelper : IDisposable
             taskListPool.Return(animationTasks);
         }
     }
-    
+
     private async Task AnimateAddProfileButtonToPositionAsync(int targetPosition, bool includeAddButton)
     {
         if (addProfileButton == null) return;
 
         var targetMargin = new Thickness(8, CalculatePositionForIndex(targetPosition, includeAddButton), 8, 0);
-        
+
         // Check if already at target position
         if (addProfileButton.Margin == targetMargin) return;
 
@@ -379,11 +375,11 @@ public class ProfileListAnimationHelper : IDisposable
                 new Setter { Property = Avalonia.Layout.Layoutable.MarginProperty, Value = targetMargin }
             }
         });
-        
+
         await animation.RunAsync(addProfileButton);
         addProfileButton.Margin = targetMargin;
     }
-    
+
     private async Task CollapseProfileAnimationForIndexAsync(int profileIndex, int staggerIndex = 0)
     {
         if (profileIndex >= profiles.Count) return;
@@ -420,9 +416,9 @@ public class ProfileListAnimationHelper : IDisposable
                     new Setter { Property = Avalonia.Layout.Layoutable.MarginProperty, Value = targetMargin }
                 }
             });
-            
+
             await animation.RunAsync(profiles[profileIndex], cancellationToken);
-            
+
             if (!cancellationToken.IsCancellationRequested)
             {
                 profiles[profileIndex].Margin = targetMargin;
@@ -430,11 +426,9 @@ public class ProfileListAnimationHelper : IDisposable
         }
         catch (OperationCanceledException)
         {
-            Debug.WriteLine($"[ANIMATION] Collapse animation for profile {profileIndex} was canceled");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[ANIMATION] Error in collapse animation for profile {profileIndex}: {ex.Message}");
         }
         finally
         {
@@ -448,41 +442,41 @@ public class ProfileListAnimationHelper : IDisposable
         if (!disposed)
         {
             disposed = true;
-            
+
             // Cancel all animations first
             CancelAllAnimations();
-            
+
             // Dispose of all pools and resources
             animationPool?.Dispose();
             taskListPool?.Dispose();
-            
+
             // Clear caches
             positionCache.Clear();
             deleteButtonCache.Clear();
             animationTemplateCache.Clear();
-            
+
             // Clear cached animations
             cachedProfileMoveAnimation = null;
             cachedProfileCollapseAnimation = null;
         }
     }
-    
+
     // Backward compatibility methods
     public async Task AnimateProfileToPosition(int profileIndex, int position, int staggerIndex = 0)
     {
         await AnimateProfileToPositionAsync(profileIndex, position, staggerIndex);
     }
-    
+
     public async Task AnimateAllProfilesToCorrectPositions(int focusIndex = -1)
     {
         await AnimateAllProfilesToCorrectPositionsAsync(focusIndex);
     }
-    
+
     public async Task ExpandProfileAnimation()
     {
         await ExpandProfileAnimationAsync();
     }
-    
+
     public async Task CollapseProfileAnimation()
     {
         await CollapseProfileAnimationAsync();

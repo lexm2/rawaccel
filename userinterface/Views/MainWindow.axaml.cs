@@ -1,17 +1,17 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using userinterface.Converters;
 using userinterface.Extensions;
 using userinterface.Models;
 using userinterface.Services;
 using userinterface.ViewModels;
-using userinterface.Views.Controls;
+using userspace_backend.Hardware;
 
 namespace userinterface.Views;
 
@@ -27,19 +27,86 @@ public partial class MainWindow : Window
         InitializeControls();
         UpdateThemeToggleButton();
         UpdateSelectedButton(NavigationPage.Devices);
-        
+
         // Subscribe to theme changes
         ThemeService.ThemeChanged += OnThemeChanged;
+
+        // Set up mouse tracking when window is loaded
+        this.Opened += OnWindowOpened;
+    }
+
+    private void OnWindowOpened(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (TryGetPlatformHandle()?.Handle is IntPtr hwnd && hwnd != IntPtr.Zero)
+            {
+                MouseTracker.SetWindowHandle(hwnd);
+                SetupWindowProcHook(hwnd);
+            }
+            else
+            {
+            }
+        }
+        catch (Exception ex)
+        {
+        }
+    }
+
+    private const int WM_INPUT = 0x00FF;
+    private IntPtr originalWndProc = IntPtr.Zero;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    private const int GWL_WNDPROC = -4;
+
+    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    private WndProcDelegate? wndProcDelegate;
+
+    private void SetupWindowProcHook(IntPtr hwnd)
+    {
+        try
+        {
+            wndProcDelegate = new WndProcDelegate(WindowProc);
+            IntPtr newWndProc = Marshal.GetFunctionPointerForDelegate(wndProcDelegate);
+            originalWndProc = SetWindowLongPtr(hwnd, GWL_WNDPROC, newWndProc);
+        }
+        catch (Exception ex)
+        {
+        }
+    }
+
+    private IntPtr WindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        try
+        {
+            if (msg == WM_INPUT)
+            {
+                MouseTracker.ProcessRawInput(lParam);
+            }
+        }
+        catch (Exception ex)
+        {
+        }
+
+        return CallWindowProc(originalWndProc, hWnd, msg, wParam, lParam);
     }
 
     private INotificationService NotificationService =>
         App.Services!.GetRequiredService<INotificationService>();
-    
+
     private ISettingsService SettingsService =>
         App.Services!.GetRequiredService<ISettingsService>();
-    
+
     private IThemeService ThemeService =>
         App.Services!.GetRequiredService<IThemeService>();
+
+    private IMouseTracker MouseTracker =>
+        App.Services!.GetRequiredService<IMouseTracker>();
 
     private void InitializeControls()
     {
@@ -90,9 +157,10 @@ public partial class MainWindow : Window
                 LoadingProgressBar.IsVisible = true;
             }
 
+            bool applySuccess = false;
             if (viewModel.ApplyCommand.CanExecute(null))
             {
-                viewModel.ApplyCommand.Execute(null);
+                applySuccess = viewModel.Apply();
             }
 
             await Task.Delay(1000);
@@ -102,7 +170,7 @@ public partial class MainWindow : Window
                 LoadingProgressBar.IsVisible = false;
             }
 
-            NotificationService.ShowSuccessToast("MainWindowSettingsAppliedSuccess");
+            // Individual device success toasts are now handled in the backend
 
             if (ApplyButtonControl != null)
             {
@@ -175,7 +243,7 @@ public partial class MainWindow : Window
                 break;
         }
     }
-    
+
     public void UpdateNavigationSelection(NavigationPage page)
     {
         UpdateSelectedButton(page);
@@ -189,7 +257,7 @@ public partial class MainWindow : Window
         {
             var currentTheme = SettingsService.Theme;
             var actualTheme = ThemeVariantConverter.GetActualTheme(currentTheme);
-            
+
             if (actualTheme == ThemeVariant.Dark)
             {
                 themeIcon.Data = (Avalonia.Media.Geometry?)this.FindResource("weather_moon_regular");

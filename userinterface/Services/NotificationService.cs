@@ -1,19 +1,22 @@
 ﻿using System;
-using System.Threading;
 using userinterface.Models;
+using userspace_backend.Logging;
 
 namespace userinterface.Services
 {
     public class NotificationService : INotificationService
     {
-        private Timer? timer;
         private readonly LocalizationService localizationService;
         private readonly ISettingsService settingsService;
+        private readonly ILoggingService loggingService;
 
-        public NotificationService(LocalizationService localizationService, ISettingsService settingsService)
+        private const int DefaultToastDurationMs = 3000;
+
+        public NotificationService(LocalizationService localizationService, ISettingsService settingsService, ILoggingService loggingService)
         {
             this.localizationService = localizationService;
             this.settingsService = settingsService;
+            this.loggingService = loggingService;
         }
 
         public event EventHandler<ToastNotificationEventArgs>? ToastRequested;
@@ -29,10 +32,9 @@ namespace userinterface.Services
         {
             if (!settingsService.ShowToastNotifications)
             {
+                loggingService.LogDebug(LogSource.Toast, "Toast notification skipped (disabled): MessageKey={MessageKey}, Type={Type}", messageKey, type);
                 return;
             }
-
-            timer?.Dispose();
 
             var localizedMessage = localizationService.GetText(messageKey);
             if (formatArgs.Length > 0)
@@ -40,65 +42,146 @@ namespace userinterface.Services
                 localizedMessage = string.Format(localizedMessage, formatArgs);
             }
 
-            ToastRequested?.Invoke(this, new ToastNotificationEventArgs
+            loggingService.LogInformation(LogSource.Toast, "Showing toast: MessageKey={MessageKey}, Type={Type}, Duration={Duration}ms, Message={Message}", 
+                messageKey, type, durationMs, localizedMessage);
+
+            var toastArgs = new ToastNotificationEventArgs
             {
                 Message = localizedMessage,
                 Type = type,
                 Duration = TimeSpan.FromMilliseconds(durationMs)
-            });
+            };
 
-            timer = new Timer(state => HideToast(), null, durationMs, Timeout.Infinite);
+            ToastRequested?.Invoke(this, toastArgs);
+        }
+
+        public void ShowImmediateToast(string messageKey, ToastType type, int durationMs = 5000)
+        {
+            ShowImmediateToast(messageKey, type, durationMs, new object[0]);
+        }
+
+        public void ShowImmediateToast(string messageKey, ToastType type, int durationMs = 5000, params object[] formatArgs)
+        {
+            if (!settingsService.ShowToastNotifications)
+            {
+                loggingService.LogDebug(LogSource.Toast, "Immediate toast notification skipped (disabled): MessageKey={MessageKey}, Type={Type}", messageKey, type);
+                return;
+            }
+
+            ClearQueue();
+
+            var localizedMessage = localizationService.GetText(messageKey);
+            if (formatArgs.Length > 0)
+            {
+                localizedMessage = string.Format(localizedMessage, formatArgs);
+            }
+
+            loggingService.LogInformation(LogSource.Toast, "Showing immediate toast: MessageKey={MessageKey}, Type={Type}, Duration={Duration}ms, Message={Message}", 
+                messageKey, type, durationMs, localizedMessage);
+
+            var toastArgs = new ToastNotificationEventArgs
+            {
+                Message = localizedMessage,
+                Type = type,
+                Duration = TimeSpan.FromMilliseconds(durationMs)
+            };
+
+            ToastRequested?.Invoke(this, toastArgs);
         }
 
         public void HideToast()
         {
-            timer?.Dispose();
             ToastDismissed?.Invoke(this, EventArgs.Empty);
         }
 
-        public void ShowSuccessToast(string messageKey, int durationMs = 5000)
+        public void ShowSuccessToast(string messageKey, int durationMs = DefaultToastDurationMs)
         {
             ShowToast(messageKey, ToastType.Success, durationMs);
         }
 
-        public void ShowSuccessToast(string messageKey, int durationMs = 5000, params object[] formatArgs)
+        public void ShowSuccessToast(string messageKey, int durationMs = DefaultToastDurationMs, params object[] formatArgs)
         {
             ShowToast(messageKey, ToastType.Success, durationMs, formatArgs);
         }
 
-        public void ShowErrorToast(string messageKey, int durationMs = 8000)
+        public void ShowImmediateSuccessToast(string messageKey, int durationMs = DefaultToastDurationMs)
+        {
+            ShowImmediateToast(messageKey, ToastType.Success, durationMs);
+        }
+
+        public void ShowImmediateSuccessToast(string messageKey, int durationMs = DefaultToastDurationMs, params object[] formatArgs)
+        {
+            ShowImmediateToast(messageKey, ToastType.Success, durationMs, formatArgs);
+        }
+
+        public void ShowErrorToast(string messageKey, int durationMs = DefaultToastDurationMs + 3000)
         {
             ShowToast(messageKey, ToastType.Error, durationMs);
         }
 
-        public void ShowErrorToast(string messageKey, int durationMs = 8000, params object[] formatArgs)
+        public void ShowErrorToast(string messageKey, int durationMs = DefaultToastDurationMs + 3000, params object[] formatArgs)
         {
             ShowToast(messageKey, ToastType.Error, durationMs, formatArgs);
         }
 
-        public void ShowWarningToast(string messageKey, int durationMs = 6000)
+        public void ShowImmediateErrorToast(string messageKey, int durationMs = DefaultToastDurationMs + 3000)
+        {
+            ShowImmediateToast(messageKey, ToastType.Error, durationMs);
+        }
+
+        public void ShowImmediateErrorToast(string messageKey, int durationMs = DefaultToastDurationMs + 3000, params object[] formatArgs)
+        {
+            ShowImmediateToast(messageKey, ToastType.Error, durationMs, formatArgs);
+        }
+
+        public void ShowWarningToast(string messageKey, int durationMs = DefaultToastDurationMs)
         {
             ShowToast(messageKey, ToastType.Warning, durationMs);
         }
 
-        public void ShowWarningToast(string messageKey, int durationMs = 6000, params object[] formatArgs)
+        public void ShowWarningToast(string messageKey, int durationMs = DefaultToastDurationMs, params object[] formatArgs)
         {
             ShowToast(messageKey, ToastType.Warning, durationMs, formatArgs);
         }
 
-        public void ShowInfoToast(string messageKey, int durationMs = 4000)
+        public void ShowImmediateWarningToast(string messageKey, int durationMs = DefaultToastDurationMs)
+        {
+            ShowImmediateToast(messageKey, ToastType.Warning, durationMs);
+        }
+
+        public void ShowImmediateWarningToast(string messageKey, int durationMs = DefaultToastDurationMs, params object[] formatArgs)
+        {
+            ShowImmediateToast(messageKey, ToastType.Warning, durationMs, formatArgs);
+        }
+
+        public void ShowInfoToast(string messageKey, int durationMs = DefaultToastDurationMs)
         {
             ShowToast(messageKey, ToastType.Info, durationMs);
         }
 
-        public void ShowInfoToast(string messageKey, int durationMs = 4000, params object[] formatArgs)
+        public void ShowInfoToast(string messageKey, int durationMs = DefaultToastDurationMs, params object[] formatArgs)
         {
             ShowToast(messageKey, ToastType.Info, durationMs, formatArgs);
         }
 
+        public void ShowImmediateInfoToast(string messageKey, int durationMs = DefaultToastDurationMs)
+        {
+            ShowImmediateToast(messageKey, ToastType.Info, durationMs);
+        }
+
+        public void ShowImmediateInfoToast(string messageKey, int durationMs = DefaultToastDurationMs, params object[] formatArgs)
+        {
+            ShowImmediateToast(messageKey, ToastType.Info, durationMs, formatArgs);
+        }
+
+
+        public void ClearQueue()
+        {
+            ToastDismissed?.Invoke(this, EventArgs.Empty);
+        }
+
         public void Dispose()
         {
-            timer?.Dispose();
         }
     }
 }

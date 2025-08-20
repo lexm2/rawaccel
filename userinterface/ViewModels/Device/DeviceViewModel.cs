@@ -1,7 +1,9 @@
-﻿using System;
+﻿using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using Microsoft.Extensions.DependencyInjection;
 using userinterface.Commands;
 using userinterface.Services;
 using userinterface.ViewModels.Controls;
@@ -12,6 +14,7 @@ namespace userinterface.ViewModels.Device
     public partial class DeviceViewModel : ViewModelBase
     {
         private readonly IModalService modalService;
+        private readonly userspace_backend.BackEnd? backEnd;
 
         public DeviceViewModel(BE.DeviceModel deviceBE, BE.DevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false, Func<DeviceViewModel, Task>? animatedDeleteCallback = null)
         {
@@ -20,6 +23,7 @@ namespace userinterface.ViewModels.Device
             IsDefaultDevice = isDefault;
             AnimatedDeleteCallback = animatedDeleteCallback;
             this.modalService = modalService;
+            backEnd = App.Services?.GetService<userspace_backend.BackEnd>();
 
             NameField = new NamedEditableFieldViewModel(DeviceBE.Name, localizationService);
 
@@ -34,7 +38,14 @@ namespace userinterface.ViewModels.Device
 
             DeviceGroup = new DeviceGroupSelectorViewModel(DeviceBE, DevicesBE.DeviceGroups);
 
+            AvailableDevices = new ObservableCollection<MultiHandleDevice>();
+            RefreshAvailableDevices();
+
+            var currentDevice = AvailableDevices.FirstOrDefault(d => d.id == DeviceBE.HardwareID.ModelValue);
+            SelectedDevice = currentDevice;
+
             DeleteCommand = new RelayCommand(async () => await DeleteWithAnimation());
+            RefreshDevicesCommand = new RelayCommand(RefreshAvailableDevices);
         }
 
         internal BE.DeviceModel DeviceBE { get; }
@@ -57,11 +68,54 @@ namespace userinterface.ViewModels.Device
 
         public DeviceGroupSelectorViewModel DeviceGroup { get; set; }
 
+        public ObservableCollection<MultiHandleDevice> AvailableDevices { get; set; }
+
+        private MultiHandleDevice? selectedDevice;
+
+        public MultiHandleDevice? SelectedDevice
+        {
+            get => selectedDevice;
+            set
+            {
+                if (SetProperty(ref selectedDevice, value))
+                {
+                    if (value != null)
+                    {
+                        DeviceBE.HardwareID.InterfaceValue = value.id;
+                        DeviceBE.HardwareID.TryUpdateFromInterface();
+                    }
+                }
+            }
+        }
+
         public ICommand DeleteCommand { get; }
+
+        public ICommand RefreshDevicesCommand { get; }
 
         public bool IsExpanderEnabled => !IgnoreBool.Value;
 
+        public bool IsActiveDevice
+        {
+            get
+            {
+                if (backEnd?.Hardware.ActiveDevice == null)
+                    return false;
+
+                return DeviceBE.HardwareID == backEnd.Hardware.ActiveDevice.HardwareID;
+            }
+        }
+
         private bool isDeleting = false;
+
+        private void RefreshAvailableDevices()
+        {
+            DevicesBE.RefreshSystemDevices();
+            AvailableDevices.Clear();
+            foreach (var device in DevicesBE.SystemDevices)
+            {
+                AvailableDevices.Add(device);
+            }
+        }
 
         private void OnIgnoreBoolChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
@@ -75,9 +129,9 @@ namespace userinterface.ViewModels.Device
         {
             if (isDeleting)
                 return;
-            
+
             isDeleting = true;
-            
+
             try
             {
                 var confirmed = await modalService.ShowConfirmationAsync(
@@ -101,5 +155,6 @@ namespace userinterface.ViewModels.Device
         {
             DevicesBE.RemoveDevice(DeviceBE);
         }
+
     }
 }

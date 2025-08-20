@@ -1,4 +1,3 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Styling;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +18,7 @@ using userinterface.ViewModels.Mapping;
 using userinterface.ViewModels.Profile;
 using userinterface.ViewModels.Settings;
 using userinterface.Views;
+// using userspace_backend.Logging;
 using BE = userspace_backend;
 
 namespace userinterface.ViewModels;
@@ -34,32 +34,46 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private readonly MappingsPageViewModel mappingsPage;
     private readonly SettingsPageViewModel settingsPage;
     private readonly ProfileListViewModel profileListView;
-    private readonly ToastViewModel toastViewModel;
+    private readonly ToastContainerViewModel toastContainerViewModel;
+    private readonly IModalService modalService;
+    private readonly ISettingsService settingsService;
 
     private readonly BE.BackEnd backEnd;
     private readonly IThemeService themeService;
-    private readonly ISettingsService settingsService;
+    private readonly INotificationService notificationService;
     private readonly FrameTimerService frameTimer;
 
-    public MainWindowViewModel(BE.BackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer)
+    public MainWindowViewModel(BE.BackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer, INotificationService notificationService)
     {
         this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
         this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
         this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        this.notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         this.frameTimer = frameTimer ?? throw new ArgumentNullException(nameof(frameTimer));
+
+        backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "MainWindowViewModel initializing");
 
         devicesPage = App.Services!.GetRequiredService<DevicesPageViewModel>();
         profilesPage = App.Services!.GetRequiredService<ProfilesPageViewModel>();
         mappingsPage = App.Services!.GetRequiredService<MappingsPageViewModel>();
         settingsPage = App.Services!.GetRequiredService<SettingsPageViewModel>();
         profileListView = App.Services!.GetRequiredService<ProfileListViewModel>();
-        toastViewModel = App.Services!.GetRequiredService<ToastViewModel>();
+        toastContainerViewModel = App.Services!.GetRequiredService<ToastContainerViewModel>();
+        modalService = App.Services!.GetRequiredService<IModalService>();
+        settingsService = App.Services!.GetRequiredService<ISettingsService>();
 
         ApplyCommand = new RelayCommand(() => Apply());
         NavigateCommand = new RelayCommand<NavigationPage>(page => SelectPage(page));
         ToggleThemeCommand = new RelayCommand(() => ToggleTheme());
-        
+
         profileListView.SelectedProfileChanged += OnProfileSelected;
+        BE.NotificationManager.NotificationRequested += OnBackEndNotificationRequested;
+        BE.NotificationManager.QueuedNotificationRequested += OnBackEndQueuedNotificationRequested;
+
+        backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "MainWindowViewModel initialized, validating devices");
+
+        // Now that UI is ready and event handlers are subscribed, validate devices
+        backEnd.ValidateDevicesAfterUIReady();
     }
 
     public DevicesPageViewModel DevicesPage => devicesPage;
@@ -72,7 +86,7 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     public ProfileListViewModel ProfileListView => profileListView;
 
-    public ToastViewModel ToastViewModel => toastViewModel;
+    public ToastContainerViewModel ToastContainerViewModel => toastContainerViewModel;
 
     protected BE.BackEnd BackEnd => backEnd;
 
@@ -103,6 +117,12 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         {
             if (isProfilesExpandedValue != value)
             {
+                // Check if force profiles list open is enabled before allowing collapse
+                if (!value && settingsService.ForceProfilesListOpen)
+                {
+                    return; // Don't collapse if force setting is enabled
+                }
+
                 isProfilesExpandedValue = value;
                 OnPropertyChanged();
 
@@ -130,10 +150,10 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     public void SelectPage(NavigationPage page)
     {
-        Console.WriteLine($"SelectPage called with: {page}");
+        backEnd.LoggingService?.LogDebug(userspace_backend.Logging.LogSource.UI, "Navigating to page: {PageName}", page);
         SelectedPage = page;
         IsProfilesExpanded = page == NavigationPage.Profiles;
-        
+
         if (page == NavigationPage.Profiles && profileListView.SelectedProfile == null)
         {
             var defaultProfile = backEnd.Profiles.Profiles.FirstOrDefault(p => p == BE.Model.ProfilesModel.DefaultProfile);
@@ -146,13 +166,13 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                 profileListView.SelectedProfile = backEnd.Profiles.Profiles[0];
             }
         }
-        
+
         UpdateNavigationButtonSelection(page);
     }
-    
+
     private void UpdateNavigationButtonSelection(NavigationPage page)
     {
-        if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop && 
+        if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop &&
             desktop.MainWindow is MainWindow mainWindow)
         {
             mainWindow.UpdateNavigationSelection(page);
@@ -179,7 +199,7 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         SelectedPage = page;
         IsProfilesExpanded = page == NavigationPage.Profiles;
-        
+
         if (page == NavigationPage.Profiles && profileListView.SelectedProfile == null)
         {
             var defaultProfile = backEnd.Profiles.Profiles.FirstOrDefault(p => p == BE.Model.ProfilesModel.DefaultProfile);
@@ -218,16 +238,19 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         }
     }
 
-    public void Apply()
+    public bool Apply()
     {
-        BackEnd.Apply();
+        backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "Apply settings requested from UI");
+        var result = BackEnd.Apply();
+        backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "Apply settings result: {Success}", result);
+        return result;
     }
 
     private void ToggleTheme()
     {
         var currentTheme = settingsService.Theme.ToLower();
         string newTheme;
-        
+
         if (currentTheme == "system")
         {
             var actualSystemTheme = ThemeVariantConverter.GetSystemThemeVariant();
@@ -237,15 +260,57 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         {
             newTheme = currentTheme == "light" ? "Dark" : "Light";
         }
-        
+
         settingsService.Theme = newTheme;
     }
-    
+
     private void OnProfileSelected(BE.Model.ProfileModel selectedProfile)
     {
         if (selectedProfile != null && SelectedPage != NavigationPage.Profiles)
         {
             SelectPage(NavigationPage.Profiles);
+        }
+    }
+
+    private void OnBackEndNotificationRequested(object? sender, BE.NotificationEventArgs e)
+    {
+        var toastType = e.Type switch
+        {
+            BE.NotificationType.Info => ToastType.Info,
+            BE.NotificationType.Success => ToastType.Success,
+            BE.NotificationType.Warning => ToastType.Warning,
+            BE.NotificationType.Error => ToastType.Error,
+            _ => ToastType.Info
+        };
+
+        if (e.FormatArgs.Length > 0)
+        {
+            notificationService.ShowToast(e.MessageKey, toastType, 5000, e.FormatArgs);
+        }
+        else
+        {
+            notificationService.ShowToast(e.MessageKey, toastType);
+        }
+    }
+
+    private void OnBackEndQueuedNotificationRequested(object? sender, BE.NotificationEventArgs e)
+    {
+        var toastType = e.Type switch
+        {
+            BE.NotificationType.Info => ToastType.Info,
+            BE.NotificationType.Success => ToastType.Success,
+            BE.NotificationType.Warning => ToastType.Warning,
+            BE.NotificationType.Error => ToastType.Error,
+            _ => ToastType.Info
+        };
+
+        if (e.FormatArgs.Length > 0)
+        {
+            notificationService.ShowToast(e.MessageKey, toastType, 5000, e.FormatArgs);
+        }
+        else
+        {
+            notificationService.ShowToast(e.MessageKey, toastType);
         }
     }
 

@@ -78,16 +78,30 @@ public class SettingsService : ISettingsService
         }
     }
 
+    public bool ForceProfilesListOpen
+    {
+        get => backEnd.Settings?.ForceProfilesListOpen ?? false;
+        set
+        {
+            if (backEnd.Settings != null && backEnd.Settings.ForceProfilesListOpen != value)
+            {
+                backEnd.Settings.ForceProfilesListOpen = value;
+                Save();
+            }
+        }
+    }
+
     public bool TrySave(out string? errorMessage)
     {
         errorMessage = null;
         try
         {
-            backEnd.Apply();
+            backEnd.ApplyUserSettingsOnly();
             return true;
         }
         catch (Exception ex)
         {
+            backEnd.LoggingService?.LogError(userspace_backend.Logging.LogSource.System, ex, "Failed to save settings via SettingsService");
             errorMessage = $"Failed to save settings: {ex.Message}";
             return false;
         }
@@ -108,6 +122,7 @@ public class SettingsService : ISettingsService
         }
         catch (Exception ex)
         {
+            backEnd.LoggingService?.LogError(userspace_backend.Logging.LogSource.System, ex, "Failed to load settings via SettingsService");
             errorMessage = $"Failed to load settings: {ex.Message}";
             return false;
         }
@@ -124,7 +139,7 @@ public class SettingsService : ISettingsService
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        
+
         // Fire specific event for theme changes
         if (propertyName == nameof(Theme))
         {

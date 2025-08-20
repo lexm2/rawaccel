@@ -46,7 +46,7 @@
 		<TextBlock Classes="Warning"
            Text="{ext:Localized ProfileExpertsOnlyWarning}"/>
 		<TextBlock Classes="Instructions"
-           Text="{ext:Localized ProfileLUTFormatInstructions}"/>
-		<ContentControl Content="{Binding LUTPoints}" Height="100"/>
+           Text="{ext:Localized LutAddCoordinateInstructions}"/>
+		<ContentControl Content="{Binding PointsCollection}"/>
 	</StackPanel>
 </UserControl>

@@ -19,13 +19,8 @@
 			<Setter Property="CornerRadius" Value="8"/>
 			<Setter Property="MaxWidth" Value="400"/>
 			<Setter Property="MinWidth" Value="300"/>
-			<Setter Property="HorizontalAlignment" Value="Center"/>
-			<Setter Property="VerticalAlignment" Value="Bottom"/>
-			<Setter Property="Margin" Value="20"/>
+			<Setter Property="HorizontalAlignment" Value="Stretch"/>
 			<Setter Property="BoxShadow" Value="{DynamicResource ToastShadow}"/>
-			<!-- Initial state: hidden below -->
-			<Setter Property="RenderTransform" Value="translateY(100px)"/>
-			<Setter Property="Opacity" Value="0"/>
 			<Setter Property="Transitions">
 				<Transitions>
 					<BrushTransition Property="BorderBrush" Duration="0:0:0.2">
@@ -33,45 +28,10 @@
 							<SineEaseOut/>
 						</BrushTransition.Easing>
 					</BrushTransition>
-					<DoubleTransition Property="Opacity" Duration="0:0:0.4">
-						<DoubleTransition.Easing>
-							<QuadraticEaseOut/>
-						</DoubleTransition.Easing>
-					</DoubleTransition>
-					<TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.5">
-						<TransformOperationsTransition.Easing>
-							<QuadraticEaseOut/>
-						</TransformOperationsTransition.Easing>
-					</TransformOperationsTransition>
 				</Transitions>
 			</Setter>
 		</Style>
 
-		<!-- Toast Container visible -->
-		<Style Selector="Border.ToastContainer.Visible">
-			<Setter Property="RenderTransform" Value="translateY(0)"/>
-			<Setter Property="Opacity" Value="1"/>
-		</Style>
-
-		<!-- Toast Container hiding -->
-		<Style Selector="Border.ToastContainer.Hiding">
-			<Setter Property="RenderTransform" Value="translateY(100px)"/>
-			<Setter Property="Opacity" Value="0"/>
-			<Setter Property="Transitions">
-				<Transitions>
-					<DoubleTransition Property="Opacity" Duration="0:0:0.3">
-						<DoubleTransition.Easing>
-							<QuadraticEaseIn/>
-						</DoubleTransition.Easing>
-					</DoubleTransition>
-					<TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.3">
-						<TransformOperationsTransition.Easing>
-							<QuadraticEaseIn/>
-						</TransformOperationsTransition.Easing>
-					</TransformOperationsTransition>
-				</Transitions>
-			</Setter>
-		</Style>
 
 		<!-- Toast Content Style -->
 		<Style Selector="Grid.ToastContent">
@@ -159,10 +119,24 @@
 		</Style>
 	</UserControl.Styles>
 
+	<UserControl.Transitions>
+		<Transitions>
+			<TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.4">
+				<TransformOperationsTransition.Easing>
+					<CubicEaseOut/>
+				</TransformOperationsTransition.Easing>
+			</TransformOperationsTransition>
+			<DoubleTransition Property="Opacity" Duration="0:0:0.4">
+				<DoubleTransition.Easing>
+					<CubicEaseOut/>
+				</DoubleTransition.Easing>
+			</DoubleTransition>
+		</Transitions>
+	</UserControl.Transitions>
+
 	<Grid>
 		<Border x:Name="ToastBorder"
-                Classes="ToastContainer"
-                Classes.Visible="{Binding IsVisible}">
+                Classes="ToastContainer">
 
 			<Grid>
 				<Grid.RowDefinitions>
@@ -202,7 +176,7 @@
                             Classes="ToastProgressBar"
                             Value="{Binding Progress}"
                             Maximum="100"
-                            IsVisible="{Binding IsVisible}" />
+                            IsVisible="{Binding ShowProgressBar}" />
 			</Grid>
 		</Border>
 	</Grid>

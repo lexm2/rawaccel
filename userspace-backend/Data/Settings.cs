@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using userspace_backend.Logging;
 
 namespace userspace_backend.Data
 {
@@ -9,6 +10,8 @@ namespace userspace_backend.Data
         private bool showConfirmModals = true;
         private string theme = "System";
         private string language = "en-US";
+        private bool forceProfilesListOpen = false;
+        private LoggingConfiguration loggingConfiguration = new();
 
         public bool ShowToastNotifications
         {
@@ -57,6 +60,32 @@ namespace userspace_backend.Data
                 if (language != value)
                 {
                     language = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public bool ForceProfilesListOpen
+        {
+            get => forceProfilesListOpen;
+            set
+            {
+                if (forceProfilesListOpen != value)
+                {
+                    forceProfilesListOpen = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public LoggingConfiguration LoggingConfiguration
+        {
+            get => loggingConfiguration;
+            set
+            {
+                if (loggingConfiguration != value)
+                {
+                    loggingConfiguration = value;
                     OnPropertyChanged();
                 }
             }
