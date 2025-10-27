@@ -17,7 +17,7 @@ namespace userspace_backend
 {
     public static class BackEndComposer
     {
-        public static IServiceProvider Compose(IServiceCollection services)
+        public static void Compose(IServiceCollection services)
         {
             services.AddSingleton<ISystemDevicesRetriever, SystemDevicesRetriever>();
             services.AddSingleton<ISystemDevicesProvider, SystemDevicesProvider>();
@@ -574,14 +574,6 @@ namespace userspace_backend
 
             #endregion Mapping
 
-            #region IO Layer
-
-            services.AddSingleton<DevicesReaderWriter>();
-            services.AddSingleton<MappingsReaderWriter>();
-            services.AddSingleton<ProfileReaderWriter>();
-
-            #endregion IO Layer
-
             #region BackEnd
 
             services.AddSingleton<IProfilesModel, ProfilesModel>();
@@ -589,8 +581,6 @@ namespace userspace_backend
             services.AddSingleton<IBackEnd, BackEnd>();
 
             #endregion BackEnd
-
-            return services.BuildServiceProvider();
         }
     }
 }

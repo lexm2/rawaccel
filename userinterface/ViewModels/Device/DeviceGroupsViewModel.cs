@@ -21,7 +21,7 @@ namespace userinterface.ViewModels.Device
 
         protected BE.DeviceGroups DeviceGroupsBE { get; }
 
-        public ObservableCollection<BE.DeviceGroupModel> DeviceGroups => DeviceGroupsBE.DeviceGroupModels;
+        public ObservableCollection<string> DeviceGroups => DeviceGroupsBE.DeviceGroupModels;
 
         public ObservableCollection<DeviceGroupViewModel> DeviceGroupViews { get; }
 

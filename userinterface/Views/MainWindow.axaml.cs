@@ -11,7 +11,6 @@ using userinterface.Extensions;
 using userinterface.Models;
 using userinterface.Services;
 using userinterface.ViewModels;
-using userspace_backend.Hardware;
 
 namespace userinterface.Views;
 
@@ -30,70 +29,6 @@ public partial class MainWindow : Window
 
         // Subscribe to theme changes
         ThemeService.ThemeChanged += OnThemeChanged;
-
-        // Set up mouse tracking when window is loaded
-        this.Opened += OnWindowOpened;
-    }
-
-    private void OnWindowOpened(object? sender, EventArgs e)
-    {
-        try
-        {
-            if (TryGetPlatformHandle()?.Handle is IntPtr hwnd && hwnd != IntPtr.Zero)
-            {
-                MouseTracker.SetWindowHandle(hwnd);
-                SetupWindowProcHook(hwnd);
-            }
-            else
-            {
-            }
-        }
-        catch (Exception ex)
-        {
-        }
-    }
-
-    private const int WM_INPUT = 0x00FF;
-    private IntPtr originalWndProc = IntPtr.Zero;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-    private const int GWL_WNDPROC = -4;
-
-    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-    private WndProcDelegate? wndProcDelegate;
-
-    private void SetupWindowProcHook(IntPtr hwnd)
-    {
-        try
-        {
-            wndProcDelegate = new WndProcDelegate(WindowProc);
-            IntPtr newWndProc = Marshal.GetFunctionPointerForDelegate(wndProcDelegate);
-            originalWndProc = SetWindowLongPtr(hwnd, GWL_WNDPROC, newWndProc);
-        }
-        catch (Exception ex)
-        {
-        }
-    }
-
-    private IntPtr WindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
-    {
-        try
-        {
-            if (msg == WM_INPUT)
-            {
-                MouseTracker.ProcessRawInput(lParam);
-            }
-        }
-        catch (Exception ex)
-        {
-        }
-
-        return CallWindowProc(originalWndProc, hWnd, msg, wParam, lParam);
     }
 
     private INotificationService NotificationService =>
@@ -104,9 +39,6 @@ public partial class MainWindow : Window
 
     private IThemeService ThemeService =>
         App.Services!.GetRequiredService<IThemeService>();
-
-    private IMouseTracker MouseTracker =>
-        App.Services!.GetRequiredService<IMouseTracker>();
 
     private void InitializeControls()
     {

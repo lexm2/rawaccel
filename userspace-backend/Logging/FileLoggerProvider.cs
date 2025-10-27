@@ -135,7 +135,7 @@ namespace userspace_backend.Logging
             this.provider = provider;
         }
 
-        public IDisposable BeginScope<TState>(TState state) => NullScope.Instance;
+        IDisposable ILogger.BeginScope<TState>(TState state) => NullScope.Instance;
 
         public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
 

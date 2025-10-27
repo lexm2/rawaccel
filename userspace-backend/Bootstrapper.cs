@@ -11,16 +11,16 @@ namespace userspace_backend
     // TODO: remove before release
     public class Bootstrapper : IBackEndLoader
     {
-        public DATA.Device[] DevicesToLoad { get; set; }
+        public DATA.Device[] DevicesToLoad { get; set; } = null!;
 
-        public DATA.MappingSet MappingsToLoad { get; set; }
+        public DATA.MappingSet MappingsToLoad { get; set; } = null!;
 
-        public DATA.Profile[] ProfilesToLoad { get; set; }
+        public DATA.Profile[] ProfilesToLoad { get; set; } = null!;
 
-        public DATA.Settings SettingsToLoad { get; set; }
+        public DATA.Settings SettingsToLoad { get; set; } = null!;
 
         // Allows us to test parts of BackEndLoader as desired
-        public BackEndLoader BackEndLoader { get; set; }
+        public BackEndLoader BackEndLoader { get; set; } = null!;
 
         public IEnumerable<DATA.Device> LoadDevices()
         {
@@ -42,14 +42,7 @@ namespace userspace_backend
             BackEndLoader.WriteSettingsToDisk(devices, mappings, profiles);
         }
 
-        public DATA.Settings? LoadSettings()
-        {
-            return SettingsToLoad ?? BackEndLoader?.LoadSettings();
-        }
-
-        public void WriteSettings(DATA.Settings settings)
-        {
-            BackEndLoader?.WriteSettings(settings);
-        }
+        // LoadSettings and WriteSettings methods removed - no longer part of IBackEndLoader interface
+        // Settings are now handled through the SettingsToLoad property and App.axaml.cs initialization
     }
 }

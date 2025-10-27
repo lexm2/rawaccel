@@ -12,7 +12,6 @@ using userinterface.ViewModels.Controls;
 using userinterface.ViewModels.Settings;
 using userinterface.Views;
 using userspace_backend;
-using userspace_backend.Hardware;
 using userspace_backend.IO;
 using DATA = userspace_backend.Data;
 
@@ -46,7 +45,6 @@ public partial class App : Application
         services.AddSingleton<LocalizationService>();
         services.AddSingleton<FrameTimerService>();
         services.AddSingleton<PreviewChartRenderer>();
-        services.AddSingleton<IMouseTracker, MouseTracker>();
         services.AddSingleton<IAnimationStateService, AnimationStateService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IViewModelFactory, ViewModelFactory>();
@@ -79,21 +77,18 @@ public partial class App : Application
             return new BackEndLoader(settingsDirectory, devicesRW, mappingsRW, profileRW);
         });
 
-        services.AddSingleton<IDeviceInfoProvider, DeviceInfoProvider>();
-
-        // Compose backend DI and build service provider
-        var serviceProvider = BackEndComposer.Compose(services);
-        Services = serviceProvider;
-
-        // Load backend
-        var backEnd = serviceProvider.GetRequiredService<IBackEnd>();
-        backEnd.Load();
+        // Compose backend DI (registers all backend services)
+        BackEndComposer.Compose(services);
 
         // Register ViewModels
-        RegisterViewModels(services, serviceProvider);
+        RegisterViewModels(services);
 
-        // Rebuild service provider with ViewModels
+        // Build service provider once with all registrations
         Services = services.BuildServiceProvider();
+
+        // Load backend
+        var backEnd = Services.GetRequiredService<IBackEnd>();
+        backEnd.Load();
 
         // Apply settings from backend after services are built
         ApplyStartupSettings();
@@ -126,14 +121,12 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private void RegisterViewModels(IServiceCollection services, IServiceProvider tempProvider)
+    private void RegisterViewModels(IServiceCollection services)
     {
-        var backEnd = tempProvider.GetRequiredService<IBackEnd>();
-
         // Main ViewModels
         services.AddSingleton<MainWindowViewModel>(provider =>
             new MainWindowViewModel(
-                backEnd,
+                provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IThemeService>(),
                 provider.GetRequiredService<ISettingsService>(),
                 provider.GetRequiredService<FrameTimerService>(),
@@ -143,12 +136,12 @@ public partial class App : Application
         // Device ViewModels
         services.AddTransient<ViewModels.Device.DevicesPageViewModel>(provider =>
             new ViewModels.Device.DevicesPageViewModel(
-                backEnd,
+                provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IModalService>(),
                 provider.GetRequiredService<LocalizationService>()));
         services.AddTransient<ViewModels.Device.DevicesListViewModel>(provider =>
             new ViewModels.Device.DevicesListViewModel(
-                backEnd.Devices,
+                provider.GetRequiredService<IBackEnd>().Devices,
                 provider.GetRequiredService<IModalService>(),
                 provider.GetRequiredService<LocalizationService>()));
         services.AddTransient<ViewModels.Device.DeviceGroupsViewModel>();

@@ -16,7 +16,6 @@ using userinterface.Interfaces;
 using userinterface.Services;
 using userspace_backend;
 using userspace_backend.Display;
-using userspace_backend.Hardware;
 using userspace_backend.Logging;
 using userspace_backend.Model.EditableSettings;
 using BE = userspace_backend.Model;
@@ -62,9 +61,7 @@ namespace userinterface.ViewModels.Profile
         private readonly IThemeService themeService;
         private readonly LocalizationService localizationService;
         private readonly PreviewChartRenderer previewRenderer;
-        private readonly IMouseTracker mouseTracker;
         private readonly BackEnd backEnd;
-        private readonly IDeviceInfoProvider? deviceInfoProvider;
         private readonly ILoggingService loggingService;
         private BE.ProfileModel currentProfileModel = null!;
 
@@ -80,15 +77,13 @@ namespace userinterface.ViewModels.Profile
 
         private readonly object syncObject = new object();
 
-        public ProfileChartViewModel(IThemeService themeService, LocalizationService localizationService, PreviewChartRenderer previewRenderer, IMouseTracker mouseTracker, BackEnd backEnd, ILoggingService loggingService, IDeviceInfoProvider? deviceInfoProvider = null)
+        public ProfileChartViewModel(IThemeService themeService, LocalizationService localizationService, PreviewChartRenderer previewRenderer, BackEnd backEnd, ILoggingService loggingService)
         {
             this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             this.localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
             this.previewRenderer = previewRenderer ?? throw new ArgumentNullException(nameof(previewRenderer));
-            this.mouseTracker = mouseTracker ?? throw new ArgumentNullException(nameof(mouseTracker));
             this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
             this.loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
-            this.deviceInfoProvider = deviceInfoProvider;
 
             RecreateAxesCommand = new RelayCommand(() =>
             {
@@ -907,33 +902,17 @@ namespace userinterface.ViewModels.Profile
 
             var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
 
-            // Set BackEnd reference and device service for centralized device handling
-            mouseTracker.SetBackEnd(backEnd);
-
-            // Pass device service if available
-            if (deviceInfoProvider != null)
-            {
-                mouseTracker.SetDeviceInfoProvider(deviceInfoProvider);
-            }
-
-            var activeDeviceModel = GetActiveDeviceModel();
-            if (activeDeviceModel != null)
-            {
-                mouseTracker.SetDeviceDPI(activeDeviceModel.DPI.CurrentValidatedValue);
-            }
+            // Hardware tracking disabled - Hardware folder removed
+            // TODO: Re-implement if needed without Hardware dependencies
 
             if (currentSpeedDotSeries != null)
             {
-                currentSpeedDotSeries.IsVisible = true;
+                currentSpeedDotSeries.IsVisible = false;
             }
             if (currentYSpeedDotSeries != null)
             {
-                currentYSpeedDotSeries.IsVisible = hasYCurve;
+                currentYSpeedDotSeries.IsVisible = false;
             }
-
-            mouseTracker.MouseMoved += OnMouseMoved;
-            mouseTracker.MouseIdle += OnMouseIdle;
-            mouseTracker.StartTracking();
 
 
             OnPropertyChanged(nameof(IsRealTimeTrackingEnabled));
@@ -952,9 +931,7 @@ namespace userinterface.ViewModels.Profile
 
             IsRealTimeTrackingEnabled = false;
 
-            mouseTracker.MouseMoved -= OnMouseMoved;
-            mouseTracker.MouseIdle -= OnMouseIdle;
-            mouseTracker.StopTracking();
+            // Hardware tracking disabled - Hardware folder removed
 
             currentSpeedData.Clear();
             currentYSpeedData.Clear();
@@ -979,54 +956,11 @@ namespace userinterface.ViewModels.Profile
             OnPropertyChanged(nameof(IsRealTimeTrackingEnabled));
         }
 
-        private void OnMouseMoved(object? sender, MouseMovementEventArgs e)
+        // OnMouseMoved handler removed - Hardware functionality disabled
+        // TODO: Re-implement if needed without Hardware dependencies
+        private void OnMouseMoved(object? sender, EventArgs e)
         {
-            if (!IsRealTimeTrackingEnabled) return;
-
-            try
-            {
-                // Update current device info using BackEnd cross-reference
-                var (deviceName, sourceDPI, isKnownDevice) = backEnd.Hardware.GetCurrentDeviceInfo();
-
-                string displayName = isKnownDevice ? deviceName : e.DeviceName;
-                string dpiInfo = $"{sourceDPI} DPI";
-
-                if (CurrentMouseDevice != displayName || CurrentDeviceDPI != dpiInfo)
-                {
-
-                    CurrentMouseDevice = displayName;
-                    CurrentDeviceDPI = dpiInfo;
-
-                    // Batch property changes
-                    OnPropertyChanged(nameof(CurrentMouseDevice));
-                    OnPropertyChanged(nameof(CurrentDeviceDPI));
-                }
-
-                var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
-
-                if (hasYCurve)
-                {
-                    var xOutputValue = InterpolateOutputFromSpeed(e.XSpeed, XCurvePreview);
-                    var yOutputValue = InterpolateOutputFromSpeed(e.YSpeed, YCurvePreview);
-
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        UpdateCurrentSpeedDots(e.XSpeed, xOutputValue, e.YSpeed, yOutputValue, hasYCurve);
-                    });
-                }
-                else
-                {
-                    var outputValue = InterpolateOutputFromSpeed(e.MouseSpeed, XCurvePreview);
-
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        UpdateCurrentSpeedDots(e.MouseSpeed, outputValue, 0, null, hasYCurve);
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-            }
+            // Hardware tracking disabled
         }
 
         private double? InterpolateOutputFromSpeed(double mouseSpeed, ICurvePreview curvePreview)
@@ -1116,6 +1050,7 @@ namespace userinterface.ViewModels.Profile
             }
         }
 
+        // OnMouseIdle handler removed - Hardware functionality disabled
         private void OnMouseIdle(object? sender, EventArgs e)
         {
             if (!IsRealTimeTrackingEnabled) return;

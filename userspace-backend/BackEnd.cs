@@ -155,7 +155,7 @@ namespace userspace_backend
             {
                 //WriteToDriver();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return;
             }
@@ -179,7 +179,7 @@ namespace userspace_backend
             {
                 config.Activate();
             }
-            catch(Exception ex)
+            catch(Exception)
             {
                 // Log this once logging is added
             }
