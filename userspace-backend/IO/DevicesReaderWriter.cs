@@ -19,7 +19,7 @@ namespace userspace_backend.IO
 
         public override IEnumerable<Device> Deserialize(string toRead)
         {
-            return JsonSerializer.Deserialize<List<Device>>(toRead);
+            return JsonSerializer.Deserialize<List<Device>>(toRead, JsonOptions);
         }
     }
 }

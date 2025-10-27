@@ -1,27 +1,46 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using userspace_backend.Data.Profiles;
+﻿using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions.Formula
 {
-    public class ClassicAccelerationDefinitionModel : AccelDefinitionModel<ClassicAccel>
+
+    public interface IClassicAccelerationDefinitionModel : IAccelDefinitionModelSpecific<ClassicAccel>
     {
-        public ClassicAccelerationDefinitionModel(Acceleration dataObject) : base(dataObject)
+    }
+
+    public class ClassicAccelerationDefinitionModel
+        : EditableSettingsSelectable<ClassicAccel, FormulaAccel>,
+        IClassicAccelerationDefinitionModel
+    {
+        public const string AccelerationDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Acceleration)}";
+        public const string ExponentDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Exponent)}";
+        public const string OffsetDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Offset)}";
+        public const string CapDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(CapDIKey)}";
+
+        public ClassicAccelerationDefinitionModel(
+            [FromKeyedServices(AccelerationDIKey)]IEditableSettingSpecific<double> acceleration,
+            [FromKeyedServices(ExponentDIKey)]IEditableSettingSpecific<double> exponent,
+            [FromKeyedServices(OffsetDIKey)]IEditableSettingSpecific<double> offset,
+            [FromKeyedServices(CapDIKey)]IEditableSettingSpecific<double> cap)
+            : base([acceleration, exponent, offset, cap], [])
         {
+            Acceleration = acceleration;
+            Exponent = exponent;
+            Offset = offset;
+            Cap = cap;
         }
 
-        public EditableSetting<double> Acceleration { get; set; }
+        public IEditableSettingSpecific<double> Acceleration { get; set; }
 
-        public EditableSetting<double> Exponent { get; set; }
+        public IEditableSettingSpecific<double> Exponent { get; set; }
 
-        public EditableSetting<double> Offset { get; set;  }
+        public IEditableSettingSpecific<double> Offset { get; set;  }
 
-        public EditableSetting<double> Cap { get; set; }
+        public IEditableSettingSpecific<double> Cap { get; set; }
 
-        public override AccelArgs MapToDriver()
+        public AccelArgs MapToDriver()
         {
             return new AccelArgs
             {
@@ -34,7 +53,7 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
             };
         }
 
-        public override Acceleration MapToData()
+        public override ClassicAccel MapToData()
         {
             return new ClassicAccel()
             {
@@ -43,67 +62,19 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
                 Offset = Offset.ModelValue,
                 Cap = Cap.ModelValue,
             };
-
         }
 
-        protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()
+        protected override bool TryMapEditableSettingsFromData(ClassicAccel data)
         {
-            return [ Acceleration, Exponent, Offset, Cap ];
+            return Acceleration.TryUpdateModelDirectly(data.Acceleration)
+                & Exponent.TryUpdateModelDirectly(data.Exponent)
+                & Offset.TryUpdateModelDirectly(data.Offset)
+                & Cap.TryUpdateModelDirectly(data.Cap);
         }
 
-        protected override IEnumerable<IEditableSettingsCollection> EnumerateEditableSettingsCollections()
+        protected override bool TryMapEditableSettingsCollectionsFromData(ClassicAccel data)
         {
-            return Enumerable.Empty<IEditableSettingsCollection>();
-        }
-
-        protected override ClassicAccel GenerateDefaultDataObject()
-        {
-            return new ClassicAccel()
-            {
-                Acceleration = 0.001,
-                Exponent = 2,
-                Offset = 0,
-                Cap = 0,
-            };
-        }
-
-        private void OnExponentChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(EditableSetting<double>.CurrentValidatedValue) && 
-                Math.Abs(Exponent.CurrentValidatedValue - 2.0) < 0.001)
-            {
-                NotificationManager.TriggerNotification("ProfileClassicLinearEquivalent", NotificationType.Info);
-            }
-        }
-
-        protected override void InitSpecificSettingsAndCollections(ClassicAccel dataObject)
-        {
-            Acceleration = new EditableSetting<double>(
-                displayName: "Acceleration",
-                initialValue: dataObject.Acceleration,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AccelClassicAcceleration");
-            Exponent = new EditableSetting<double>(
-                displayName: "Exponent",
-                initialValue: dataObject.Exponent,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AccelClassicExponent");
-            Offset = new EditableSetting<double>(
-                displayName: "Offset",
-                initialValue: dataObject.Offset,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AccelClassicOffset");
-            Cap = new EditableSetting<double>(
-                displayName: "Cap",
-                initialValue: dataObject.Cap,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AccelClassicCap");
-
-            Exponent.PropertyChanged += OnExponentChanged;
+            return true;
         }
     }
 }

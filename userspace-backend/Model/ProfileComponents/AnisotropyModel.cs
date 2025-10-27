@@ -1,30 +1,61 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.Extensions.DependencyInjection;
 using userspace_backend.Data.Profiles;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.ProfileComponents
 {
-    public class AnisotropyModel : EditableSettingsCollection<Anisotropy>
+    public interface IAnisotropyModel : IEditableSettingsCollectionSpecific<Anisotropy>
     {
-        public AnisotropyModel(Anisotropy dataObject) : base(dataObject)
+        IEditableSettingSpecific<double> DomainX { get; }
+
+        IEditableSettingSpecific<double> DomainY { get; }
+
+        IEditableSettingSpecific<double> RangeX { get; }
+
+        IEditableSettingSpecific<double> RangeY { get; }
+
+        IEditableSettingSpecific<double> LPNorm { get; }
+
+        IEditableSettingSpecific<bool> CombineXYComponents { get; }
+    }
+
+    public class AnisotropyModel : EditableSettingsCollectionV2<Anisotropy>, IAnisotropyModel
+    {
+        public const string DomainXDIKey = $"{nameof(AnisotropyModel)}.{nameof(DomainX)}";
+        public const string DomainYDIKey = $"{nameof(AnisotropyModel)}.{nameof(DomainY)}";
+        public const string RangeXDIKey = $"{nameof(AnisotropyModel)}.{nameof(RangeX)}";
+        public const string RangeYDIKey = $"{nameof(AnisotropyModel)}.{nameof(RangeYDIKey)}";
+        public const string LPNormDIKey = $"{nameof(AnisotropyModel)}.{nameof(LPNorm)}";
+        public const string CombineXYComponentsDIKey = $"{nameof(AnisotropyModel)}.{nameof(CombineXYComponents)}";
+
+        public AnisotropyModel(
+            [FromKeyedServices(DomainXDIKey)]IEditableSettingSpecific<double> domainX,
+            [FromKeyedServices(DomainYDIKey)]IEditableSettingSpecific<double> domainY,
+            [FromKeyedServices(RangeXDIKey)]IEditableSettingSpecific<double> rangeX,
+            [FromKeyedServices(RangeYDIKey)]IEditableSettingSpecific<double> rangeY,
+            [FromKeyedServices(LPNormDIKey)]IEditableSettingSpecific<double> lpNorm,
+            [FromKeyedServices(CombineXYComponentsDIKey)]IEditableSettingSpecific<bool> combineXYComponents
+            ) : base([domainX, domainY, rangeX, rangeY, lpNorm, combineXYComponents], [])
         {
+            DomainX = domainX;
+            DomainY = domainY;
+            RangeX = rangeX;
+            RangeY = rangeY;
+            LPNorm = lpNorm;
+            CombineXYComponents = combineXYComponents;
         }
 
-        public EditableSetting<double> DomainX { get; set; }
+        public IEditableSettingSpecific<double> DomainX { get; set; }
 
-        public EditableSetting<double> DomainY { get; set; }
+        public IEditableSettingSpecific<double> DomainY { get; set; }
 
-        public EditableSetting<double> RangeX { get; set; }
+        public IEditableSettingSpecific<double> RangeX { get; set; }
 
-        public EditableSetting<double> RangeY { get; set; }
+        public IEditableSettingSpecific<double> RangeY { get; set; }
 
-        public EditableSetting<double> LPNorm { get; set; }
+        public IEditableSettingSpecific<double> LPNorm { get; set; }
 
-        public EditableSetting<bool> CombineXYComponents { get; set; }
+        public IEditableSettingSpecific<bool> CombineXYComponents { get; set; }
 
         public override Anisotropy MapToData()
         {
@@ -36,54 +67,20 @@ namespace userspace_backend.Model.ProfileComponents
             };
         }
 
-        protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()
+        protected override bool TryMapEditableSettingsCollectionsFromData(Anisotropy data)
         {
-            return [DomainX, DomainY, RangeX, RangeY, LPNorm];
+            // Nothing to do here
+            return true;
         }
 
-        protected override IEnumerable<IEditableSettingsCollection> EnumerateEditableSettingsCollections()
+        protected override bool TryMapEditableSettingsFromData(Anisotropy data)
         {
-            return Enumerable.Empty<IEditableSettingsCollection>();
-        }
-
-        protected override void InitEditableSettingsAndCollections(Anisotropy dataObject)
-        {
-            DomainX = new EditableSetting<double>(
-                displayName: "Domain X",
-                initialValue: dataObject?.Domain?.X ?? 1,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AnisotropyDomainX");
-            DomainY = new EditableSetting<double>(
-                displayName: "Domain Y",
-                initialValue: dataObject?.Domain?.Y ?? 1,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AnisotropyDomainY");
-            RangeX = new EditableSetting<double>(
-                displayName: "Range X",
-                initialValue: dataObject?.Range?.X ?? 1,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AnisotropyRangeX");
-            RangeY = new EditableSetting<double>(
-                displayName: "Range Y",
-                initialValue: dataObject?.Range?.Y ?? 1,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AnisotropyRangeY");
-            LPNorm = new EditableSetting<double>(
-                displayName: "LP Norm",
-                initialValue: dataObject?.LPNorm ?? 2,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AnisotropyLPNorm");
-            CombineXYComponents = new EditableSetting<bool>(
-                displayName: "Combine X and Y Components",
-                initialValue: dataObject?.CombineXYComponents ?? false,
-                parser: UserInputParsers.BoolParser,
-                validator: ModelValueValidators.DefaultBoolValidator,
-                localizationKey: "AnisotropyCombineXY");
+            return DomainX.TryUpdateModelDirectly(data.Domain.X)
+                & DomainY.TryUpdateModelDirectly(data.Domain.Y)
+                & RangeX.TryUpdateModelDirectly(data.Range.X)
+                & RangeY.TryUpdateModelDirectly(data.Range.Y)
+                & LPNorm.TryUpdateModelDirectly(data.LPNorm)
+                & CombineXYComponents.TryUpdateModelDirectly(data.CombineXYComponents);
         }
     }
 }

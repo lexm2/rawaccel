@@ -138,9 +138,11 @@ namespace userinterface.ViewModels.Mapping
 
         public void HandleAddMappingSelection(SelectionChangedEventArgs e)
         {
-            if (e.AddedItems.Count > 0 && e.AddedItems[0] is BE.DeviceGroupModel deviceGroup)
+            if (e.AddedItems.Count > 0 && e.AddedItems[0] is string deviceGroup)
             {
-                MappingBE.TryAddMapping(deviceGroup.CurrentValidatedValue, BE.ProfilesModel.DefaultProfile.CurrentNameForDisplay);
+                // TODO: re-add default profile
+                // MappingBE.TryAddMapping(deviceGroup, BE.ProfilesModel.DefaultProfile.CurrentNameForDisplay);
+                MappingBE.TryAddMapping(deviceGroup, "Default");
             }
         }
 

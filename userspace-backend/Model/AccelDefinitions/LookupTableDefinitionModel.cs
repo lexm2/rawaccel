@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Microsoft.Extensions.DependencyInjection;
+using System;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using userspace_backend.Data.Profiles;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Model.EditableSettings;
@@ -10,17 +8,33 @@ using static userspace_backend.Data.Profiles.Accel.LookupTableAccel;
 
 namespace userspace_backend.Model.AccelDefinitions
 {
-    public class LookupTableDefinitionModel : AccelDefinitionModel<LookupTableAccel>
+    public interface ILookupTableDefinitionModel : IAccelDefinitionModelSpecific<LookupTableAccel>
     {
-        public LookupTableDefinitionModel(Acceleration dataObject) : base(dataObject)
+        IEditableSettingSpecific<LookupTableType> ApplyAs { get; }
+
+        IEditableSettingSpecific<LookupTableData> Data { get; }
+
+    }
+
+    public class LookupTableDefinitionModel : EditableSettingsSelectable<LookupTableAccel, Acceleration>, ILookupTableDefinitionModel
+    {
+        public const string ApplyAsDIKey = $"{nameof(LookupTableDefinitionModel)}.{nameof(ApplyAs)}";
+        public const string DataDIKey = $"{nameof(LookupTableDefinitionModel)}.{nameof(Data)}";
+
+        public LookupTableDefinitionModel(
+            [FromKeyedServices(ApplyAsDIKey)]IEditableSettingSpecific<LookupTableType> applyAs,
+            [FromKeyedServices(DataDIKey)]IEditableSettingSpecific<LookupTableData> data)
+            : base([applyAs, data], [])
         {
+            ApplyAs = applyAs;
+            Data = data;
         }
 
-        public EditableSetting<LookupTableType> ApplyAs { get; set; }
+        public IEditableSettingSpecific<LookupTableType> ApplyAs { get; set; }
 
-        public EditableSetting<LookupTableData> Data { get; set; }
+        public IEditableSettingSpecific<LookupTableData> Data { get; set; }
 
-        public override AccelArgs MapToDriver()
+        public AccelArgs MapToDriver()
         {
             // data in driver profile must be predefined length for marshalling purposes
             var accelArgsData = new float[AccelArgs.MaxLutPoints*2];
@@ -34,7 +48,7 @@ namespace userspace_backend.Model.AccelDefinitions
             };
         }
 
-        public override Acceleration MapToData()
+        public override LookupTableAccel MapToData()
         {
             return new LookupTableAccel()
             {
@@ -43,39 +57,15 @@ namespace userspace_backend.Model.AccelDefinitions
             };
         }
 
-        protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()
+        protected override bool TryMapEditableSettingsFromData(LookupTableAccel data)
         {
-            return [ApplyAs, Data];
+            return ApplyAs.TryUpdateModelDirectly(data.ApplyAs)
+                & Data.TryUpdateModelDirectly(new LookupTableData(data.Data));
         }
 
-        protected override IEnumerable<IEditableSettingsCollection> EnumerateEditableSettingsCollections()
+        protected override bool TryMapEditableSettingsCollectionsFromData(LookupTableAccel data)
         {
-            return Enumerable.Empty<IEditableSettingsCollection>();
-        }
-
-        protected override LookupTableAccel GenerateDefaultDataObject()
-        {
-            return new LookupTableAccel()
-            {
-                ApplyAs = LookupTableType.Velocity,
-                Data = [],
-            };
-        }
-
-        protected override void InitSpecificSettingsAndCollections(LookupTableAccel dataObject)
-        {
-            ApplyAs = new EditableSetting<LookupTableType>(
-                displayName: "Apply as",
-                initialValue: dataObject.ApplyAs,
-                parser: UserInputParsers.LookupTableTypeParser,
-                validator: ModelValueValidators.DefaultLookupTableTypeValidator,
-                localizationKey: "LookupTableApplyAs");
-            Data = new EditableSetting<LookupTableData>(
-                displayName: "Data",
-                initialValue: new LookupTableData(dataObject.Data),
-                parser: UserInputParsers.LookupTableDataParser,
-                validator: ModelValueValidators.DefaultLookupTableDataValidator,
-                localizationKey: "LookupTableData");
+            return true;
         }
     }
 
@@ -87,14 +77,6 @@ namespace userspace_backend.Model.AccelDefinitions
         }
 
         public double[] Data { get; set; }
-
-        public override string ToString()
-        {
-            if (Data == null || Data.Length == 0)
-                return string.Empty;
-
-            return string.Join(",", Data);
-        }
 
         public int CompareTo(object? obj)
         {

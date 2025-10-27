@@ -5,29 +5,29 @@ namespace userinterface.ViewModels.Device
 {
     public partial class DeviceGroupSelectorViewModel : ViewModelBase
     {
-        protected DeviceGroupModel selectedEntry = null!;
+        protected string selectedEntry = null!;
 
-        public DeviceGroupSelectorViewModel(DeviceModel device, DeviceGroups deviceGroupsBE)
+        public DeviceGroupSelectorViewModel(IDeviceModel device, DeviceGroups deviceGroupsBE)
         {
             Device = device;
             DeviceGroupsBE = deviceGroupsBE;
             RefreshSelectedDeviceGroup();
         }
 
-        protected DeviceModel Device { get; }
+        protected IDeviceModel Device { get; }
         protected DeviceGroups DeviceGroupsBE { get; }
 
-        public ObservableCollection<DeviceGroupModel> DeviceGroupEntries =>
+        public ObservableCollection<string> DeviceGroupEntries =>
             DeviceGroupsBE.DeviceGroupModels;
 
-        public DeviceGroupModel SelectedEntry
+        public string SelectedEntry
         {
             get => selectedEntry;
             set
             {
                 if (DeviceGroupEntries.Contains(value))
                 {
-                    Device.DeviceGroup = value;
+                    Device.DeviceGroup.TryUpdateModelDirectly(value);
                     selectedEntry = value;
                 }
             }
@@ -37,7 +37,7 @@ namespace userinterface.ViewModels.Device
 
         public void RefreshSelectedDeviceGroup()
         {
-            if (!DeviceGroupEntries.Contains(Device.DeviceGroup))
+            if (!DeviceGroupEntries.Contains(Device.DeviceGroup.ModelValue))
             {
                 IsValid = false;
                 SelectedEntry = DeviceGroups.DefaultDeviceGroup;
@@ -45,7 +45,7 @@ namespace userinterface.ViewModels.Device
             }
 
             IsValid = true;
-            selectedEntry = Device.DeviceGroup;
+            selectedEntry = Device.DeviceGroup.ModelValue;
         }
     }
 }

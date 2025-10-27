@@ -1,105 +1,85 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using Microsoft.Extensions.DependencyInjection;
 using userspace_backend.Data;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model
 {
-    public class DeviceModel : EditableSettingsCollection<Device>
+    public interface IDeviceModel : IEditableSettingsCollectionSpecific<Device>
     {
+        IEditableSettingSpecific<string> Name { get; }
+
+        IEditableSettingSpecific<string> HardwareID { get; }
+
+        IEditableSettingSpecific<int> DPI { get; }
+
+        IEditableSettingSpecific<int> PollRate { get; }
+
+        IEditableSettingSpecific<bool> Ignore { get; }
+
+        IEditableSettingSpecific<string> DeviceGroup { get; }
+    }
+
+    public class DeviceModel : NamedEditableSettingsCollection<Device>, IDeviceModel
+    {
+        public const string NameDIKey = $"{nameof(DeviceModel)}.{nameof(Name)}";
+        public const string HardwareIDDIKey = $"{nameof(DeviceModel)}.{nameof(HardwareID)}";
+        public const string DPIDIKey = $"{nameof(DeviceModel)}.{nameof(DPI)}";
+        public const string PollRateDIKey = $"{nameof(DeviceModel)}.{nameof(PollRate)}";
+        public const string IgnoreDIKey = $"{nameof(DeviceModel)}.{nameof(Ignore)}";
+        public const string DeviceGroupDIKey = $"{nameof(DeviceModel)}.{nameof(DeviceGroup)}";
+
         public DeviceModel(
-            Device device,
-            DeviceGroupModel deviceGroup,
-            DeviceModelNameValidator deviceModelNameValidator,
-            DeviceModelHWIDValidator deviceModelHWIDValidator)
-            : base(device)
+            [FromKeyedServices(NameDIKey)] IEditableSettingSpecific<string> name,
+            [FromKeyedServices(HardwareIDDIKey)] IEditableSettingSpecific<string> hardwareID,
+            [FromKeyedServices(DPIDIKey)] IEditableSettingSpecific<int> dpi,
+            [FromKeyedServices(PollRateDIKey)] IEditableSettingSpecific<int> pollRate,
+            [FromKeyedServices(IgnoreDIKey)] IEditableSettingSpecific<bool> ignore,
+            [FromKeyedServices(DeviceGroupDIKey)] IEditableSettingSpecific<string> deviceGroup)
+            : base(name, [hardwareID, dpi, pollRate, ignore, deviceGroup], [])
         {
+            HardwareID = hardwareID;
+            DPI = dpi;
+            PollRate = pollRate;
+            Ignore = ignore;
             DeviceGroup = deviceGroup;
-            Name.Validator = deviceModelNameValidator;
-            HardwareID.Validator = deviceModelHWIDValidator;
         }
 
-        public EditableSetting<string> Name { get; protected set; }
+        public IEditableSettingSpecific<string> HardwareID { get; protected set; }
 
-        public EditableSetting<string> HardwareID { get; protected set; }
+        public IEditableSettingSpecific<int> DPI { get; protected set; }
 
-        public EditableSetting<string> ProductString { get; protected set; }
+        public IEditableSettingSpecific<int> PollRate { get; protected set; }
 
-        public EditableSetting<int> DPI { get; protected set; }
+        public IEditableSettingSpecific<bool> Ignore { get; protected set; }
 
-        public EditableSetting<int> PollRate { get; protected set; }
-
-        public EditableSetting<bool> Ignore { get; protected set; }
-
-        public DeviceGroupModel DeviceGroup { get; set; }
-
-        protected DeviceModelNameValidator DeviceModelNameValidator { get; }
-
-        protected DeviceModelHWIDValidator DeviceModelHWIDValidator { get; }
-
-        protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()
-        {
-            return [Name, HardwareID, ProductString, DPI, PollRate, Ignore, DeviceGroup];
-        }
-
-        protected override IEnumerable<IEditableSettingsCollection> EnumerateEditableSettingsCollections()
-        {
-            return [];
-        }
-
-        protected override void InitEditableSettingsAndCollections(Device device)
-        {
-            Name = new EditableSetting<string>(
-                displayName: "Name",
-                initialValue: device.Name,
-                parser: UserInputParsers.StringParser,
-                validator: ModelValueValidators.DefaultStringValidator,
-                localizationKey: "DeviceName");
-            HardwareID = new EditableSetting<string>(
-                displayName: "Hardware ID",
-                initialValue: device.HWID,
-                parser: UserInputParsers.StringParser,
-                validator: ModelValueValidators.DefaultStringValidator,
-                localizationKey: "DeviceHardwareID");
-            ProductString = new EditableSetting<string>(
-                displayName: "Product String",
-                initialValue: device.ProductString,
-                parser: UserInputParsers.StringParser,
-                validator: ModelValueValidators.DefaultStringValidator,
-                localizationKey: "DeviceProductString");
-            DPI = new EditableSetting<int>(
-               displayName: "DPI",
-               initialValue: device.DPI,
-               parser: UserInputParsers.IntParser,
-               validator: ModelValueValidators.DefaultIntValidator,
-               localizationKey: "DeviceDPI");
-            PollRate = new EditableSetting<int>(
-                displayName: "Polling Rate",
-                initialValue: device.PollingRate,
-                parser: UserInputParsers.IntParser,
-                validator: ModelValueValidators.DefaultIntValidator,
-                localizationKey: "DevicePollingRate");
-            Ignore = new EditableSetting<bool>(
-                displayName: "Ignore",
-                initialValue: device.Ignore,
-                parser: UserInputParsers.BoolParser,
-                validator: ModelValueValidators.DefaultBoolValidator,
-                localizationKey: "DeviceIgnore");
-        }
+        public IEditableSettingSpecific<string> DeviceGroup { get; set; }
 
         public override Device MapToData()
         {
             return new Device()
             {
-                Name = this.Name.ModelValue,
-                HWID = this.HardwareID.ModelValue,
-                ProductString = this.ProductString.ModelValue,
-                DPI = this.DPI.ModelValue,
-                PollingRate = this.PollRate.ModelValue,
-                Ignore = this.Ignore.ModelValue,
+                Name = Name.ModelValue,
+                HWID = HardwareID.ModelValue,
+                DPI = DPI.ModelValue,
+                PollingRate = PollRate.ModelValue,
+                Ignore = Ignore.ModelValue,
                 DeviceGroup = DeviceGroup.ModelValue,
             };
+        }
+
+        protected override bool TryMapEditableSettingsFromData(Device data)
+        {
+            return Name.TryUpdateModelDirectly(data.Name)
+                & HardwareID.TryUpdateModelDirectly(data.HWID)
+                & DPI.TryUpdateModelDirectly(data.DPI)
+                & PollRate.TryUpdateModelDirectly(data.PollingRate)
+                & Ignore.TryUpdateModelDirectly(data.Ignore)
+                & DeviceGroup.TryUpdateModelDirectly(data.DeviceGroup);
+        }
+
+        protected override bool TryMapEditableSettingsCollectionsFromData(Device data)
+        {
+            return true;
         }
     }
 }

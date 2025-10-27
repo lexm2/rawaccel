@@ -38,12 +38,12 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private readonly IModalService modalService;
     private readonly ISettingsService settingsService;
 
-    private readonly BE.BackEnd backEnd;
+    private readonly BE.IBackEnd backEnd;
     private readonly IThemeService themeService;
     private readonly INotificationService notificationService;
     private readonly FrameTimerService frameTimer;
 
-    public MainWindowViewModel(BE.BackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer, INotificationService notificationService)
+    public MainWindowViewModel(BE.IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer, INotificationService notificationService)
     {
         this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
         this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
@@ -88,7 +88,7 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     public ToastContainerViewModel ToastContainerViewModel => toastContainerViewModel;
 
-    protected BE.BackEnd BackEnd => backEnd;
+    protected BE.IBackEnd BackEnd => backEnd;
 
     public ICommand ApplyCommand { get; }
 

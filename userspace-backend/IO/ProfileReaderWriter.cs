@@ -20,7 +20,7 @@ namespace userspace_backend.IO
 
         public override DATA.Profile Deserialize(string toRead)
         {
-            return JsonSerializer.Deserialize<DATA.Profile>(toRead);
+            return JsonSerializer.Deserialize<DATA.Profile>(toRead, JsonOptions);
         }
 
         public override string Serialize(DATA.Profile toWrite)

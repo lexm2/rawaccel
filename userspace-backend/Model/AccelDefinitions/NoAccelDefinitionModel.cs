@@ -1,24 +1,24 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using userspace_backend.Data.Profiles;
+﻿using userspace_backend.Data.Profiles;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions
 {
-    public class NoAccelDefinitionModel : AccelDefinitionModel<NoAcceleration>
+    public interface INoAccelDefinitionModel : IAccelDefinitionModelSpecific<NoAcceleration>
     {
-        public NoAccelDefinitionModel(Acceleration dataObject) : base(dataObject)
+    }
+
+    public class NoAccelDefinitionModel : EditableSettingsSelectable<NoAcceleration, Acceleration>, INoAccelDefinitionModel
+    {
+        public NoAccelDefinitionModel()
+            : base([], [])
         {
             NoAcceleration = new NoAcceleration();
         }
 
         public NoAcceleration NoAcceleration { get; protected set; }
 
-        public override AccelArgs MapToDriver()
+        public AccelArgs MapToDriver()
         {
             return new AccelArgs()
             {
@@ -26,29 +26,19 @@ namespace userspace_backend.Model.AccelDefinitions
             };
         }
 
-        public override Acceleration MapToData()
+        public override NoAcceleration MapToData()
         {
             return NoAcceleration;
         }
 
-        protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()
+        protected override bool TryMapEditableSettingsFromData(NoAcceleration data)
         {
-            return Enumerable.Empty<IEditableSetting>();
+            return true;
         }
 
-        protected override IEnumerable<IEditableSettingsCollection> EnumerateEditableSettingsCollections()
+        protected override bool TryMapEditableSettingsCollectionsFromData(NoAcceleration data)
         {
-            return Enumerable.Empty<IEditableSettingsCollection>();
-        }
-
-        protected override NoAcceleration GenerateDefaultDataObject()
-        {
-            return new NoAcceleration();
-        }
-
-        protected override void InitSpecificSettingsAndCollections(NoAcceleration dataObject)
-        {
-            // Nothing to do here since no acceleration has no settings
+            return true;
         }
     }
 }

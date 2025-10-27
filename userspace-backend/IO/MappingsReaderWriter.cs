@@ -25,7 +25,7 @@ namespace userspace_backend.IO
 
         public override MappingSet Deserialize(string toRead)
         {
-            return JsonSerializer.Deserialize<MappingSet>(toRead);
+            return JsonSerializer.Deserialize<MappingSet>(toRead, JsonOptions);
         }
     }
 }

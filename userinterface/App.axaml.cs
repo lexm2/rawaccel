@@ -13,6 +13,7 @@ using userinterface.ViewModels.Settings;
 using userinterface.Views;
 using userspace_backend;
 using userspace_backend.Hardware;
+using userspace_backend.IO;
 using DATA = userspace_backend.Data;
 
 namespace userinterface;
@@ -32,21 +33,7 @@ public partial class App : Application
     {
         var services = new ServiceCollection();
 
-        // Register services
-        services.AddSingleton<INotificationService>(provider =>
-            new NotificationService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>(), provider.GetRequiredService<userspace_backend.Logging.ILoggingService>()));
-        services.AddSingleton<IModalService>(provider =>
-            new ModalService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>()));
-        services.AddSingleton<IThemeService>(provider =>
-            new ThemeService(provider.GetRequiredService<ISettingsService>()));
-        services.AddSingleton<IViewModelFactory, ViewModelFactory>();
-        services.AddSingleton<LocalizationService>();
-        services.AddSingleton<FrameTimerService>();
-        services.AddSingleton<PreviewChartRenderer>();
-        services.AddSingleton<IMouseTracker, MouseTracker>();
-        services.AddSingleton<IAnimationStateService, AnimationStateService>();
-
-        // Register logging service
+        // Register logging service first (needed by other services)
         services.AddSingleton<userspace_backend.Logging.ILoggingService>(provider =>
         {
             var bootstrapper = BootstrapBackEnd();
@@ -55,24 +42,57 @@ public partial class App : Application
             return new userspace_backend.Logging.LoggingService(loggingConfig);
         });
 
-        // Register backend services
-        services.AddSingleton<IDeviceInfoProvider, DeviceInfoProvider>();
-        services.AddSingleton<Bootstrapper>(provider => BootstrapBackEnd());
-        services.AddSingleton<BackEnd>(provider =>
+        // Register UI services
+        services.AddSingleton<LocalizationService>();
+        services.AddSingleton<FrameTimerService>();
+        services.AddSingleton<PreviewChartRenderer>();
+        services.AddSingleton<IMouseTracker, MouseTracker>();
+        services.AddSingleton<IAnimationStateService, AnimationStateService>();
+        services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IViewModelFactory, ViewModelFactory>();
+
+        services.AddSingleton<INotificationService>(provider =>
+            new NotificationService(
+                provider.GetRequiredService<LocalizationService>(),
+                provider.GetRequiredService<ISettingsService>(),
+                provider.GetRequiredService<userspace_backend.Logging.ILoggingService>()));
+
+        services.AddSingleton<IModalService>(provider =>
+            new ModalService(
+                provider.GetRequiredService<LocalizationService>(),
+                provider.GetRequiredService<ISettingsService>()));
+
+        services.AddSingleton<IThemeService>(provider =>
+            new ThemeService(provider.GetRequiredService<ISettingsService>()));
+
+        // Register backend services using BackEndComposer
+        string settingsDirectory = System.AppDomain.CurrentDomain.BaseDirectory;
+        services.AddSingleton<DevicesReaderWriter>();
+        services.AddSingleton<MappingsReaderWriter>();
+        services.AddSingleton<ProfileReaderWriter>();
+
+        services.AddSingleton<IBackEndLoader>(sp =>
         {
-            var bootstrapper = provider.GetRequiredService<Bootstrapper>();
-            var deviceInfoProvider = provider.GetRequiredService<IDeviceInfoProvider>();
-            var loggingService = provider.GetRequiredService<userspace_backend.Logging.ILoggingService>();
-            var backEnd = new BackEnd(bootstrapper, deviceInfoProvider, loggingService);
-            backEnd.Load();
-            return backEnd;
+            var devicesRW = sp.GetRequiredService<DevicesReaderWriter>();
+            var mappingsRW = sp.GetRequiredService<MappingsReaderWriter>();
+            var profileRW = sp.GetRequiredService<ProfileReaderWriter>();
+            return new BackEndLoader(settingsDirectory, devicesRW, mappingsRW, profileRW);
         });
 
-        // Register settings service that depends on backend
-        services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IDeviceInfoProvider, DeviceInfoProvider>();
 
-        RegisterViewModels(services);
+        // Compose backend DI and build service provider
+        var serviceProvider = BackEndComposer.Compose(services);
+        Services = serviceProvider;
 
+        // Load backend
+        var backEnd = serviceProvider.GetRequiredService<IBackEnd>();
+        backEnd.Load();
+
+        // Register ViewModels
+        RegisterViewModels(services, serviceProvider);
+
+        // Rebuild service provider with ViewModels
         Services = services.BuildServiceProvider();
 
         // Apply settings from backend after services are built
@@ -88,8 +108,6 @@ public partial class App : Application
             {
                 DataContext = Services.GetRequiredService<MainWindowViewModel>(),
             };
-
-            // Set up the toast control (was already created in MainWindow.axaml)
 
             desktop.MainWindow = mainWindow;
 
@@ -108,12 +126,14 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private void RegisterViewModels(IServiceCollection services)
+    private void RegisterViewModels(IServiceCollection services, IServiceProvider tempProvider)
     {
+        var backEnd = tempProvider.GetRequiredService<IBackEnd>();
+
         // Main ViewModels
         services.AddSingleton<MainWindowViewModel>(provider =>
             new MainWindowViewModel(
-                provider.GetRequiredService<BackEnd>(),
+                backEnd,
                 provider.GetRequiredService<IThemeService>(),
                 provider.GetRequiredService<ISettingsService>(),
                 provider.GetRequiredService<FrameTimerService>(),
@@ -123,12 +143,12 @@ public partial class App : Application
         // Device ViewModels
         services.AddTransient<ViewModels.Device.DevicesPageViewModel>(provider =>
             new ViewModels.Device.DevicesPageViewModel(
-                provider.GetRequiredService<BackEnd>(),
+                backEnd,
                 provider.GetRequiredService<IModalService>(),
                 provider.GetRequiredService<LocalizationService>()));
         services.AddTransient<ViewModels.Device.DevicesListViewModel>(provider =>
             new ViewModels.Device.DevicesListViewModel(
-                provider.GetRequiredService<BackEnd>().Devices,
+                backEnd.Devices,
                 provider.GetRequiredService<IModalService>(),
                 provider.GetRequiredService<LocalizationService>()));
         services.AddTransient<ViewModels.Device.DeviceGroupsViewModel>();
@@ -177,7 +197,11 @@ public partial class App : Application
     {
         return new Bootstrapper()
         {
-            BackEndLoader = new BackEndLoader(System.AppDomain.CurrentDomain.BaseDirectory),
+            BackEndLoader = new BackEndLoader(
+                System.AppDomain.CurrentDomain.BaseDirectory,
+                new DevicesReaderWriter(),
+                new MappingsReaderWriter(),
+                new ProfileReaderWriter()),
             DevicesToLoad =
             [
                 new DATA.Device() { Name = "Superlight 2", DPI = 32000, HWID = @"HID\VID_046D&PID_C54D&MI_00", PollingRate = 1000, DeviceGroup = "Logitech Mice" },
@@ -280,10 +304,10 @@ public partial class App : Application
         }
     }
 
-    /* 
-     * This was originally intended to preload libraries that cause stutter 
+    /*
+     * This was originally intended to preload libraries that cause stutter
      * but it seems to not have much effect. Will leave it here for now.
-     * 
+     *
      * Could also do these
      * System.Runtime.Intrinsics
      * System.Text.Json

@@ -1,27 +1,40 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using userspace_backend.Data.Profiles;
+﻿using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions.Formula
 {
-    public class LinearAccelerationDefinitionModel : AccelDefinitionModel<LinearAccel>
+    public interface ILinearAccelerationDefinitionModel : IAccelDefinitionModelSpecific<LinearAccel>
     {
-        public LinearAccelerationDefinitionModel(Acceleration dataObject) : base(dataObject)
+    }
+
+    public class LinearAccelerationDefinitionModel
+        : EditableSettingsSelectable<LinearAccel, FormulaAccel>,
+        ILinearAccelerationDefinitionModel
+    {
+        public const string AccelerationDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(Acceleration)}";
+        public const string OffsetDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(Offset)}";
+        public const string CapDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(CapDIKey)}";
+
+        public LinearAccelerationDefinitionModel(
+            [FromKeyedServices(AccelerationDIKey)]IEditableSettingSpecific<double> acceleration,
+            [FromKeyedServices(OffsetDIKey)]IEditableSettingSpecific<double> offset,
+            [FromKeyedServices(CapDIKey)]IEditableSettingSpecific<double> cap)
+            : base([acceleration, offset, cap], [])
         {
+            Acceleration = acceleration;
+            Offset = offset;
+            Cap = cap;
         }
 
-        public EditableSetting<double> Acceleration { get; set; }
+        public IEditableSettingSpecific<double> Acceleration { get; set; }
 
-        public EditableSetting<double> Offset { get; set;  }
+        public IEditableSettingSpecific<double> Offset { get; set;  }
 
-        public EditableSetting<double> Cap { get; set; }
+        public IEditableSettingSpecific<double> Cap { get; set; }
 
-        public override AccelArgs MapToDriver()
+        public AccelArgs MapToDriver()
         {
             return new AccelArgs
             {
@@ -34,7 +47,7 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
             };
         }
 
-        public override Acceleration MapToData()
+        public override LinearAccel MapToData()
         {
             return new LinearAccel()
             {
@@ -44,46 +57,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
             };
         }
 
-        protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()
+        protected override bool TryMapEditableSettingsFromData(LinearAccel data)
         {
-            return [ Acceleration, Offset, Cap ];
+            return Acceleration.TryUpdateModelDirectly(data.Acceleration)
+                & Offset.TryUpdateModelDirectly(data.Offset)
+                & Cap.TryUpdateModelDirectly(data.Cap);
         }
 
-        protected override IEnumerable<IEditableSettingsCollection> EnumerateEditableSettingsCollections()
+        protected override bool TryMapEditableSettingsCollectionsFromData(LinearAccel data)
         {
-            return Enumerable.Empty<IEditableSettingsCollection>();
-        }
-
-        protected override LinearAccel GenerateDefaultDataObject()
-        {
-            return new LinearAccel()
-            {
-                Acceleration = 0.001,
-                Offset = 0,
-                Cap = 0,
-            };
-        }
-
-        protected override void InitSpecificSettingsAndCollections(LinearAccel dataObject)
-        {
-            Acceleration = new EditableSetting<double>(
-                displayName: "Acceleration",
-                initialValue: dataObject.Acceleration,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AccelLinearAcceleration");
-            Offset = new EditableSetting<double>(
-                displayName: "Offset",
-                initialValue: dataObject.Offset,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AccelLinearOffset");
-            Cap = new EditableSetting<double>(
-                displayName: "Cap",
-                initialValue: dataObject.Cap,
-                parser: UserInputParsers.DoubleParser,
-                validator: ModelValueValidators.DefaultDoubleValidator,
-                localizationKey: "AccelLinearCap");
+            return true;
         }
     }
 }

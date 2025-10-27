@@ -7,10 +7,14 @@ using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model
 {
-    public class DeviceGroups : EditableSettingsCollection<IEnumerable<string>>
+    public interface IDeviceGroups
     {
-        public static readonly DeviceGroupModel DefaultDeviceGroup =
-            new DeviceGroupModel("Default", ModelValueValidators.AllChangesInvalidStringValidator);
+        bool TryGetDeviceGroup(string name, out string? deviceGroup);
+    }
+
+    public class DeviceGroups : EditableSettingsCollection<IEnumerable<string>>, IDeviceGroups
+    {
+        public const string DefaultDeviceGroup = "Default";
 
         public DeviceGroups(IEnumerable<string> devices)
             : base(devices)
@@ -18,23 +22,23 @@ namespace userspace_backend.Model
             GroupNameChangeValidator = new DeviceGroupValidator(this);
         }
 
-        public ObservableCollection<DeviceGroupModel> DeviceGroupModels { get; set; }
+        public ObservableCollection<string> DeviceGroupModels { get; set; }
 
         protected DeviceGroupValidator GroupNameChangeValidator { get; set; }
 
-        public bool TryGetDeviceGroup(string name, out DeviceGroupModel? deviceGroup)
+        public bool TryGetDeviceGroup(string name, out string? deviceGroup)
         {
             deviceGroup = DeviceGroupModels.FirstOrDefault(
-                g => string.Equals(g.ModelValue, name, StringComparison.InvariantCultureIgnoreCase));
+                g => string.Equals(g, name, StringComparison.InvariantCultureIgnoreCase));
 
             return deviceGroup is not null;
         }
 
-        public DeviceGroupModel AddOrGetDeviceGroup(string deviceGroupName)
+        public string AddOrGetDeviceGroup(string deviceGroupName)
         {
-            if (!TryGetDeviceGroup(deviceGroupName, out DeviceGroupModel? deviceGroup))
+            if (!TryGetDeviceGroup(deviceGroupName, out string? deviceGroup))
             {
-                deviceGroup = new DeviceGroupModel(deviceGroupName, GroupNameChangeValidator);
+                deviceGroup = deviceGroupName;
                 DeviceGroupModels.Add(deviceGroup);
             }
 
@@ -75,27 +79,26 @@ namespace userspace_backend.Model
                 return false;
             }
 
-            DeviceGroupModel deviceGroup = new DeviceGroupModel(deviceGroupName, GroupNameChangeValidator);
-            DeviceGroupModels.Add(deviceGroup);
+            DeviceGroupModels.Add(deviceGroupName);
             return true;
         }
 
-        public bool RemoveDeviceGroup(DeviceGroupModel deviceGroup)
+        public bool RemoveDeviceGroup(string deviceGroup)
         {
             return DeviceGroupModels.Remove(deviceGroup);
         }
 
         public override IEnumerable<string> MapToData()
         {
-            return DeviceGroupModels.Select(g => g.ModelValue);
+            return DeviceGroupModels;
         }
 
         protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()
         {
-            return DeviceGroupModels;
+            return [];
         }
 
-        protected override IEnumerable<IEditableSettingsCollection> EnumerateEditableSettingsCollections()
+        protected override IEnumerable<IEditableSettingsCollectionV2> EnumerateEditableSettingsCollections()
         {
             return [];
         }
@@ -104,7 +107,7 @@ namespace userspace_backend.Model
         {
             // This initialization does not set up all device group models.
             // That is done in backend construction in order to point the devices to their groups.
-            DeviceGroupModels = new ObservableCollection<DeviceGroupModel>() { DefaultDeviceGroup };
+            DeviceGroupModels = new ObservableCollection<string>() { DefaultDeviceGroup };
         }
     }
 

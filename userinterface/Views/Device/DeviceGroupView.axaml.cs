@@ -22,12 +22,7 @@ public partial class DeviceGroupView : UserControl
 
     public void LostFocusHandler(object sender, RoutedEventArgs args)
     {
-        if (sender is TextBox senderTextBox)
-        {
-            if (senderTextBox.DataContext is BE.DeviceGroupModel deviceGroup)
-            {
-                deviceGroup.TryUpdateFromInterface();
-            }
-        }
+        // Device groups are now simple strings, no longer editable settings
+        // The binding handles updates automatically
     }
 }

@@ -1,129 +1,47 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using userspace_backend.Model.EditableSettings;
 using DATA = userspace_backend.Data;
 
-/**
- * TODO: Fix circular dependency and initialization order issues with ProfileNameValidator
- * 
- * - ProfilesModel needs ProfileNameValidator to create ProfileModel instances
- * - ProfileNameValidator needs ProfilesModel to check for duplicate names
- * 
- *  - Base constructor calls InitEditableSettingsAndCollections() BEFORE derived constructor can set NameValidator property, causing validator to be null
- *  
- *  - SOLUTION (Implement after DI PR from _m00se):
- *  
- *  Create IProfileNameChecker interface for duplicate name validation
- *  Have ProfilesModel implement IProfileNameChecker
- *  Inject IProfileNameChecker into ProfileNameValidator constructor
- *  Register ProfileNameValidator in DI container
- *  Inject ProfileNameValidator into ProfilesModel constructor
- */
-
 namespace userspace_backend.Model
 {
-    public class ProfilesModel : EditableSettingsCollection<IEnumerable<DATA.Profile>>
+    public interface IProfilesModel : IEditableSettingsList<IProfileModel, DATA.Profile>
     {
-        public static readonly ProfileModel DefaultProfile = new ProfileModel(
-            GenerateNewDefaultProfile("Default"), ModelValueValidators.AllChangesInvalidStringValidator);
-
-        public ProfilesModel(IEnumerable<DATA.Profile> dataObject) : base(dataObject)
-        {
-            NameValidator = new ProfileNameValidator(this);
-        }
-
-        public ObservableCollection<ProfileModel> Profiles { get; protected set; }
-
-        protected ProfileNameValidator NameValidator { get; }
-
-        public override IEnumerable<DATA.Profile> MapToData()
-        {
-            return Profiles.Select(p => p.MapToData());
-        }
-
-        protected override IEnumerable<IEditableSetting> EnumerateEditableSettings()
-        {
-            return [];
-        }
-
-        protected override IEnumerable<IEditableSettingsCollection> EnumerateEditableSettingsCollections()
-        {
-            return Profiles;
-        }
-
-        protected override void InitEditableSettingsAndCollections(IEnumerable<DATA.Profile> dataObject)
-        {
-            Profiles = new ObservableCollection<ProfileModel>() { DefaultProfile, };
-        }
-
-        public bool TryGetProfile(string name, out ProfileModel? profileModel)
-        {
-            profileModel = Profiles.FirstOrDefault(
-                p => string.Equals(p.Name.ModelValue, name, StringComparison.InvariantCultureIgnoreCase));
-
-            return profileModel != null;
-        }
-
-        public bool TryAddNewDefaultProfile(string name)
-        {
-            if (TryGetProfile(name, out _))
-            {
-                return false;
-            }
-
-            DATA.Profile profile = GenerateNewDefaultProfile(name);
-            ProfileModel profileModel = new ProfileModel(profile, NameValidator);
-            Profiles.Add(profileModel);
-            return true;
-        }
-
-        public bool TryAddProfile(DATA.Profile profileToAdd)
-        {
-            if (TryGetProfile(profileToAdd.Name, out _))
-            {
-                return false;
-            }
-
-            ProfileModel profileModel = new ProfileModel(profileToAdd, NameValidator);
-            Profiles.Add(profileModel);
-            return true;
-        }
-
-        public bool RemoveProfile(ProfileModel profile)
-        {
-            return Profiles.Remove(profile);
-        }
-
-        protected static DATA.Profile GenerateNewDefaultProfile(string name)
-        {
-            return new DATA.Profile()
-            {
-                Name = name,
-                OutputDPI = 1000,
-                YXRatio = 1,
-            };
-        }
     }
 
-    public class ProfileNameValidator(ProfilesModel profilesModel) : IModelValueValidator<string>
+    public class ProfilesModel : EditableSettingsList<IProfileModel, DATA.Profile>, IProfilesModel
     {
-        ProfilesModel ProfilesModel { get; } = profilesModel;
+        // Default profile is created during BackEnd.Load() if it doesn't exist
 
-        // Should match ra::MAX_NAME_LEN from the kernel driver
-        private const int MaxNameLength = 256;
-
-        public bool Validate(string value)
+        public ProfilesModel(IServiceProvider serviceProvider)
+            : base(serviceProvider, [], [])
         {
-            if (string.IsNullOrEmpty(value))
-                return false;
+        }
 
-            if (value.Length >= MaxNameLength)
-                return false;
 
-            // Check if profile name already exists
-            return !ProfilesModel.TryGetProfile(value, out _);
+        protected override string DefaultNameTemplate => "Profile";
+
+        protected override string GetNameFromElement(IProfileModel element)
+        {
+            return element.Name.ModelValue;
+        }
+
+        protected override bool TryMapEditableSettingsFromData(IEnumerable<DATA.Profile> data)
+        {
+            return true;
+        }
+
+        protected override void SetElementName(IProfileModel element, string name)
+        {
+            element.Name.TryUpdateModelDirectly(name);
+        }
+
+        protected override string GetNameFromData(DATA.Profile data)
+        {
+            return data.Name;
         }
     }
 }
