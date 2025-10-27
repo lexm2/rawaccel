@@ -444,55 +444,9 @@ namespace userinterface.Services
 
             var result = await ShowDialogImmediatelyAsync<bool?>(confirmationView, "UnconfiguredDeviceTitle");
 
-
-            // Get the BackEnd service to handle the device configuration
-            if (result == true)
-            {
-                var backEnd = App.Services?.GetService<userspace_backend.BackEnd>();
-                if (backEnd?.UnconfiguredActiveDevice != null)
-                {
-                    try
-                    {
-
-                        var deviceToAdd = backEnd.UnconfiguredActiveDevice;
-                        bool success = backEnd.Devices.TryAddDevice(deviceToAdd.MapToData());
-
-                        if (success)
-                        {
-                            backEnd.UnconfiguredActiveDevice = null;
-                            backEnd.ApplyUserSettingsOnly();
-
-                            userspace_backend.NotificationManager.QueueNotification(
-                                "DeviceCreatedSuccessfully",
-                                userspace_backend.NotificationType.Success,
-                                deviceToAdd.Name.CurrentValidatedValue);
-                        }
-                        else
-                        {
-                            userspace_backend.NotificationManager.QueueNotification(
-                                "DeviceCreationFailed",
-                                userspace_backend.NotificationType.Error,
-                                deviceToAdd.Name.CurrentValidatedValue);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        userspace_backend.NotificationManager.QueueNotification(
-                            "DeviceCreationError",
-                            userspace_backend.NotificationType.Error,
-                            ex.Message);
-                    }
-                }
-                else
-                {
-                    userspace_backend.NotificationManager.QueueNotification(
-                        "NoUnconfiguredDevice",
-                        userspace_backend.NotificationType.Error);
-                }
-            }
-            else
-            {
-            }
+            // Hardware detection has been removed
+            // This method now only shows the dialog and returns the user's choice
+            // Device management should be done through the Devices page
 
             return result;
         }

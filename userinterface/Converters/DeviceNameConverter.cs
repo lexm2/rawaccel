@@ -1,6 +1,7 @@
 ﻿using Avalonia.Data.Converters;
 using System;
 using System.Globalization;
+using userspace_backend.Model;
 
 namespace userinterface.Converters
 {
@@ -8,9 +9,9 @@ namespace userinterface.Converters
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (value is MultiHandleDevice device)
+            if (value is ISystemDevice device)
             {
-                return string.IsNullOrWhiteSpace(device.name) ? device.id : device.name;
+                return string.IsNullOrWhiteSpace(device.Name) ? device.HWID : device.Name;
             }
             return value?.ToString() ?? string.Empty;
         }

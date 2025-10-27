@@ -10,17 +10,8 @@ namespace userinterface.Converters
     {
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (value is MultiHandleDevice device && !string.IsNullOrEmpty(device.id))
-            {
-                var backEnd = App.Services?.GetService<BackEnd>();
-
-                if (backEnd?.Hardware.ActiveDevice != null)
-                {
-                    bool isActive = device.id.Equals(backEnd.Hardware.ActiveDevice.HardwareID.CurrentValidatedValue, StringComparison.OrdinalIgnoreCase);
-                    return isActive;
-                }
-            }
-
+            // Hardware detection has been removed - no device is considered "active"
+            // This converter can be removed or extended with different logic in the future
             return false;
         }
 

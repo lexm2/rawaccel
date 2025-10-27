@@ -15,15 +15,15 @@ namespace userinterface.ViewModels.Profile
             this.viewModelFactory = viewModelFactory;
         }
 
-        protected BE.ProfileModel ProfileModelBE { get; private set; } = null!;
+        protected BE.IProfileModel ProfileModelBE { get; private set; } = null!;
 
-        public string CurrentName => ProfileModelBE?.Name.CurrentValidatedValue ?? string.Empty;
+        public string CurrentName => ProfileModelBE?.Name.ModelValue ?? string.Empty;
 
         public ProfileSettingsViewModel Settings { get; private set; } = null!;
 
         public ProfileChartViewModel Chart { get; private set; } = null!;
 
-        public void Initialize(BE.ProfileModel profileModel)
+        public void Initialize(BE.IProfileModel profileModel)
         {
             var stopwatch = Stopwatch.StartNew();
 

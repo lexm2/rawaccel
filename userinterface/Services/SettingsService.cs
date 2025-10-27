@@ -7,9 +7,9 @@ namespace userinterface.Services;
 
 public class SettingsService : ISettingsService
 {
-    private readonly BackEnd backEnd;
+    private readonly IBackEnd backEnd;
 
-    public SettingsService(BackEnd backEnd)
+    public SettingsService(IBackEnd backEnd)
     {
         this.backEnd = backEnd;
 

@@ -49,7 +49,7 @@ public partial class AccelerationFormulaSettingsView : UserControl
         }
 
         CreateFormulaFieldViewModel();
-        var currentFormulaType = GetCurrentFormulaType(viewModel.FormulaAccelBE.FormulaType.InterfaceValue);
+        var currentFormulaType = GetCurrentFormulaType(viewModel.FormulaAccelBE.Selection.InterfaceValue);
         AddFormulaSpecificFields(currentFormulaType, viewModel);
         AddControlToStackPanel();
     }
@@ -68,8 +68,8 @@ public partial class AccelerationFormulaSettingsView : UserControl
         {
             if (DataContext is AccelerationFormulaSettingsViewModel viewModel && FormulaTypeCombo.SelectedEnumValue != null)
             {
-                viewModel.FormulaAccelBE.FormulaType.InterfaceValue = FormulaTypeCombo.SelectedEnumValue;
-                viewModel.FormulaAccelBE.FormulaType.TryUpdateFromInterface();
+                viewModel.FormulaAccelBE.Selection.InterfaceValue = FormulaTypeCombo.SelectedEnumValue;
+                viewModel.FormulaAccelBE.Selection.TryUpdateFromInterface();
                 OnFormulaTypeSelectionChanged();
             }
         };
@@ -109,7 +109,7 @@ public partial class AccelerationFormulaSettingsView : UserControl
         }
 
         RemoveFormulaSpecificFields();
-        var currentFormulaType = GetCurrentFormulaType(viewModel.FormulaAccelBE.FormulaType.InterfaceValue);
+        var currentFormulaType = GetCurrentFormulaType(viewModel.FormulaAccelBE.Selection.InterfaceValue);
         AddFormulaSpecificFields(currentFormulaType, viewModel);
     }
 

@@ -15,6 +15,7 @@ namespace userinterface.ViewModels.Controls
     {
         private readonly ILoggingService? loggingService;
         private readonly LocalizationService? localizationService;
+        private readonly IUserInputParser<double> doubleParser;
 
         private string? lastXInterfaceValue;
         private string? lastYInterfaceValue;
@@ -55,6 +56,7 @@ namespace userinterface.ViewModels.Controls
         {
             this.loggingService = loggingService;
             this.localizationService = localizationService;
+            this.doubleParser = new DoubleParser();
 
             if (this.localizationService != null)
             {
@@ -66,14 +68,14 @@ namespace userinterface.ViewModels.Controls
             XCoordinate = new EditableSetting<double>(
                 displayName: "X Coordinate",
                 initialValue: x,
-                parser: UserInputParsers.LUTXParser,
+                parser: doubleParser,
                 validator: LUTModelValueValidators.LUTXValidator,
                 autoUpdateFromInterface: true);
 
             YCoordinate = new EditableSetting<double>(
                 displayName: "Y Coordinate",
                 initialValue: y,
-                parser: UserInputParsers.LUTYParser,
+                parser: doubleParser,
                 validator: LUTModelValueValidators.LUTYValidator,
                 autoUpdateFromInterface: true);
 
@@ -92,13 +94,13 @@ namespace userinterface.ViewModels.Controls
 
         public double XValue
         {
-            get => XCoordinate.CurrentValidatedValue;
+            get => XCoordinate.ModelValue;
             set => XCoordinate.InterfaceValue = value.ToString(CultureInfo.InvariantCulture);
         }
 
         public double YValue
         {
-            get => YCoordinate.CurrentValidatedValue;
+            get => YCoordinate.ModelValue;
             set => YCoordinate.InterfaceValue = value.ToString("F2", CultureInfo.InvariantCulture);
         }
 
@@ -161,7 +163,7 @@ namespace userinterface.ViewModels.Controls
                 DetectValidationFailure(setting, coordinateType);
             }
 
-            if (e.PropertyName == nameof(EditableSetting<double>.CurrentValidatedValue))
+            if (e.PropertyName == nameof(EditableSetting<double>.ModelValue))
             {
                 ValueChanged?.Invoke(this, new PointValueChangedEventArgs(this, XValue, YValue));
 
@@ -196,9 +198,9 @@ namespace userinterface.ViewModels.Controls
 
             // Check for validation errors in either coordinate
             bool xHasError = !string.IsNullOrEmpty(XCoordinate.InterfaceValue) &&
-                           !UserInputParsers.LUTXParser.TryParse(XCoordinate.InterfaceValue, out _);
+                           !doubleParser.TryParse(XCoordinate.InterfaceValue, out _);
             bool yHasError = !string.IsNullOrEmpty(YCoordinate.InterfaceValue) &&
-                           !UserInputParsers.LUTYParser.TryParse(YCoordinate.InterfaceValue, out _);
+                           !doubleParser.TryParse(YCoordinate.InterfaceValue, out _);
 
             HasValidationErrors = xHasError || yHasError;
 

@@ -23,8 +23,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 {
     private readonly List<Border> allItems = [];
     private Panel? profileContainer;
-    private readonly BE.ProfilesModel profilesModel;
-    private BE.ProfileModel? selectedProfile;
+    private readonly BE.IProfilesModel profilesModel;
+    private BE.IProfileModel? selectedProfile;
 
     private int GetProfileCount() => allItems.Count - 1;
     private readonly IAnimationStateService animationStateService;
@@ -44,7 +44,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         profilesModel = backEnd.Profiles ?? throw new ArgumentNullException(nameof(backEnd.Profiles));
         localizationService.PropertyChanged += OnLocalizationPropertyChanged;
-        profilesModel.Profiles.CollectionChanged += OnProfilesCollectionChanged;
+        ((INotifyCollectionChanged)profilesModel.Elements).CollectionChanged += OnProfilesCollectionChanged;
 
         InitializeComponent();
 
@@ -119,7 +119,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         if (e.NewItems == null) return;
 
         // Add profiles at their actual positions in the backend collection
-        int startIndex = e.NewStartingIndex >= 0 ? e.NewStartingIndex : profilesModel.Profiles.Count - e.NewItems.Count;
+        int startIndex = e.NewStartingIndex >= 0 ? e.NewStartingIndex : profilesModel.Elements.Count - e.NewItems.Count;
 
         for (int i = 0; i < e.NewItems.Count; i++)
         {
@@ -132,9 +132,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         if (e.NewItems.Count > 0)
         {
             int lastAddedIndex = startIndex + e.NewItems.Count - 1;
-            if (lastAddedIndex >= 0 && lastAddedIndex < profilesModel.Profiles.Count)
+            if (lastAddedIndex >= 0 && lastAddedIndex < profilesModel.Elements.Count)
             {
-                SetSelectedProfile(profilesModel.Profiles[lastAddedIndex]);
+                SetSelectedProfile(profilesModel.Elements[lastAddedIndex]);
             }
         }
     }
@@ -156,16 +156,16 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         await AnimateAllElementsToPositions(removeIndex);
 
-        if (selectedProfile != null && !profilesModel.Profiles.Contains(selectedProfile))
+        if (selectedProfile != null && !profilesModel.Elements.Contains(selectedProfile))
         {
-            var defaultProfile = profilesModel.Profiles.FirstOrDefault(p => p == BE.ProfilesModel.DefaultProfile);
+            var defaultProfile = profilesModel.Elements.FirstOrDefault(p => p.Name.ModelValue == "Default");
             if (defaultProfile != null)
             {
                 SetSelectedProfile(defaultProfile);
             }
-            else if (profilesModel.Profiles.Count > 0)
+            else if (profilesModel.Elements.Count > 0)
             {
-                SetSelectedProfile(profilesModel.Profiles[0]);
+                SetSelectedProfile(profilesModel.Elements[0]);
             }
             else
             {
@@ -222,7 +222,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             profileContainer?.Children.Add(addButton);
         }
 
-        for (int i = 0; i < profilesModel.Profiles.Count; i++)
+        for (int i = 0; i < profilesModel.Elements.Count; i++)
         {
             AddProfileAtPosition(i);
         }
@@ -306,8 +306,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private Border CreateProfileBorder(IBrush color, int targetIndex)
     {
-        var profileName = targetIndex < profilesModel.Profiles.Count ? profilesModel.Profiles[targetIndex].CurrentNameForDisplay : $"Profile {targetIndex + 1}";
-        var isDefaultProfile = targetIndex < profilesModel.Profiles.Count && profilesModel.Profiles[targetIndex] == BE.ProfilesModel.DefaultProfile;
+        var profileName = targetIndex < profilesModel.Elements.Count ? profilesModel.Elements[targetIndex].CurrentNameForDisplay : $"Profile {targetIndex + 1}";
+        var isDefaultProfile = targetIndex < profilesModel.Elements.Count && profilesModel.Elements[targetIndex].Name.ModelValue == "Default";
 
         var profileText = new TextBlock
         {
@@ -380,9 +380,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         if (sender is Border border)
         {
             int profileIndex = allItems.IndexOf(border) - 1; // Convert to profile index
-            if (profileIndex >= 0 && profileIndex < profilesModel.Profiles.Count)
+            if (profileIndex >= 0 && profileIndex < profilesModel.Elements.Count)
             {
-                var clickedProfile = profilesModel.Profiles[profileIndex];
+                var clickedProfile = profilesModel.Elements[profileIndex];
                 SetSelectedProfile(clickedProfile);
             }
         }
@@ -421,11 +421,11 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             grid.Parent is Border border)
         {
             var profileIndex = allItems.IndexOf(border) - 1; // Subtract 1 for add button
-            logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, $"OnDeleteButtonClicked: Profile index = {profileIndex}, Total profiles = {profilesModel.Profiles.Count}");
+            logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, $"OnDeleteButtonClicked: Profile index = {profileIndex}, Total profiles = {profilesModel.Elements.Count}");
 
-            if (profileIndex >= 0 && profileIndex < profilesModel.Profiles.Count)
+            if (profileIndex >= 0 && profileIndex < profilesModel.Elements.Count)
             {
-                var profileToDelete = profilesModel.Profiles[profileIndex];
+                var profileToDelete = profilesModel.Elements[profileIndex];
                 logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, $"OnDeleteButtonClicked: Profile to delete = '{profileToDelete.Name.ModelValue}'");
 
                 // Show confirmation modal
@@ -441,7 +441,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
                 if (confirmed)
                 {
                     logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, "OnDeleteButtonClicked: User confirmed, removing profile");
-                    profilesModel.RemoveProfile(profileToDelete);
+                    profilesModel.TryRemoveElement(profileToDelete);
                 }
                 else
                 {
@@ -496,7 +496,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private void CreateProfilesWithStagger()
     {
-        for (int i = 0; i < profilesModel.Profiles.Count; i++)
+        for (int i = 0; i < profilesModel.Elements.Count; i++)
         {
             var profileBorder = CreateProfileBorder(null!, i);
             profileBorder.ZIndex = 1000;
@@ -602,7 +602,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         UpdateDeleteButtonStates();
     }
 
-    public void SetSelectedProfile(BE.ProfileModel? profile, bool updateViewModel = true)
+    public void SetSelectedProfile(BE.IProfileModel? profile, bool updateViewModel = true)
     {
         if (selectedProfile == profile) return;
 
@@ -623,7 +623,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         if (selectedProfile != null)
         {
-            var currentIndex = profilesModel.Profiles.IndexOf(selectedProfile);
+            var currentIndex = profilesModel.Elements.IndexOf(selectedProfile);
             if (currentIndex >= 0 && currentIndex < GetProfileCount())
             {
                 int itemIndex = currentIndex + 1; // Convert to item index
@@ -636,7 +636,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         }
     }
 
-    public BE.ProfileModel? GetSelectedProfile()
+    public BE.IProfileModel? GetSelectedProfile()
     {
         return selectedProfile;
     }
@@ -644,14 +644,14 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private void RefreshAllProfileNames()
     {
-        for (int i = 0; i < GetProfileCount() && i < profilesModel.Profiles.Count; i++)
+        for (int i = 0; i < GetProfileCount() && i < profilesModel.Elements.Count; i++)
         {
             int itemIndex = i + 1; // Convert to item index
 
             if (itemIndex >= allItems.Count) break;
 
             var border = allItems[itemIndex];
-            var profile = profilesModel.Profiles[i];
+            var profile = profilesModel.Elements[i];
 
             if (border.Child is Grid grid)
             {

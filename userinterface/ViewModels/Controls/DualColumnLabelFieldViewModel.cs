@@ -152,13 +152,7 @@ public class FieldItemViewModel : INotifyPropertyChanged
             return localizationService?.GetText(localizationKey) ?? localizationKey;
         }
 
-        // If we have an EditableSetting with a localization key, use it
-        if (setting != null && !string.IsNullOrEmpty(setting.LocalizationKey))
-        {
-            return localizationService?.GetText(setting.LocalizationKey) ?? setting.DisplayText;
-        }
-
-        // Otherwise, use the display name directly (for user input settings)
-        return setting?.DisplayText ?? string.Empty;
+        // Use the display name directly
+        return setting?.DisplayName ?? string.Empty;
     }
 };

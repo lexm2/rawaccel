@@ -47,7 +47,7 @@ namespace userinterface.Views.Mapping
             if (e.AddedItems.Count > 0
                 && DataContext is MappingViewModel viewModel)
             {
-                DeviceGroupSelectorToAddMapping.ItemsSource = Enumerable.Empty<DeviceGroupModel>();
+                DeviceGroupSelectorToAddMapping.ItemsSource = Enumerable.Empty<string>();
                 viewModel.HandleAddMappingSelection(e);
                 DeviceGroupSelectorToAddMapping.ItemsSource = viewModel.MappingBE.DeviceGroupsStillUnmapped;
 

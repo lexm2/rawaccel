@@ -36,7 +36,7 @@ public partial class ProfileChartView : UserControl
                 chart.PointerPressed += OnChartPointerPressed;
             }
         }
-        catch (System.Exception ex)
+        catch (System.Exception)
         {
         }
     }

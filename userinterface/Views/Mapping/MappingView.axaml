@@ -253,7 +253,7 @@
 				</Button>
 				<TextBlock Grid.Column="1"
                            Classes="MappingTitle"
-                           Text="{Binding MappingBE.Name.CurrentValidatedValue}"
+                           Text="{Binding MappingBE.Name.ModelValue}"
                            VerticalAlignment="Center"/>
 			</Grid>
 
@@ -277,7 +277,7 @@
                                  Width="280">
 							<ListBox.ItemTemplate>
 								<DataTemplate>
-									<TextBlock Text="{Binding CurrentValidatedValue}"/>
+									<TextBlock Text="{Binding}"/>
 								</DataTemplate>
 							</ListBox.ItemTemplate>
 						</ListBox>

@@ -17,7 +17,7 @@ namespace userinterface.Services
 
         private IServiceProvider ServiceProvider { get; }
 
-        public ProfileViewModel CreateProfileViewModel(BE.ProfileModel profileModel)
+        public ProfileViewModel CreateProfileViewModel(BE.IProfileModel profileModel)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -29,7 +29,7 @@ namespace userinterface.Services
             return viewModel;
         }
 
-        public ProfileSettingsViewModel CreateProfileSettingsViewModel(BE.ProfileModel profileModel)
+        public ProfileSettingsViewModel CreateProfileSettingsViewModel(BE.IProfileModel profileModel)
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -41,7 +41,7 @@ namespace userinterface.Services
             return viewModel;
         }
 
-        public ProfileChartViewModel CreateProfileChartViewModel(BE.ProfileModel profileModel)
+        public ProfileChartViewModel CreateProfileChartViewModel(BE.IProfileModel profileModel)
         {
             var stopwatch = Stopwatch.StartNew();
 

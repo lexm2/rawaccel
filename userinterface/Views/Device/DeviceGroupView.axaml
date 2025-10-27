@@ -79,7 +79,8 @@
 			<TextBox Grid.Column="1"
 					 KeyDown="TextBox_KeyDown"
 					 LostFocus="LostFocusHandler"
-					 Text="{Binding DeviceGroupBE.InterfaceValue, Mode=TwoWay}" />
+					 Text="{Binding DeviceGroupName, Mode=OneWay}"
+				 IsReadOnly="True" />
 		</Grid>
 	</Border>
 </UserControl>

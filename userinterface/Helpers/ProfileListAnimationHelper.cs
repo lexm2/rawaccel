@@ -198,7 +198,7 @@ public class ProfileListAnimationHelper : IDisposable
         {
             // Silently handle cancellation - this is expected behavior
         }
-        catch (Exception ex)
+        catch (Exception)
         {
         }
         finally
@@ -258,7 +258,7 @@ public class ProfileListAnimationHelper : IDisposable
                 {
                     await Task.WhenAll(animationTasks);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                 }
                 finally
@@ -427,7 +427,7 @@ public class ProfileListAnimationHelper : IDisposable
         catch (OperationCanceledException)
         {
         }
-        catch (Exception ex)
+        catch (Exception)
         {
         }
         finally

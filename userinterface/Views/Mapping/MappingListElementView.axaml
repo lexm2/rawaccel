@@ -162,7 +162,7 @@
                       PointerPressed="OnInteractiveElementPointerPressed">
 				<ComboBox.ItemTemplate>
 					<DataTemplate>
-						<TextBlock Text="{Binding Name.CurrentValidatedValue}"/>
+						<TextBlock Text="{Binding Name.ModelValue}"/>
 					</DataTemplate>
 				</ComboBox.ItemTemplate>
 			</ComboBox>

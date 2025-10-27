@@ -49,7 +49,7 @@ namespace userinterface.ViewModels.Profile
             var success = LUTAccelBE.Data.TryUpdateFromInterface();
 
             loggingService?.LogDebug(LogSource.LUT, "TryUpdateFromInterface result: {Success}", success);
-            loggingService?.LogDebug(LogSource.LUT, "CurrentValidatedValue: {Value}", LUTAccelBE.Data.CurrentValidatedValue.ToString());
+            loggingService?.LogDebug(LogSource.LUT, "ModelValue: {Value}", LUTAccelBE.Data.ModelValue.ToString());
 
             // WORKAROUND: Manually trigger AnySettingChanged event if automatic event chain fails
             if (success)

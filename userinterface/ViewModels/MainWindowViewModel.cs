@@ -70,10 +70,7 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         BE.NotificationManager.NotificationRequested += OnBackEndNotificationRequested;
         BE.NotificationManager.QueuedNotificationRequested += OnBackEndQueuedNotificationRequested;
 
-        backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "MainWindowViewModel initialized, validating devices");
-
-        // Now that UI is ready and event handlers are subscribed, validate devices
-        backEnd.ValidateDevicesAfterUIReady();
+        backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "MainWindowViewModel initialized");
     }
 
     public DevicesPageViewModel DevicesPage => devicesPage;
@@ -156,14 +153,10 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         if (page == NavigationPage.Profiles && profileListView.SelectedProfile == null)
         {
-            var defaultProfile = backEnd.Profiles.Profiles.FirstOrDefault(p => p == BE.Model.ProfilesModel.DefaultProfile);
-            if (defaultProfile != null)
+            // Select first profile as default
+            if (backEnd.Profiles.Elements.Count > 0)
             {
-                profileListView.SelectedProfile = defaultProfile;
-            }
-            else if (backEnd.Profiles.Profiles.Count > 0)
-            {
-                profileListView.SelectedProfile = backEnd.Profiles.Profiles[0];
+                profileListView.SelectedProfile = backEnd.Profiles.Elements[0];
             }
         }
 
@@ -202,14 +195,10 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         if (page == NavigationPage.Profiles && profileListView.SelectedProfile == null)
         {
-            var defaultProfile = backEnd.Profiles.Profiles.FirstOrDefault(p => p == BE.Model.ProfilesModel.DefaultProfile);
-            if (defaultProfile != null)
+            // Select first profile as default
+            if (backEnd.Profiles.Elements.Count > 0)
             {
-                profileListView.SelectedProfile = defaultProfile;
-            }
-            else if (backEnd.Profiles.Profiles.Count > 0)
-            {
-                profileListView.SelectedProfile = backEnd.Profiles.Profiles[0];
+                profileListView.SelectedProfile = backEnd.Profiles.Elements[0];
             }
         }
     }
@@ -241,9 +230,9 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     public bool Apply()
     {
         backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "Apply settings requested from UI");
-        var result = BackEnd.Apply();
-        backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "Apply settings result: {Success}", result);
-        return result;
+        BackEnd.Apply();
+        backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "Apply settings completed");
+        return true;
     }
 
     private void ToggleTheme()
@@ -264,7 +253,7 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         settingsService.Theme = newTheme;
     }
 
-    private void OnProfileSelected(BE.Model.ProfileModel selectedProfile)
+    private void OnProfileSelected(BE.Model.IProfileModel selectedProfile)
     {
         if (selectedProfile != null && SelectedPage != NavigationPage.Profiles)
         {

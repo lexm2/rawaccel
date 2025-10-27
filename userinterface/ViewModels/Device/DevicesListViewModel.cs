@@ -16,22 +16,22 @@ namespace userinterface.ViewModels.Device
         private readonly IModalService modalService;
         private readonly LocalizationService localizationService;
 
-        public DevicesListViewModel(BE.DevicesModel devicesBE, IModalService modalService, LocalizationService localizationService)
+        public DevicesListViewModel(BE.IDevicesModel devicesBE, IModalService modalService, LocalizationService localizationService)
         {
             DevicesBE = devicesBE;
             this.modalService = modalService;
             this.localizationService = localizationService;
             DeviceViews = [];
             UpdateDeviceViews();
-            DevicesBE.Devices.CollectionChanged += DevicesCollectionChanged;
+            ((INotifyCollectionChanged)DevicesBE.Elements).CollectionChanged += DevicesCollectionChanged;
 
             AddDeviceCommand = new RelayCommand(
                 () => TryAddDevice());
         }
 
-        protected BE.DevicesModel DevicesBE { get; }
+        protected BE.IDevicesModel DevicesBE { get; }
 
-        public ObservableCollection<BE.DeviceModel> Devices => DevicesBE.Devices;
+        public ReadOnlyObservableCollection<BE.IDeviceModel> Devices => DevicesBE.Elements;
 
         public ObservableCollection<DeviceViewModel> DeviceViews { get; }
 
@@ -52,9 +52,9 @@ namespace userinterface.ViewModels.Device
                 case NotifyCollectionChangedAction.Add:
                     if (e.NewItems != null)
                     {
-                        foreach (BE.DeviceModel device in e.NewItems)
+                        foreach (BE.IDeviceModel device in e.NewItems)
                         {
-                            int index = DevicesBE.Devices.IndexOf(device);
+                            int index = DevicesBE.Elements.IndexOf(device);
                             bool isDefault = index == 0;
                             var animateCallback = devicesListView != null ? (Func<DeviceViewModel, Task>)devicesListView.AnimateDeviceDelete : null;
                             var deviceViewModel = new DeviceViewModel(device, DevicesBE, modalService, localizationService, isDefault, animateCallback);
@@ -86,15 +86,15 @@ namespace userinterface.ViewModels.Device
         {
             DeviceViews.Clear();
 
-            for (int i = 0; i < DevicesBE.Devices.Count; i++)
+            for (int i = 0; i < DevicesBE.Elements.Count; i++)
             {
-                var device = DevicesBE.Devices[i];
+                var device = DevicesBE.Elements[i];
                 bool isDefault = i == 0;
                 var animateCallback = devicesListView != null ? (Func<DeviceViewModel, Task>)devicesListView.AnimateDeviceDelete : null;
                 DeviceViews.Add(new DeviceViewModel(device, DevicesBE, modalService, localizationService, isDefault, animateCallback));
             }
         }
 
-        public bool TryAddDevice() => DevicesBE.TryAddDevice();
+        public bool TryAddDevice() => DevicesBE.TryAddNewDefault();
     }
 }

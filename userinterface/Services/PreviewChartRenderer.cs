@@ -111,7 +111,7 @@ namespace userinterface.Services
 
                     return bitmapBytes;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     return Array.Empty<byte>();
                 }

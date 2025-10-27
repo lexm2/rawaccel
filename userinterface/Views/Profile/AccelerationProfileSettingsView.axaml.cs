@@ -70,14 +70,14 @@ public partial class AccelerationProfileSettingsView : UserControl
         {
             if (AccelerationComboBox.SelectedEnumValue != null)
             {
-                viewModel.AccelerationBE.DefinitionType.InterfaceValue = AccelerationComboBox.SelectedEnumValue;
-                viewModel.AccelerationBE.DefinitionType.TryUpdateFromInterface();
+                viewModel.AccelerationBE.Selection.InterfaceValue = AccelerationComboBox.SelectedEnumValue;
+                viewModel.AccelerationBE.Selection.TryUpdateFromInterface();
                 UpdateViewBasedOnSelection();
             }
         };
 
         // Set initial selection based on backend value
-        var currentValue = viewModel.AccelerationBE.DefinitionType.InterfaceValue;
+        var currentValue = viewModel.AccelerationBE.Selection.InterfaceValue;
         if (!string.IsNullOrEmpty(currentValue))
         {
             var matchingItem = AccelerationComboBox.localizedItems.FirstOrDefault(item => item.EnumValue == currentValue);

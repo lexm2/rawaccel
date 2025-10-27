@@ -16,7 +16,7 @@ namespace userinterface.ViewModels.Device
         private readonly IModalService modalService;
         private readonly userspace_backend.BackEnd? backEnd;
 
-        public DeviceViewModel(BE.DeviceModel deviceBE, BE.DevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false, Func<DeviceViewModel, Task>? animatedDeleteCallback = null)
+        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.IDevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false, Func<DeviceViewModel, Task>? animatedDeleteCallback = null)
         {
             DeviceBE = deviceBE;
             DevicesBE = devicesBE;
@@ -36,21 +36,21 @@ namespace userinterface.ViewModels.Device
             IgnoreBool = new EditableBoolViewModel(DeviceBE.Ignore, localizationService);
             IgnoreBool.PropertyChanged += OnIgnoreBoolChanged;
 
-            DeviceGroup = new DeviceGroupSelectorViewModel(DeviceBE, DevicesBE.DeviceGroups);
+            DeviceGroup = new DeviceGroupSelectorViewModel(DeviceBE, ((BE.DevicesModel)DevicesBE).DeviceGroups);
 
-            AvailableDevices = new ObservableCollection<MultiHandleDevice>();
+            AvailableDevices = new ObservableCollection<BE.ISystemDevice>();
             RefreshAvailableDevices();
 
-            var currentDevice = AvailableDevices.FirstOrDefault(d => d.id == DeviceBE.HardwareID.ModelValue);
+            var currentDevice = AvailableDevices.FirstOrDefault(d => d.HWID == DeviceBE.HardwareID.ModelValue);
             SelectedDevice = currentDevice;
 
             DeleteCommand = new RelayCommand(async () => await DeleteWithAnimation());
             RefreshDevicesCommand = new RelayCommand(RefreshAvailableDevices);
         }
 
-        internal BE.DeviceModel DeviceBE { get; }
+        internal BE.IDeviceModel DeviceBE { get; }
 
-        internal BE.DevicesModel DevicesBE { get; }
+        internal BE.IDevicesModel DevicesBE { get; }
 
         public bool IsDefaultDevice { get; }
 
@@ -68,11 +68,11 @@ namespace userinterface.ViewModels.Device
 
         public DeviceGroupSelectorViewModel DeviceGroup { get; set; }
 
-        public ObservableCollection<MultiHandleDevice> AvailableDevices { get; set; }
+        public ObservableCollection<BE.ISystemDevice> AvailableDevices { get; set; }
 
-        private MultiHandleDevice? selectedDevice;
+        private BE.ISystemDevice? selectedDevice;
 
-        public MultiHandleDevice? SelectedDevice
+        public BE.ISystemDevice? SelectedDevice
         {
             get => selectedDevice;
             set
@@ -81,7 +81,7 @@ namespace userinterface.ViewModels.Device
                 {
                     if (value != null)
                     {
-                        DeviceBE.HardwareID.InterfaceValue = value.id;
+                        DeviceBE.HardwareID.InterfaceValue = value.HWID;
                         DeviceBE.HardwareID.TryUpdateFromInterface();
                     }
                 }
@@ -98,10 +98,8 @@ namespace userinterface.ViewModels.Device
         {
             get
             {
-                if (backEnd?.Hardware.ActiveDevice == null)
-                    return false;
-
-                return DeviceBE.HardwareID == backEnd.Hardware.ActiveDevice.HardwareID;
+                // Hardware detection has been removed - no device is considered "active"
+                return false;
             }
         }
 
@@ -109,9 +107,10 @@ namespace userinterface.ViewModels.Device
 
         private void RefreshAvailableDevices()
         {
-            DevicesBE.RefreshSystemDevices();
+            var devicesModel = (BE.DevicesModel)DevicesBE;
+            devicesModel.SystemDevices.RefreshSystemDevices();
             AvailableDevices.Clear();
-            foreach (var device in DevicesBE.SystemDevices)
+            foreach (var device in devicesModel.SystemDevices.SystemDevices)
             {
                 AvailableDevices.Add(device);
             }
@@ -153,7 +152,7 @@ namespace userinterface.ViewModels.Device
 
         public void DeleteSelf()
         {
-            DevicesBE.RemoveDevice(DeviceBE);
+            DevicesBE.TryRemoveElement(DeviceBE);
         }
 
     }

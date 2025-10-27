@@ -186,16 +186,22 @@ namespace userinterface.ViewModels.Mapping
         {
             if (activeMappingView == newActiveMapping) return;
 
-            if (MappingsBE.SetActiveMapping(newActiveMapping.MappingBE))
+            // Deactivate all mappings
+            foreach (var mapping in MappingsBE.Mappings)
             {
-                if (activeMappingView != null)
-                {
-                    activeMappingView.IsActiveMapping = false;
-                }
-
-                newActiveMapping.IsActiveMapping = true;
-                activeMappingView = newActiveMapping;
+                mapping.SetActive = false;
             }
+
+            // Activate the new mapping
+            newActiveMapping.MappingBE.SetActive = true;
+
+            if (activeMappingView != null)
+            {
+                activeMappingView.IsActiveMapping = false;
+            }
+
+            newActiveMapping.IsActiveMapping = true;
+            activeMappingView = newActiveMapping;
         }
 
         public bool TryAddNewMapping() => MappingsBE.TryAddMapping();

@@ -63,7 +63,7 @@ namespace userinterface.ViewModels.Profile
         private readonly PreviewChartRenderer previewRenderer;
         private readonly BackEnd backEnd;
         private readonly ILoggingService loggingService;
-        private BE.ProfileModel currentProfileModel = null!;
+        private BE.IProfileModel currentProfileModel = null!;
 
         private SolidColorPaint? cachedXStroke;
         private SolidColorPaint? cachedYStroke;
@@ -128,13 +128,11 @@ namespace userinterface.ViewModels.Profile
         private double currentMaxYData = 0;
 
 
-        private ICurvePreview XCurvePreview { get; set; } = null!;
+        private ICurvePreview CurvePreview { get; set; } = null!;
 
-        private ICurvePreview YCurvePreview { get; set; } = null!;
+        private IEditableSettingSpecific<double> YXRatio { get; set; } = null!;
 
-        private EditableSetting<double> YXRatio { get; set; } = null!;
-
-        public void Initialize(BE.ProfileModel profileModel)
+        public void Initialize(BE.IProfileModel profileModel)
         {
             if (currentProfileModel == profileModel)
                 return;
@@ -146,11 +144,10 @@ namespace userinterface.ViewModels.Profile
             }
 
             currentProfileModel = profileModel;
-            XCurvePreview = profileModel.XCurvePreview;
-            YCurvePreview = profileModel.YCurvePreview;
+            CurvePreview = profileModel.CurvePreview;
             YXRatio = profileModel.YXRatio;
 
-            if (XCurvePreview?.Points != null && YCurvePreview?.Points != null)
+            if (CurvePreview?.Points != null)
             {
                 InitializeSeries();
             }
@@ -205,14 +202,14 @@ namespace userinterface.ViewModels.Profile
                                 TransitionToInteractiveMode();
 
                             }
-                            catch (Exception ex)
+                            catch (Exception)
                             {
                                 IsLoadingChart = false;
                                 OnPropertyChanged(nameof(IsLoadingChart));
                             }
                         });
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
@@ -267,8 +264,8 @@ namespace userinterface.ViewModels.Profile
             if (cachedYStroke == null)
                 cachedYStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
 
-            xSeries = CreateLineSeries(XCurvePreview.Points, cachedXStroke, "X Curve Profile", "X");
-            ySeries = CreateLineSeries(YCurvePreview.Points, cachedYStroke, "Y Curve Profile", "Y");
+            xSeries = CreateLineSeries(CurvePreview.Points, cachedXStroke, "Curve Profile", "Curve");
+            ySeries = CreateLineSeries(CurvePreview.Points, cachedYStroke, "Curve Profile Y", "Y");
 
             Series.Clear();
             Series.Add(xSeries);
@@ -353,7 +350,7 @@ namespace userinterface.ViewModels.Profile
             OnPropertyChanged(nameof(ChartOpacity));
         }
 
-        public Task SwitchToProfileAsync(BE.ProfileModel profileModel)
+        public Task SwitchToProfileAsync(BE.IProfileModel profileModel)
         {
             if (currentProfileModel == profileModel && IsInitialized)
                 return Task.CompletedTask;
@@ -364,8 +361,7 @@ namespace userinterface.ViewModels.Profile
             }
 
             currentProfileModel = profileModel;
-            XCurvePreview = profileModel.XCurvePreview;
-            YCurvePreview = profileModel.YCurvePreview;
+            CurvePreview = profileModel.CurvePreview;
             YXRatio = profileModel.YXRatio;
 
             SubscribeToEvents();
@@ -376,13 +372,15 @@ namespace userinterface.ViewModels.Profile
             }
 
             // Update LUT dots data for new profile
+            // TODO: Extract LUT points from profileModel.Acceleration.LookupTableAccel.Data.ModelValue.Data
+            // The Data array contains alternating X,Y pairs that need to be split
             if (xLUTDotSeries != null)
             {
-                xLUTDotSeries.Values = profileModel.XLUTPoints;
+                // xLUTDotSeries.Values = ExtractXLUTPoints(profileModel);
             }
             if (yLUTDotSeries != null)
             {
-                yLUTDotSeries.Values = profileModel.YLUTPoints;
+                // yLUTDotSeries.Values = ExtractYLUTPoints(profileModel);
             }
             UpdateLUTDotsVisibility();
 
@@ -413,12 +411,7 @@ namespace userinterface.ViewModels.Profile
 
         public void FitToData()
         {
-            var allPoints = XCurvePreview.Points.ToList();
-
-            if (YXRatio.CurrentValidatedValue != 1.0)
-            {
-                allPoints.AddRange(YCurvePreview.Points);
-            }
+            var allPoints = CurvePreview.Points.ToList();
 
             if (allPoints.Count == 0)
             {
@@ -481,23 +474,23 @@ namespace userinterface.ViewModels.Profile
         {
             if (YXRatio != null)
                 YXRatio.PropertyChanged += OnYXRatioChanged;
-            
-            if (currentProfileModel?.Acceleration?.DefinitionType != null)
-                currentProfileModel.Acceleration.DefinitionType.PropertyChanged += OnAccelerationTypeChanged;
+
+            if (currentProfileModel?.Acceleration?.Selection != null)
+                currentProfileModel.Acceleration.Selection.PropertyChanged += OnAccelerationTypeChanged;
         }
 
         private void UnsubscribeFromEvents()
         {
             if (YXRatio != null)
                 YXRatio.PropertyChanged -= OnYXRatioChanged;
-            
-            if (currentProfileModel?.Acceleration?.DefinitionType != null)
-                currentProfileModel.Acceleration.DefinitionType.PropertyChanged -= OnAccelerationTypeChanged;
+
+            if (currentProfileModel?.Acceleration?.Selection != null)
+                currentProfileModel.Acceleration.Selection.PropertyChanged -= OnAccelerationTypeChanged;
         }
 
         private void OnYXRatioChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(EditableSetting<double>.CurrentValidatedValue))
+            if (e.PropertyName == nameof(EditableSetting<double>.ModelValue))
             {
                 UpdateYSeriesVisibility();
             }
@@ -507,7 +500,7 @@ namespace userinterface.ViewModels.Profile
         {
             if (ySeries == null) return;
 
-            var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
+            var hasYCurve = YXRatio.ModelValue != 1.0;
             var ySeriesExists = Series.Contains(ySeries);
 
             if (hasYCurve && !ySeriesExists)
@@ -534,22 +527,23 @@ namespace userinterface.ViewModels.Profile
 
         private void OnAccelerationTypeChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(EditableSetting<userspace_backend.Data.Profiles.Acceleration.AccelerationDefinitionType>.CurrentValidatedValue))
+            if (e.PropertyName == nameof(EditableSetting<userspace_backend.Data.Profiles.Acceleration.AccelerationDefinitionType>.ModelValue))
             {
                 // Update geometry when acceleration type changes (dots may appear different for different curve types)
                 UpdateLineSeriesGeometry();
-                
+
                 // Update LUT dots visibility when acceleration type changes
                 UpdateLUTDotsVisibility();
-                
+
                 // Update LUT points data when switching to/from LUT mode
+                // TODO: Extract LUT points from currentProfileModel.Acceleration.LookupTableAccel.Data
                 if (xLUTDotSeries != null && currentProfileModel != null)
                 {
-                    xLUTDotSeries.Values = currentProfileModel.XLUTPoints;
+                    // xLUTDotSeries.Values = ExtractXLUTPoints(currentProfileModel);
                 }
                 if (yLUTDotSeries != null && currentProfileModel != null)
                 {
-                    yLUTDotSeries.Values = currentProfileModel.YLUTPoints;
+                    // yLUTDotSeries.Values = ExtractYLUTPoints(currentProfileModel);
                 }
             }
         }
@@ -781,9 +775,10 @@ namespace userinterface.ViewModels.Profile
             // Use injected logging service for LUT point click logging
 
             // Create scatter series for X LUT points
+            // TODO: Extract LUT points from currentProfileModel.Acceleration.LookupTableAccel.Data
             xLUTDotSeries = new LoggingScatterSeries<CurvePoint>(loggingService, "X")
             {
-                Values = currentProfileModel.XLUTPoints,
+                Values = null, // currentProfileModel.XLUTPoints removed - need to extract from LookupTableAccel.Data
                 GeometrySize = 8,
                 Stroke = new SolidColorPaint(SKColors.DarkBlue) { StrokeThickness = 2 },
                 Fill = new SolidColorPaint(SKColors.LightBlue),
@@ -796,7 +791,7 @@ namespace userinterface.ViewModels.Profile
             // Create scatter series for Y LUT points
             yLUTDotSeries = new LoggingScatterSeries<CurvePoint>(loggingService, "Y")
             {
-                Values = currentProfileModel.YLUTPoints,
+                Values = null, // currentProfileModel.YLUTPoints removed - need to extract from LookupTableAccel.Data
                 GeometrySize = 8,
                 Stroke = new SolidColorPaint(SKColors.DarkRed) { StrokeThickness = 2 },
                 Fill = new SolidColorPaint(SKColors.LightPink),
@@ -822,13 +817,13 @@ namespace userinterface.ViewModels.Profile
             if (xLUTDotSeries == null || yLUTDotSeries == null || currentProfileModel == null) return;
 
             // Check if current acceleration type is LUT
-            var isLUT = currentProfileModel.Acceleration?.DefinitionType?.CurrentValidatedValue == 
+            var isLUT = currentProfileModel.Acceleration?.Selection?.ModelValue ==
                 userspace_backend.Data.Profiles.Acceleration.AccelerationDefinitionType.LookupTable;
 
             xLUTDotSeries.IsVisible = isLUT;
-            
+
             // Y LUT dots are visible only if LUT and Y curve is separate
-            var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
+            var hasYCurve = YXRatio.ModelValue != 1.0;
             yLUTDotSeries.IsVisible = isLUT && hasYCurve;
         }
 
@@ -900,7 +895,7 @@ namespace userinterface.ViewModels.Profile
             currentSpeedData.Clear();
             currentYSpeedData.Clear();
 
-            var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
+            var hasYCurve = YXRatio.ModelValue != 1.0;
 
             // Hardware tracking disabled - Hardware folder removed
             // TODO: Re-implement if needed without Hardware dependencies
@@ -918,11 +913,11 @@ namespace userinterface.ViewModels.Profile
             OnPropertyChanged(nameof(IsRealTimeTrackingEnabled));
         }
 
-        private BE.DeviceModel? GetActiveDeviceModel()
+        private BE.IDeviceModel? GetActiveDeviceModel()
         {
             // For now, get the first device or return null to use default DPI
             // TODO: Implement proper active device detection based on current mapping
-            return backEnd.Devices.Devices.FirstOrDefault();
+            return backEnd.Devices.Elements.FirstOrDefault();
         }
 
         private void StopRealTimeTracking()

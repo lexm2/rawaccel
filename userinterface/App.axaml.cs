@@ -35,8 +35,16 @@ public partial class App : Application
         // Register logging service first (needed by other services)
         services.AddSingleton<userspace_backend.Logging.ILoggingService>(provider =>
         {
-            var bootstrapper = BootstrapBackEnd();
-            var settings = bootstrapper.LoadSettings();
+            // Load settings to get logging configuration
+            string settingsDir = System.AppDomain.CurrentDomain.BaseDirectory;
+            var settingsRW = new SettingsReaderWriter();
+            var settingsFile = System.IO.Path.Combine(settingsDir, "settings.json");
+            DATA.Settings settings = new DATA.Settings();
+            if (System.IO.File.Exists(settingsFile))
+            {
+                var settingsText = System.IO.File.ReadAllText(settingsFile);
+                settings = settingsRW.Deserialize(settingsText);
+            }
             var loggingConfig = settings?.LoggingConfiguration ?? new userspace_backend.Logging.LoggingConfiguration();
             return new userspace_backend.Logging.LoggingService(loggingConfig);
         });
@@ -68,13 +76,15 @@ public partial class App : Application
         services.AddSingleton<DevicesReaderWriter>();
         services.AddSingleton<MappingsReaderWriter>();
         services.AddSingleton<ProfileReaderWriter>();
+        services.AddSingleton<SettingsReaderWriter>();
 
         services.AddSingleton<IBackEndLoader>(sp =>
         {
             var devicesRW = sp.GetRequiredService<DevicesReaderWriter>();
             var mappingsRW = sp.GetRequiredService<MappingsReaderWriter>();
             var profileRW = sp.GetRequiredService<ProfileReaderWriter>();
-            return new BackEndLoader(settingsDirectory, devicesRW, mappingsRW, profileRW);
+            var settingsRW = sp.GetRequiredService<SettingsReaderWriter>();
+            return new BackEndLoader(settingsDirectory, devicesRW, mappingsRW, profileRW, settingsRW);
         });
 
         // Compose backend DI (registers all backend services)
@@ -194,7 +204,8 @@ public partial class App : Application
                 System.AppDomain.CurrentDomain.BaseDirectory,
                 new DevicesReaderWriter(),
                 new MappingsReaderWriter(),
-                new ProfileReaderWriter()),
+                new ProfileReaderWriter(),
+                new SettingsReaderWriter()),
             DevicesToLoad =
             [
                 new DATA.Device() { Name = "Superlight 2", DPI = 32000, HWID = @"HID\VID_046D&PID_C54D&MI_00", PollingRate = 1000, DeviceGroup = "Logitech Mice" },

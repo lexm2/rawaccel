@@ -44,16 +44,8 @@ namespace userinterface.ViewModels.Controls
 
         private string GetLocalizedName()
         {
-            var displayText = SettingBE.DisplayText;
-
-            // If there's a localization key, use the localization service to resolve it
-            if (!string.IsNullOrEmpty(SettingBE.LocalizationKey))
-            {
-                return localizationService?.GetText(SettingBE.LocalizationKey) ?? displayText;
-            }
-
-            // Otherwise, use the display name directly (for user input settings)
-            return displayText;
+            // Use the display name directly
+            return SettingBE.DisplayName;
         }
 
         private void OnLanguageChanged(object? sender, PropertyChangedEventArgs e)

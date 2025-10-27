@@ -110,7 +110,7 @@ public class GeneralSettingsViewModel : ViewModelBase
         {
             settingsService.Theme = themeCode;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
         }
     }

@@ -6,7 +6,7 @@ namespace userinterface.ViewModels.Profile
 {
     public partial class AnisotropyProfileSettingsViewModel : ViewModelBase
     {
-        public AnisotropyProfileSettingsViewModel(BE.AnisotropyModel anisotropyBE, LocalizationService localizationService)
+        public AnisotropyProfileSettingsViewModel(BE.IAnisotropyModel anisotropyBE, LocalizationService localizationService)
         {
             AnisotropyBE = anisotropyBE;
             DomainX = new EditableFieldViewModel(AnisotropyBE.DomainX);
@@ -16,7 +16,7 @@ namespace userinterface.ViewModels.Profile
             LPNorm = new NamedEditableFieldViewModel(AnisotropyBE.LPNorm, localizationService);
         }
 
-        protected BE.AnisotropyModel AnisotropyBE { get; }
+        protected BE.IAnisotropyModel AnisotropyBE { get; }
 
         public EditableFieldViewModel DomainX { get; set; }
 

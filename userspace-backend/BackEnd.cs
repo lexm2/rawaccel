@@ -13,11 +13,17 @@ namespace userspace_backend
 
         void Apply();
 
+        void ApplyUserSettingsOnly();
+
         DevicesModel Devices { get; }
 
         MappingsModel Mappings { get; }
 
         IProfilesModel Profiles { get; }
+
+        DATA.Settings Settings { get; set; }
+
+        Logging.ILoggingService LoggingService { get; set; }
     }
 
     public class BackEnd : IBackEnd
@@ -27,12 +33,14 @@ namespace userspace_backend
             IProfilesModel profilesModel,
             DevicesModel devicesModel,
             MappingsModel mappingsModel,
+            Logging.ILoggingService loggingService,
             IServiceProvider serviceProvider)
         {
             BackEndLoader = backEndLoader;
             Devices = devicesModel;
             Mappings = mappingsModel;
             Profiles = profilesModel;
+            LoggingService = loggingService;
             ServiceProvider = serviceProvider;
         }
 
@@ -42,12 +50,19 @@ namespace userspace_backend
 
         public IProfilesModel Profiles { get; set; }
 
+        public DATA.Settings Settings { get; set; }
+
+        public Logging.ILoggingService LoggingService { get; set; }
+
         protected IBackEndLoader BackEndLoader { get; set; }
 
         protected IServiceProvider ServiceProvider { get; set; }
 
         public void Load()
         {
+            DATA.Settings settingsData = BackEndLoader.LoadSettings();
+            Settings = settingsData;
+
             IEnumerable<DATA.Device> devicesData = BackEndLoader.LoadDevices();
             LoadDevicesFromData(devicesData);
 
@@ -163,12 +178,18 @@ namespace userspace_backend
             WriteSettingsToDisk();
         }
 
+        public void ApplyUserSettingsOnly()
+        {
+            BackEndLoader.WriteSettings(Settings);
+        }
+
         protected void WriteSettingsToDisk()
         {
             BackEndLoader.WriteSettingsToDisk(
                 Devices.Elements,
                 Mappings,
                 Profiles.Elements);
+            BackEndLoader.WriteSettings(Settings);
         }
 
         protected void WriteToDriver()

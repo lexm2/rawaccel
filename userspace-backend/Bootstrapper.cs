@@ -42,7 +42,15 @@ namespace userspace_backend
             BackEndLoader.WriteSettingsToDisk(devices, mappings, profiles);
         }
 
-        // LoadSettings and WriteSettings methods removed - no longer part of IBackEndLoader interface
-        // Settings are now handled through the SettingsToLoad property and App.axaml.cs initialization
+        public DATA.Settings LoadSettings()
+        {
+            return SettingsToLoad ?? new DATA.Settings();
+        }
+
+        public void WriteSettings(DATA.Settings settings)
+        {
+            // Bootstrapper can delegate to BackEndLoader if needed
+            BackEndLoader?.WriteSettings(settings);
+        }
     }
 }
