@@ -58,16 +58,20 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         {
             localizationService.PropertyChanged -= OnLocalizationPropertyChanged;
         }
+
+        if (DataContext is ProfileListViewModel viewModel)
+        {
+            viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        }
     }
 
     private void OnLoaded(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         profileContainer = this.FindControl<Panel>("ProfileContainer");
 
-        // Set the view reference in the ViewModel
         if (DataContext is ProfileListViewModel viewModel)
         {
-            viewModel.SetView(this);
+            viewModel.PropertyChanged += OnViewModelPropertyChanged;
         }
 
         var addButton = CreateAddProfileButton();
@@ -77,8 +81,14 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         CreateProfilesWithStagger();
 
         _ = ExpandElements();
+    }
 
-        // SetSelectedProfile(null);
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProfileListViewModel.SelectedProfile) && sender is ProfileListViewModel viewModel)
+        {
+            SetSelectedProfile(viewModel.SelectedProfile);
+        }
     }
 
     private void OnLocalizationPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -129,12 +139,12 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         RefreshAllProfileNames();
 
-        if (e.NewItems.Count > 0)
+        if (e.NewItems.Count > 0 && DataContext is ProfileListViewModel viewModel)
         {
             int lastAddedIndex = startIndex + e.NewItems.Count - 1;
             if (lastAddedIndex >= 0 && lastAddedIndex < profilesModel.Elements.Count)
             {
-                SetSelectedProfile(profilesModel.Elements[lastAddedIndex]);
+                viewModel.SelectedProfile = profilesModel.Elements[lastAddedIndex];
             }
         }
     }
@@ -156,20 +166,20 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         await AnimateAllElementsToPositions(removeIndex);
 
-        if (selectedProfile != null && !profilesModel.Elements.Contains(selectedProfile))
+        if (selectedProfile != null && !profilesModel.Elements.Contains(selectedProfile) && DataContext is ProfileListViewModel viewModel)
         {
             var defaultProfile = profilesModel.Elements.FirstOrDefault(p => p.Name.ModelValue == "Default");
             if (defaultProfile != null)
             {
-                SetSelectedProfile(defaultProfile);
+                viewModel.SelectedProfile = defaultProfile;
             }
             else if (profilesModel.Elements.Count > 0)
             {
-                SetSelectedProfile(profilesModel.Elements[0]);
+                viewModel.SelectedProfile = profilesModel.Elements[0];
             }
             else
             {
-                SetSelectedProfile(null);
+                viewModel.SelectedProfile = null;
             }
         }
     }
@@ -377,13 +387,13 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private void OnProfileBorderClicked(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        if (sender is Border border)
+        if (sender is Border border && DataContext is ProfileListViewModel viewModel)
         {
-            int profileIndex = allItems.IndexOf(border) - 1; // Convert to profile index
+            int profileIndex = allItems.IndexOf(border) - 1;
             if (profileIndex >= 0 && profileIndex < profilesModel.Elements.Count)
             {
                 var clickedProfile = profilesModel.Elements[profileIndex];
-                SetSelectedProfile(clickedProfile);
+                viewModel.SelectedProfile = clickedProfile;
             }
         }
     }
@@ -602,7 +612,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         UpdateDeleteButtonStates();
     }
 
-    public void SetSelectedProfile(BE.IProfileModel? profile, bool updateViewModel = true)
+    private void SetSelectedProfile(BE.IProfileModel? profile)
     {
         if (selectedProfile == profile) return;
 
@@ -616,17 +626,12 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         selectedProfile = profile;
 
-        if (updateViewModel && DataContext is ProfileListViewModel viewModel)
-        {
-            viewModel.SelectedProfile = selectedProfile;
-        }
-
         if (selectedProfile != null)
         {
             var currentIndex = profilesModel.Elements.IndexOf(selectedProfile);
             if (currentIndex >= 0 && currentIndex < GetProfileCount())
             {
-                int itemIndex = currentIndex + 1; // Convert to item index
+                int itemIndex = currentIndex + 1;
 
                 if (itemIndex < allItems.Count)
                 {

@@ -34,7 +34,12 @@ public partial class DevicesListView : UserControl
         DevicesListInView.ContainerPrepared += OnContainerPrepared;
     }
 
-    public async Task AnimateDeviceDelete(DeviceViewModel deviceViewModel)
+    private void OnDeviceDeleteConfirmed(object? sender, DeviceViewModel.DeviceDeleteConfirmedEventArgs e)
+    {
+        _ = AnimateDeviceDelete(e.Device);
+    }
+
+    private async Task AnimateDeviceDelete(DeviceViewModel deviceViewModel)
     {
         if (viewModel == null) return;
 
@@ -84,8 +89,6 @@ public partial class DevicesListView : UserControl
             viewModel = vm;
             lastKnownItemCount = vm.DeviceViews.Count;
 
-            vm.SetView(this);
-
             vm.DeviceViews.CollectionChanged += OnDevicesCollectionChanged;
 
             _ = Task.Run(async () =>
@@ -119,6 +122,13 @@ public partial class DevicesListView : UserControl
             loggingService?.LogDebug(LogSource.UI, "OnContainerPrepared: Index {Index}, IsNewItem: {IsNew}, IsLast: {IsLast}, IsInitialLoad: {IsInitial}, CurrentTransform: ({X},{Y})",
                 e.Index, isNewItem, isLastElement, isInitialLoad,
                 currentTransform?.X ?? 0, currentTransform?.Y ?? 0);
+
+            if (e.Index >= 0 && e.Index < viewModel.DeviceViews.Count)
+            {
+                var deviceViewModel = viewModel.DeviceViews[e.Index];
+                deviceViewModel.DeleteConfirmed -= OnDeviceDeleteConfirmed;
+                deviceViewModel.DeleteConfirmed += OnDeviceDeleteConfirmed;
+            }
 
             if (isInitialLoad)
             {
