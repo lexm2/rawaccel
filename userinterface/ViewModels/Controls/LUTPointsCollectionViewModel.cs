@@ -8,18 +8,22 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using userinterface.Helpers;
 using userinterface.Services;
 using userspace_backend.Logging;
 using userspace_backend.Model.EditableSettings;
 
 namespace userinterface.ViewModels.Controls
 {
-    public partial class LUTPointsCollectionViewModel : ViewModelBase
+    public partial class LUTPointsCollectionViewModel : ViewModelBase, IDisposable
     {
+        private bool disposed = false;
         private readonly INotificationService? notificationService;
         private readonly ILoggingService? loggingService;
         private readonly IModalService? modalService;
         private readonly LocalizationService? localizationService;
+        private readonly userspace_backend.INotificationManager? notificationManager;
+        private readonly DebouncedAction<LUTPointCardViewModel> debouncedValidation;
 
         [ObservableProperty]
         private bool canAddPoints = true;
@@ -43,12 +47,15 @@ namespace userinterface.ViewModels.Controls
 
         public LUTPointCardViewModel? NextPoint => CurrentPointIndex < Points.Count - 1 ? Points[CurrentPointIndex + 1] : null;
 
-        public LUTPointsCollectionViewModel(INotificationService? notificationService = null, ILoggingService? loggingService = null, IModalService? modalService = null, LocalizationService? localizationService = null)
+        public LUTPointsCollectionViewModel(INotificationService? notificationService = null, ILoggingService? loggingService = null, IModalService? modalService = null, LocalizationService? localizationService = null, userspace_backend.INotificationManager? notificationManager = null)
         {
             this.notificationService = notificationService;
             this.loggingService = loggingService;
             this.modalService = modalService;
             this.localizationService = localizationService;
+            this.notificationManager = notificationManager;
+
+            debouncedValidation = new DebouncedAction<LUTPointCardViewModel>(ValidateAndNotify, delayMilliseconds: 150);
 
             // Subscribe to language changes
             if (this.localizationService != null)
@@ -80,7 +87,7 @@ namespace userinterface.ViewModels.Controls
 
             for (int i = 0; i < data.Length - 1; i += 2)
             {
-                var pointCard = new LUTPointCardViewModel(data[i], data[i + 1], (i / 2) + 1, loggingService, localizationService);
+                var pointCard = new LUTPointCardViewModel(data[i], data[i + 1], (i / 2) + 1, loggingService, localizationService, notificationManager);
                 SubscribeToPointEvents(pointCard);
                 Points.Add(pointCard);
             }
@@ -128,7 +135,7 @@ namespace userinterface.ViewModels.Controls
                 nextYValue = CalculateInterpolatedYValue(nextXValue);
             }
 
-            var newPoint = new LUTPointCardViewModel(nextXValue, nextYValue, Points.Count + 1, loggingService, localizationService);
+            var newPoint = new LUTPointCardViewModel(nextXValue, nextYValue, Points.Count + 1, loggingService, localizationService, notificationManager);
             SubscribeToPointEvents(newPoint);
             Points.Add(newPoint);
 
@@ -333,13 +340,16 @@ namespace userinterface.ViewModels.Controls
 
         private void OnPointValueChanged(object? sender, PointValueChangedEventArgs e)
         {
-            // Debug: Log every point value change for troubleshooting
-            loggingService?.LogInformation(LogSource.LUT,
-                "DEBUG: Point value changed - Point {Index}: ({X}, {Y})",
+            loggingService?.LogDebug(LogSource.LUT,
+                "LUT point value changed - Point {Index}: ({X}, {Y}) - validation debounced",
                 e.Point.PointIndex, e.XValue, e.YValue);
 
-            ValidatePointSequence(e.Point);
+            debouncedValidation.Invoke(e.Point);
+        }
 
+        private void ValidateAndNotify(LUTPointCardViewModel changedPoint)
+        {
+            ValidatePointSequence(changedPoint);
             CollectionChanged?.Invoke(this, new CollectionChangedEventArgs());
         }
 
@@ -442,6 +452,31 @@ namespace userinterface.ViewModels.Controls
                 Points[i].PointIndex = i + 1;
             }
             UpdateSwapCapabilities();
+        }
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            if (localizationService != null)
+            {
+                localizationService.PropertyChanged -= OnLocalizationChanged;
+            }
+
+            Points.CollectionChanged -= OnPointsCollectionChanged;
+
+            foreach (var point in Points)
+            {
+                UnsubscribeFromPointEvents(point);
+            }
+
+            Points.Clear();
+
+            debouncedValidation?.Dispose();
+
+            disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 

@@ -23,8 +23,9 @@ using BE = userspace_backend;
 
 namespace userinterface.ViewModels;
 
-public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
+public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged, IDisposable
 {
+    private bool disposed = false;
     private NavigationPage selectedPageValue = NavigationPage.Devices;
     private bool isProfilesExpandedValue = false;
 
@@ -42,14 +43,16 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private readonly IThemeService themeService;
     private readonly INotificationService notificationService;
     private readonly FrameTimerService frameTimer;
+    private readonly BE.INotificationManager notificationManager;
 
-    public MainWindowViewModel(BE.IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer, INotificationService notificationService)
+    public MainWindowViewModel(BE.IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer, INotificationService notificationService, BE.INotificationManager notificationManager)
     {
         this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
         this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
         this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         this.notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         this.frameTimer = frameTimer ?? throw new ArgumentNullException(nameof(frameTimer));
+        this.notificationManager = notificationManager ?? throw new ArgumentNullException(nameof(notificationManager));
 
         backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "MainWindowViewModel initializing");
 
@@ -67,8 +70,8 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         ToggleThemeCommand = new RelayCommand(() => ToggleTheme());
 
         profileListView.SelectedProfileChanged += OnProfileSelected;
-        BE.NotificationManager.NotificationRequested += OnBackEndNotificationRequested;
-        BE.NotificationManager.QueuedNotificationRequested += OnBackEndQueuedNotificationRequested;
+        notificationManager.NotificationRequested += OnBackEndNotificationRequested;
+        notificationManager.QueuedNotificationRequested += OnBackEndQueuedNotificationRequested;
 
         backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "MainWindowViewModel initialized");
     }
@@ -308,5 +311,18 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     protected virtual new void OnPropertyChanged([CallerMemberName] string? PropertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(PropertyName));
+    }
+
+    public void Dispose()
+    {
+        if (disposed)
+            return;
+
+        profileListView.SelectedProfileChanged -= OnProfileSelected;
+        notificationManager.NotificationRequested -= OnBackEndNotificationRequested;
+        notificationManager.QueuedNotificationRequested -= OnBackEndQueuedNotificationRequested;
+
+        disposed = true;
+        GC.SuppressFinalize(this);
     }
 }

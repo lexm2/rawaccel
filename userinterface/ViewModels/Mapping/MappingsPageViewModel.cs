@@ -10,8 +10,9 @@ using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Mapping
 {
-    public partial class MappingsPageViewModel : ViewModelBase, IAsyncInitializable
+    public partial class MappingsPageViewModel : ViewModelBase, IAsyncInitializable, IDisposable
     {
+        private bool disposed = false;
         private MappingViewModel? activeMappingView;
         private readonly BE.MappingsModel mappingsModel;
         private readonly IViewModelFactory viewModelFactory;
@@ -223,6 +224,20 @@ namespace userinterface.ViewModels.Mapping
             {
                 isInitializing = false;
             }
+        }
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            mappingsModel.Mappings.CollectionChanged -= MappingsCollectionChanged;
+
+            CleanupAllMappingViews();
+            MappingViews.Clear();
+
+            disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

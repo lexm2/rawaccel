@@ -25,8 +25,9 @@ namespace userinterface.ViewModels.Mapping
         public static double ContentHeightProperty => ContentHeight;
     }
 
-    public partial class MappingViewModel : ViewModelBase
+    public partial class MappingViewModel : ViewModelBase, IDisposable
     {
+        private bool disposed = false;
         private ObservableCollection<MappingListElementViewModel> mappingListElements;
         private bool isActiveMapping;
         private Action<MappingViewModel>? onActivationRequested;
@@ -49,23 +50,27 @@ namespace userinterface.ViewModels.Mapping
 
             UpdateMappingListElements();
 
-            MappingBE.IndividualMappings.CollectionChanged += (sender, e) =>
-            {
-                UpdateMappingListElements();
-            };
+            MappingBE.IndividualMappings.CollectionChanged += OnIndividualMappingsChanged;
+            MappingBE.DeviceGroupsStillUnmapped.CollectionChanged += OnDeviceGroupsUnmappedChanged;
+            MappingBE.PropertyChanged += OnMappingBEPropertyChanged;
+        }
 
-            MappingBE.DeviceGroupsStillUnmapped.CollectionChanged += (sender, e) =>
-            {
-                OnPropertyChanged(nameof(HasDeviceGroupsToAdd));
-            };
+        private void OnIndividualMappingsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            UpdateMappingListElements();
+        }
 
-            MappingBE.PropertyChanged += (sender, e) =>
+        private void OnDeviceGroupsUnmappedChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            OnPropertyChanged(nameof(HasDeviceGroupsToAdd));
+        }
+
+        private void OnMappingBEPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(BE.MappingModel.SetActive))
             {
-                if (e.PropertyName == nameof(BE.MappingModel.SetActive))
-                {
-                    IsActiveMapping = MappingBE.SetActive;
-                }
-            };
+                IsActiveMapping = MappingBE.SetActive;
+            }
         }
 
         public BE.MappingModel MappingBE { get; private set; } = null!;
@@ -178,6 +183,25 @@ namespace userinterface.ViewModels.Mapping
             {
                 element.Cleanup();
             }
+        }
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            if (MappingBE != null)
+            {
+                MappingBE.IndividualMappings.CollectionChanged -= OnIndividualMappingsChanged;
+                MappingBE.DeviceGroupsStillUnmapped.CollectionChanged -= OnDeviceGroupsUnmappedChanged;
+                MappingBE.PropertyChanged -= OnMappingBEPropertyChanged;
+            }
+
+            Cleanup();
+            mappingListElements.Clear();
+
+            disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

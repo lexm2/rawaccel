@@ -7,19 +7,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using userinterface.Commands;
+using userinterface.Services;
 using userspace_backend;
 using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Profile
 {
-    public partial class ProfileListViewModel : ViewModelBase
+    public partial class ProfileListViewModel : ViewModelBase, IDisposable
     {
+        private bool disposed = false;
         private const int MaxProfileAttempts = 10;
         private readonly BE.IProfilesModel profilesModel;
         private readonly SemaphoreSlim operationQueue = new(1, 1);
         private readonly ConcurrentQueue<Func<Task>> pendingOperations = new();
         private volatile bool isProcessingQueue = false;
-        private Views.Profile.ProfileListView? profileListView;
+        private readonly IAnimationStateService? animationStateService;
 
         [ObservableProperty]
         private BE.IProfileModel? selectedProfile;
@@ -29,26 +31,17 @@ namespace userinterface.ViewModels.Profile
         partial void OnSelectedProfileChanged(BE.IProfileModel? value)
         {
             if (value != null) SelectedProfileChanged?.Invoke(value);
-
-            if (profileListView != null)
-            {
-                profileListView.SetSelectedProfile(value, false);
-            }
         }
 
-        public ProfileListViewModel(IBackEnd backEnd)
+        public ProfileListViewModel(IBackEnd backEnd, IAnimationStateService? animationStateService = null)
         {
             profilesModel = backEnd?.Profiles ?? throw new System.ArgumentNullException(nameof(backEnd));
+            this.animationStateService = animationStateService;
             AddProfileCommand = new RelayCommand(TryAddProfile);
         }
 
         public ReadOnlyObservableCollection<BE.IProfileModel> Profiles => profilesModel.Elements;
         public ICommand AddProfileCommand { get; }
-
-        public void SetView(Views.Profile.ProfileListView view)
-        {
-            profileListView = view;
-        }
 
         public void TryAddProfile()
         {
@@ -175,29 +168,28 @@ namespace userinterface.ViewModels.Profile
 
         private async Task WaitForAnimationsToComplete()
         {
-            if (profileListView != null)
+            if (animationStateService != null)
             {
-                if (!profileListView.AreAnimationsActive)
+                if (!animationStateService.AreAnimationsActive)
                 {
                     return;
                 }
 
                 var tcs = new TaskCompletionSource<bool>();
 
-                void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+                void OnAnimationStateChanged(object? sender, bool isActive)
                 {
-                    if (e.PropertyName == nameof(profileListView.AreAnimationsActive) && !profileListView.AreAnimationsActive)
+                    if (!isActive)
                     {
                         tcs.TrySetResult(true);
                     }
                 }
 
-                profileListView.PropertyChanged += OnPropertyChanged;
+                animationStateService.AnimationStateChanged += OnAnimationStateChanged;
 
                 try
                 {
-                    // Double-check in case animations completed between the initial check and event subscription
-                    if (!profileListView.AreAnimationsActive)
+                    if (!animationStateService.AreAnimationsActive)
                     {
                         return;
                     }
@@ -206,7 +198,7 @@ namespace userinterface.ViewModels.Profile
                 }
                 finally
                 {
-                    profileListView.PropertyChanged -= OnPropertyChanged;
+                    animationStateService.AnimationStateChanged -= OnAnimationStateChanged;
                 }
             }
             else
@@ -221,7 +213,13 @@ namespace userinterface.ViewModels.Profile
 
         public void Dispose()
         {
+            if (disposed)
+                return;
+
             operationQueue?.Dispose();
+
+            disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }
