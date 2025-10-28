@@ -14,10 +14,10 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
         : EditableSettingsSelectable<PowerAccel, FormulaAccel>,
         IPowerAccelerationDefinitionModel
     {
-        public const string ScaleDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Scale)}";
-        public const string ExponentDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Exponent)}";
-        public const string OutputOffsetDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(OutputOffset)}";
-        public const string CapDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(CapDIKey)}";
+        public const string ScaleDIKey = $"{nameof(PowerAccelerationDefinitionModel)}.{nameof(Scale)}";
+        public const string ExponentDIKey = $"{nameof(PowerAccelerationDefinitionModel)}.{nameof(Exponent)}";
+        public const string OutputOffsetDIKey = $"{nameof(PowerAccelerationDefinitionModel)}.{nameof(OutputOffset)}";
+        public const string CapDIKey = $"{nameof(PowerAccelerationDefinitionModel)}.{nameof(Cap)}";
 
         public PowerAccelerationDefinitionModel(
             [FromKeyedServices(ScaleDIKey)]IEditableSettingSpecific<double> scale,
@@ -66,6 +66,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         protected override bool TryMapEditableSettingsFromData(PowerAccel data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (Scale == null || Exponent == null || OutputOffset == null || Cap == null)
+            {
+                return false;
+            }
+
             return Scale.TryUpdateModelDirectly(data.Scale)
                 & Exponent.TryUpdateModelDirectly(data.Exponent)
                 & OutputOffset.TryUpdateModelDirectly(data.OutputOffset)

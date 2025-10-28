@@ -37,7 +37,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     public ProfileListView()
     {
-        var backEnd = App.Services?.GetRequiredService<BackEnd>() ?? throw new InvalidOperationException("BackEnd service not available");
+        var backEnd = App.Services?.GetRequiredService<IBackEnd>() ?? throw new InvalidOperationException("BackEnd service not available");
         modalService = App.Services?.GetRequiredService<IModalService>() ?? throw new InvalidOperationException("ModalService not available");
         localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");

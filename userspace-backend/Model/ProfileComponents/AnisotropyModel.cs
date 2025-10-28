@@ -24,7 +24,7 @@ namespace userspace_backend.Model.ProfileComponents
         public const string DomainXDIKey = $"{nameof(AnisotropyModel)}.{nameof(DomainX)}";
         public const string DomainYDIKey = $"{nameof(AnisotropyModel)}.{nameof(DomainY)}";
         public const string RangeXDIKey = $"{nameof(AnisotropyModel)}.{nameof(RangeX)}";
-        public const string RangeYDIKey = $"{nameof(AnisotropyModel)}.{nameof(RangeYDIKey)}";
+        public const string RangeYDIKey = $"{nameof(AnisotropyModel)}.{nameof(RangeY)}";
         public const string LPNormDIKey = $"{nameof(AnisotropyModel)}.{nameof(LPNorm)}";
         public const string CombineXYComponentsDIKey = $"{nameof(AnisotropyModel)}.{nameof(CombineXYComponents)}";
 
@@ -75,10 +75,25 @@ namespace userspace_backend.Model.ProfileComponents
 
         protected override bool TryMapEditableSettingsFromData(Anisotropy data)
         {
-            return DomainX.TryUpdateModelDirectly(data.Domain.X)
-                & DomainY.TryUpdateModelDirectly(data.Domain.Y)
-                & RangeX.TryUpdateModelDirectly(data.Range.X)
-                & RangeY.TryUpdateModelDirectly(data.Range.Y)
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (DomainX == null || DomainY == null || RangeX == null || RangeY == null || LPNorm == null || CombineXYComponents == null)
+            {
+                return false;
+            }
+
+            double domainX = data.Domain?.X ?? 1.0;
+            double domainY = data.Domain?.Y ?? 1.0;
+            double rangeX = data.Range?.X ?? 1.0;
+            double rangeY = data.Range?.Y ?? 1.0;
+
+            return DomainX.TryUpdateModelDirectly(domainX)
+                & DomainY.TryUpdateModelDirectly(domainY)
+                & RangeX.TryUpdateModelDirectly(rangeX)
+                & RangeY.TryUpdateModelDirectly(rangeY)
                 & LPNorm.TryUpdateModelDirectly(data.LPNorm)
                 & CombineXYComponents.TryUpdateModelDirectly(data.CombineXYComponents);
         }

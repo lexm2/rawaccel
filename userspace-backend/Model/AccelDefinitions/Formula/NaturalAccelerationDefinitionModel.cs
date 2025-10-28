@@ -57,6 +57,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         protected override bool TryMapEditableSettingsFromData(NaturalAccel data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (DecayRate == null || InputOffset == null || Limit == null)
+            {
+                return false;
+            }
+
             return DecayRate.TryUpdateModelDirectly(data.DecayRate)
                 & InputOffset.TryUpdateModelDirectly(data.InputOffset)
                 & Limit.TryUpdateModelDirectly(data.Limit);

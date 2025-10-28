@@ -14,7 +14,7 @@ namespace userinterface.ViewModels.Device
     public partial class DeviceViewModel : ViewModelBase
     {
         private readonly IModalService modalService;
-        private readonly userspace_backend.BackEnd? backEnd;
+        private readonly userspace_backend.IBackEnd? backEnd;
 
         public DeviceViewModel(BE.IDeviceModel deviceBE, BE.IDevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false, Func<DeviceViewModel, Task>? animatedDeleteCallback = null)
         {
@@ -23,7 +23,7 @@ namespace userinterface.ViewModels.Device
             IsDefaultDevice = isDefault;
             AnimatedDeleteCallback = animatedDeleteCallback;
             this.modalService = modalService;
-            backEnd = App.Services?.GetService<userspace_backend.BackEnd>();
+            backEnd = App.Services?.GetService<userspace_backend.IBackEnd>();
 
             NameField = new NamedEditableFieldViewModel(DeviceBE.Name, localizationService);
 

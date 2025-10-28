@@ -5,15 +5,8 @@ using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions.Formula
 {
-    public interface ISynchronousAccelerationDefinitionModel : IEditableSettingsCollectionSpecific<SynchronousAccel>
+    public interface ISynchronousAccelerationDefinitionModel : IAccelDefinitionModelSpecific<SynchronousAccel>
     {
-        IEditableSettingSpecific<double> SyncSpeed { get; }
-
-        IEditableSettingSpecific<double> Motivity { get; }
-
-        IEditableSettingSpecific<double> Gamma { get; }
-
-        IEditableSettingSpecific<double> Smoothness { get; }
     }
 
     public class SynchronousAccelerationDefinitionModel
@@ -71,6 +64,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         protected override bool TryMapEditableSettingsFromData(SynchronousAccel data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (SyncSpeed == null || Motivity == null || Gamma == null || Smoothness == null)
+            {
+                return false;
+            }
+
             return SyncSpeed.TryUpdateModelDirectly(data.SyncSpeed)
                 & Motivity.TryUpdateModelDirectly(data.Motivity)
                 & Gamma.TryUpdateModelDirectly(data.Gamma)

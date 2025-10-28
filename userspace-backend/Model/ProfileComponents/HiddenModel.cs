@@ -77,6 +77,17 @@ namespace userspace_backend.Model.ProfileComponents
 
         protected override bool TryMapEditableSettingsFromData(Hidden data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (RotationDegrees == null || AngleSnappingDegrees == null || LeftRightRatio == null ||
+                UpDownRatio == null || SpeedCap == null || OutputSmoothingHalfLife == null)
+            {
+                return false;
+            }
+
             return RotationDegrees.TryUpdateModelDirectly(data.RotationDegrees)
                 & AngleSnappingDegrees.TryUpdateModelDirectly(data.AngleSnappingDegrees)
                 & LeftRightRatio.TryUpdateModelDirectly(data.LeftRightRatio)

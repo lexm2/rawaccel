@@ -59,6 +59,16 @@ namespace userspace_backend.Model.AccelDefinitions
 
         protected override bool TryMapEditableSettingsFromData(LookupTableAccel data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (ApplyAs == null || Data == null)
+            {
+                return false;
+            }
+
             return ApplyAs.TryUpdateModelDirectly(data.ApplyAs)
                 & Data.TryUpdateModelDirectly(new LookupTableData(data.Data));
         }

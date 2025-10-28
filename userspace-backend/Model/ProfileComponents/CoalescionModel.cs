@@ -45,6 +45,16 @@ namespace userspace_backend.Model.ProfileComponents
 
         protected override bool TryMapEditableSettingsFromData(Coalescion data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (InputSmoothingHalfLife == null || ScaleSmoothingHalfLife == null)
+            {
+                return false;
+            }
+
             return InputSmoothingHalfLife.TryUpdateModelDirectly(data.InputSmoothingHalfLife)
                 & ScaleSmoothingHalfLife.TryUpdateModelDirectly(data.ScaleSmoothingHalfLife);
         }

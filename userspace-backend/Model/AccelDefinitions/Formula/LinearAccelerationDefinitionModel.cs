@@ -15,7 +15,7 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
     {
         public const string AccelerationDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(Acceleration)}";
         public const string OffsetDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(Offset)}";
-        public const string CapDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(CapDIKey)}";
+        public const string CapDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(Cap)}";
 
         public LinearAccelerationDefinitionModel(
             [FromKeyedServices(AccelerationDIKey)]IEditableSettingSpecific<double> acceleration,
@@ -59,6 +59,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         protected override bool TryMapEditableSettingsFromData(LinearAccel data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (Acceleration == null || Offset == null || Cap == null)
+            {
+                return false;
+            }
+
             return Acceleration.TryUpdateModelDirectly(data.Acceleration)
                 & Offset.TryUpdateModelDirectly(data.Offset)
                 & Cap.TryUpdateModelDirectly(data.Cap);

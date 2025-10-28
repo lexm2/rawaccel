@@ -11,7 +11,7 @@ using static userspace_backend.Data.Profiles.Accel.FormulaAccel;
 
 namespace userspace_backend.Model.AccelDefinitions
 {
-    public interface IFormulaAccelModel: IEditableSettingsSelector<AccelerationFormulaType, FormulaAccel>
+    public interface IFormulaAccelModel: IEditableSettingsSelector<AccelerationFormulaType, FormulaAccel>, IAccelDefinitionModel
     {
     }
 
@@ -42,6 +42,16 @@ namespace userspace_backend.Model.AccelDefinitions
 
         protected override bool TryMapEditableSettingsFromData(FormulaAccel data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (Gain == null)
+            {
+                return false;
+            }
+
             return Gain.TryUpdateModelDirectly(data.Gain);
         }
     }

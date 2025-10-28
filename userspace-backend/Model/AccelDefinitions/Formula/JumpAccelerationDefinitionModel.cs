@@ -13,9 +13,9 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
         : EditableSettingsSelectable<JumpAccel, FormulaAccel>,
         IJumpAccelerationDefinitionModel
     {
-        public const string SmoothDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Smooth)}";
-        public const string InputDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Input)}";
-        public const string OutputDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Output)}";
+        public const string SmoothDIKey = $"{nameof(JumpAccelerationDefinitionModel)}.{nameof(Smooth)}";
+        public const string InputDIKey = $"{nameof(JumpAccelerationDefinitionModel)}.{nameof(Input)}";
+        public const string OutputDIKey = $"{nameof(JumpAccelerationDefinitionModel)}.{nameof(Output)}";
 
         public JumpAccelerationDefinitionModel(
             [FromKeyedServices(SmoothDIKey)]IEditableSettingSpecific<double> smooth,
@@ -56,6 +56,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         protected override bool TryMapEditableSettingsFromData(JumpAccel data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (Smooth == null || Input == null || Output == null)
+            {
+                return false;
+            }
+
             return Smooth.TryUpdateModelDirectly(data.Smooth)
                 & Input.TryUpdateModelDirectly(data.Input)
                 & Output.TryUpdateModelDirectly(data.Output);

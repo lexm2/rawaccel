@@ -22,7 +22,7 @@ namespace userinterface.ViewModels.Profile
 
         public ProfilesPageViewModel(
             INotificationService notificationService,
-            userspace_backend.BackEnd backEnd,
+            userspace_backend.IBackEnd backEnd,
             ProfileListViewModel profileListView,
             IViewModelFactory viewModelFactory)
         {

@@ -17,7 +17,7 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
         public const string AccelerationDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Acceleration)}";
         public const string ExponentDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Exponent)}";
         public const string OffsetDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Offset)}";
-        public const string CapDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(CapDIKey)}";
+        public const string CapDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Cap)}";
 
         public ClassicAccelerationDefinitionModel(
             [FromKeyedServices(AccelerationDIKey)]IEditableSettingSpecific<double> acceleration,
@@ -66,6 +66,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         protected override bool TryMapEditableSettingsFromData(ClassicAccel data)
         {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (Acceleration == null || Exponent == null || Offset == null || Cap == null)
+            {
+                return false;
+            }
+
             return Acceleration.TryUpdateModelDirectly(data.Acceleration)
                 & Exponent.TryUpdateModelDirectly(data.Exponent)
                 & Offset.TryUpdateModelDirectly(data.Offset)
