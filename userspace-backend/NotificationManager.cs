@@ -23,15 +23,26 @@ namespace userspace_backend
         public object[] Parameters { get; set; } = Array.Empty<object>();
     }
 
-    public static class NotificationManager
+    public interface INotificationManager
     {
-        public static event EventHandler<NotificationEventArgs>? NotificationRequested;
-        public static event EventHandler<NotificationEventArgs>? QueuedNotificationRequested;
-        public static event EventHandler<ModalEventArgs>? QueuedModalRequested;
+        event EventHandler<NotificationEventArgs>? NotificationRequested;
+        event EventHandler<NotificationEventArgs>? QueuedNotificationRequested;
+        event EventHandler<ModalEventArgs>? QueuedModalRequested;
 
-        public static void TriggerNotification(string messageKey, NotificationType type, params object[] formatArgs)
+        void TriggerNotification(string messageKey, NotificationType type, params object[] formatArgs);
+        void QueueNotification(string messageKey, NotificationType type, params object[] formatArgs);
+        void QueueModal(string modalType, params object[] parameters);
+    }
+
+    public class NotificationManager : INotificationManager
+    {
+        public event EventHandler<NotificationEventArgs>? NotificationRequested;
+        public event EventHandler<NotificationEventArgs>? QueuedNotificationRequested;
+        public event EventHandler<ModalEventArgs>? QueuedModalRequested;
+
+        public void TriggerNotification(string messageKey, NotificationType type, params object[] formatArgs)
         {
-            NotificationRequested?.Invoke(null, new NotificationEventArgs
+            NotificationRequested?.Invoke(this, new NotificationEventArgs
             {
                 MessageKey = messageKey,
                 Type = type,
@@ -39,9 +50,9 @@ namespace userspace_backend
             });
         }
 
-        public static void QueueNotification(string messageKey, NotificationType type, params object[] formatArgs)
+        public void QueueNotification(string messageKey, NotificationType type, params object[] formatArgs)
         {
-            QueuedNotificationRequested?.Invoke(null, new NotificationEventArgs
+            QueuedNotificationRequested?.Invoke(this, new NotificationEventArgs
             {
                 MessageKey = messageKey,
                 Type = type,
@@ -49,9 +60,9 @@ namespace userspace_backend
             });
         }
 
-        public static void QueueModal(string modalType, params object[] parameters)
+        public void QueueModal(string modalType, params object[] parameters)
         {
-            QueuedModalRequested?.Invoke(null, new ModalEventArgs
+            QueuedModalRequested?.Invoke(this, new ModalEventArgs
             {
                 ModalType = modalType,
                 Parameters = parameters

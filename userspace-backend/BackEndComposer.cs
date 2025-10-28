@@ -576,6 +576,8 @@ namespace userspace_backend
 
             #region BackEnd
 
+            services.AddSingleton<INotificationManager, NotificationManager>();
+
             services.AddSingleton<IProfilesModel, ProfilesModel>();
 
             services.AddSingleton<IBackEnd, BackEnd>();
