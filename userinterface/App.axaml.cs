@@ -66,7 +66,9 @@ public partial class App : Application
         services.AddSingleton<IModalService>(provider =>
             new ModalService(
                 provider.GetRequiredService<LocalizationService>(),
-                provider.GetRequiredService<ISettingsService>()));
+                provider.GetRequiredService<ISettingsService>(),
+                provider.GetRequiredService<userspace_backend.Logging.ILoggingService>(),
+                provider.GetRequiredService<userspace_backend.INotificationManager>()));
 
         services.AddSingleton<IThemeService>(provider =>
             new ThemeService(provider.GetRequiredService<ISettingsService>()));
@@ -140,7 +142,8 @@ public partial class App : Application
                 provider.GetRequiredService<IThemeService>(),
                 provider.GetRequiredService<ISettingsService>(),
                 provider.GetRequiredService<FrameTimerService>(),
-                provider.GetRequiredService<INotificationService>()));
+                provider.GetRequiredService<INotificationService>(),
+                provider.GetRequiredService<userspace_backend.INotificationManager>()));
         services.AddSingleton<ToastContainerViewModel>();
 
         // Device ViewModels
@@ -161,17 +164,21 @@ public partial class App : Application
 
         // Profile ViewModels
         services.AddTransient<ViewModels.Profile.ProfilesPageViewModel>();
-        services.AddSingleton<ViewModels.Profile.ProfileListViewModel>();
+        services.AddSingleton<ViewModels.Profile.ProfileListViewModel>(provider =>
+            new ViewModels.Profile.ProfileListViewModel(
+                provider.GetRequiredService<IBackEnd>(),
+                provider.GetRequiredService<IAnimationStateService>()));
         services.AddTransient<ViewModels.Profile.ProfileViewModel>();
         services.AddTransient<ViewModels.Profile.ProfileSettingsViewModel>(provider =>
             new ViewModels.Profile.ProfileSettingsViewModel(
                 provider.GetRequiredService<INotificationService>(),
                 provider.GetRequiredService<LocalizationService>(),
-                provider.GetRequiredService<IModalService>()));
+                provider.GetRequiredService<IModalService>(),
+                provider.GetRequiredService<userspace_backend.Logging.ILoggingService>(),
+                provider.GetRequiredService<userspace_backend.INotificationManager>()));
         services.AddTransient<ViewModels.Profile.ProfileChartViewModel>();
         services.AddTransient<ViewModels.Profile.AccelerationFormulaSettingsViewModel>();
         services.AddTransient<ViewModels.Profile.AccelerationLUTSettingsViewModel>();
-        services.AddTransient<ViewModels.Profile.AccelerationProfileSettingsViewModel>();
         services.AddTransient<ViewModels.Profile.AnisotropyProfileSettingsViewModel>();
         services.AddTransient<ViewModels.Profile.CoalescionProfileSettingsViewModel>();
         services.AddTransient<ViewModels.Profile.HiddenProfileSettingsViewModel>();
