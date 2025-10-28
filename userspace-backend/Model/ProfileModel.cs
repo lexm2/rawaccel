@@ -8,6 +8,7 @@ using userspace_backend.Common;
 using userspace_backend.Display;
 using Microsoft.Extensions.DependencyInjection;
 using userspace_backend.Logging;
+using userspace_backend.Utilities;
 
 namespace userspace_backend.Model
 {
@@ -37,6 +38,7 @@ namespace userspace_backend.Model
         public const string YXRatioDIKey = $"{nameof(ProfileModel)}.{nameof(YXRatio)}";
 
         private readonly ILoggingService loggingService;
+        private readonly DebouncedAction debouncedRecalculation;
 
         public ProfileModel(
             [FromKeyedServices(NameDIKey)]IEditableSettingSpecific<string> name,
@@ -54,6 +56,8 @@ namespace userspace_backend.Model
             Acceleration = acceleration;
             Hidden = hidden;
 
+            debouncedRecalculation = new DebouncedAction(RecalculateDriverDataAndCurvePreviewImmediate, delayMilliseconds: 200);
+
             // Name and Output DPI do not need to generate a new curve preview
             Name!.PropertyChanged += AnyNonPreviewPropertyChangedEventHandler;
             OutputDPI.PropertyChanged += AnyNonPreviewPropertyChangedEventHandler;
@@ -64,7 +68,7 @@ namespace userspace_backend.Model
             Hidden.AnySettingChanged += AnyCurveSettingCollectionChangedEventHandler;
 
             CurvePreview = curvePreview;
-            RecalculateDriverDataAndCurvePreview();
+            RecalculateDriverDataAndCurvePreviewImmediate();
             loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}' initialized", Name.ModelValue);
         }
 
@@ -109,7 +113,7 @@ namespace userspace_backend.Model
         {
             if (string.Equals(e.PropertyName, nameof(IEditableSettingSpecific<IComparable>.ModelValue)))
             {
-                loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Curve preview property changed (e.g., YXRatio), regenerating curve", Name.ModelValue);
+                loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Curve preview property changed (e.g., YXRatio), regenerating curve (debounced)", Name.ModelValue);
                 RecalculateDriverDataAndCurvePreview();
             }
         }
@@ -117,7 +121,7 @@ namespace userspace_backend.Model
         protected void AnyCurveSettingCollectionChangedEventHandler(object? sender, EventArgs e)
         {
             // All settings collections currently require curve preview to be re-generated
-            loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Acceleration or Hidden settings changed, regenerating curve", Name.ModelValue);
+            loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Acceleration or Hidden settings changed, regenerating curve (debounced)", Name.ModelValue);
             RecalculateDriverDataAndCurvePreview();
         }
 
@@ -128,6 +132,11 @@ namespace userspace_backend.Model
         }
 
         protected void RecalculateDriverDataAndCurvePreview()
+        {
+            debouncedRecalculation.Invoke();
+        }
+
+        private void RecalculateDriverDataAndCurvePreviewImmediate()
         {
             loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Starting curve regeneration", Name.ModelValue);
             RecalculateDriverData();
