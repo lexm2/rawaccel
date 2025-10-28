@@ -134,12 +134,20 @@ namespace userinterface.ViewModels.Profile
 
         public void Initialize(BE.IProfileModel profileModel)
         {
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.Initialize: Starting for profile '{ProfileName}'",
+                profileModel?.CurrentNameForDisplay ?? "null");
+
             if (currentProfileModel == profileModel)
+            {
+                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.Initialize: Same profile, skipping");
                 return;
+            }
 
             // Unsubscribe from previous events
             if (currentProfileModel != null)
             {
+                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.Initialize: Unsubscribing from previous profile '{PreviousProfile}'",
+                    currentProfileModel.CurrentNameForDisplay);
                 UnsubscribeFromEvents();
             }
 
@@ -147,12 +155,17 @@ namespace userinterface.ViewModels.Profile
             CurvePreview = profileModel.CurvePreview;
             YXRatio = profileModel.YXRatio;
 
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.Initialize: CurvePreview has {PointCount} points",
+                CurvePreview?.Points?.Count ?? 0);
+
             if (CurvePreview?.Points != null)
             {
                 InitializeSeries();
             }
 
             SubscribeToEvents();
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.Initialize: Complete for profile '{ProfileName}'",
+                profileModel.CurrentNameForDisplay);
         }
 
 
@@ -162,8 +175,17 @@ namespace userinterface.ViewModels.Profile
 
         public Task InitializeAsync()
         {
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeAsync: Called (IsInitializing={IsInitializing}, IsInitialized={IsInitialized}, Profile={ProfileName})",
+                IsInitializing, IsInitialized, currentProfileModel?.CurrentNameForDisplay ?? "null");
+
+            // Validate chart state before proceeding
+            ValidateChartState();
+
             if (IsInitializing || IsInitialized || currentProfileModel == null)
+            {
+                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeAsync: Skipping initialization");
                 return Task.CompletedTask;
+            }
 
             IsInitializing = true;
 
@@ -171,6 +193,8 @@ namespace userinterface.ViewModels.Profile
             {
                 IsLoadingChart = true;
                 OnPropertyChanged(nameof(IsLoadingChart));
+                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeAsync: Starting background initialization");
+
                 _ = Task.Run(async () =>
                 {
                     try
@@ -178,6 +202,7 @@ namespace userinterface.ViewModels.Profile
                         await Task.Delay(100);
                         await Task.Run(() =>
                         {
+                            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeAsync: Initializing series on background thread");
                             InitializeSeries();
                         });
 
@@ -185,6 +210,8 @@ namespace userinterface.ViewModels.Profile
                         {
                             try
                             {
+                                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeAsync: Creating axes and UI elements on UI thread");
+
                                 XAxes = CreateXAxes();
                                 YAxes = CreateYAxes();
                                 TooltipTextPaint = new SolidColorPaint(themeService.GetCachedColor(AxisTitleBrush));
@@ -199,18 +226,21 @@ namespace userinterface.ViewModels.Profile
                                 OnPropertyChanged(nameof(TooltipBackgroundPaint));
                                 OnPropertyChanged(nameof(Series));
 
+                                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeAsync: Transitioning to interactive mode");
                                 TransitionToInteractiveMode();
 
                             }
-                            catch (Exception)
+                            catch (Exception ex)
                             {
+                                loggingService.LogError(LogSource.UI, ex, "ProfileChartViewModel.InitializeAsync: Error during UI thread initialization");
                                 IsLoadingChart = false;
                                 OnPropertyChanged(nameof(IsLoadingChart));
                             }
                         });
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
+                        loggingService.LogError(LogSource.UI, ex, "ProfileChartViewModel.InitializeAsync: Error during background initialization");
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
                             IsLoadingChart = false;
@@ -220,6 +250,7 @@ namespace userinterface.ViewModels.Profile
                 });
 
                 IsInitialized = true;
+                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeAsync: Initialization started successfully");
             }
             finally
             {
@@ -229,6 +260,70 @@ namespace userinterface.ViewModels.Profile
             return Task.CompletedTask;
         }
 
+
+        private void ValidateChartState()
+        {
+            bool hasIssues = false;
+
+            // Check if curve preview has valid data
+            if (CurvePreview == null || CurvePreview.Points == null)
+            {
+                loggingService.LogWarning(LogSource.UI, "ProfileChartViewModel.ValidateChartState: CurvePreview or Points is null");
+                hasIssues = true;
+            }
+            else if (CurvePreview.Points.Count == 0)
+            {
+                loggingService.LogWarning(LogSource.UI, "ProfileChartViewModel.ValidateChartState: CurvePreview has 0 points");
+                hasIssues = true;
+            }
+
+            // Check series bindings
+            if (xSeries != null)
+            {
+                if (xSeries.Values != CurvePreview?.Points)
+                {
+                    loggingService.LogWarning(LogSource.UI, "ProfileChartViewModel.ValidateChartState: xSeries values not bound to CurvePreview.Points, rebinding");
+                    xSeries.Values = CurvePreview?.Points;
+                    hasIssues = true;
+                }
+            }
+
+            if (ySeries != null)
+            {
+                if (ySeries.Values != CurvePreview?.Points)
+                {
+                    loggingService.LogWarning(LogSource.UI, "ProfileChartViewModel.ValidateChartState: ySeries values not bound to CurvePreview.Points, rebinding");
+                    ySeries.Values = CurvePreview?.Points;
+                    hasIssues = true;
+                }
+            }
+
+            // Check visibility state consistency
+            if (IsInitialized && !IsInteractiveMode)
+            {
+                loggingService.LogWarning(LogSource.UI, "ProfileChartViewModel.ValidateChartState: Chart is initialized but not interactive, fixing");
+                IsInteractiveMode = true;
+                OnPropertyChanged(nameof(IsInteractiveMode));
+                hasIssues = true;
+            }
+
+            if (IsInteractiveMode && ChartOpacity < 0.5)
+            {
+                loggingService.LogWarning(LogSource.UI, "ProfileChartViewModel.ValidateChartState: Chart is interactive but opacity is {Opacity}, fixing", ChartOpacity);
+                ChartOpacity = 1.0;
+                OnPropertyChanged(nameof(ChartOpacity));
+                hasIssues = true;
+            }
+
+            if (!hasIssues)
+            {
+                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.ValidateChartState: Chart state is valid");
+            }
+            else
+            {
+                loggingService.LogInformation(LogSource.UI, "ProfileChartViewModel.ValidateChartState: Fixed chart state issues");
+            }
+        }
 
         private void EnsureInteractiveChartLoaded()
         {
@@ -259,6 +354,9 @@ namespace userinterface.ViewModels.Profile
 
         private void InitializeSeries()
         {
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeSeries: Starting with {PointCount} curve points",
+                CurvePreview?.Points?.Count ?? 0);
+
             if (cachedXStroke == null)
                 cachedXStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
             if (cachedYStroke == null)
@@ -275,6 +373,9 @@ namespace userinterface.ViewModels.Profile
             UpdateYSeriesVisibility();
             UpdateLineSeriesGeometry();
             UpdateLUTDotsVisibility();
+
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeSeries: Complete, {SeriesCount} series in collection",
+                Series.Count);
         }
 
         private LineSeries<CurvePoint> CreateLineSeries(ObservableCollection<CurvePoint> points, SolidColorPaint stroke, string name, string axis)
@@ -335,6 +436,8 @@ namespace userinterface.ViewModels.Profile
 
         private async void TransitionToInteractiveMode()
         {
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.TransitionToInteractiveMode: Starting fade-in animation");
+
             IsLoadingChart = false;
             IsInteractiveMode = true;
             ChartOpacity = 0.0;
@@ -348,21 +451,34 @@ namespace userinterface.ViewModels.Profile
 
             ChartOpacity = 1.0;
             OnPropertyChanged(nameof(ChartOpacity));
+
+            loggingService.LogInformation(LogSource.UI, "ProfileChartViewModel: Chart is now interactive and visible");
         }
 
         public Task SwitchToProfileAsync(BE.IProfileModel profileModel)
         {
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.SwitchToProfileAsync: Switching to profile '{ProfileName}'",
+                profileModel?.CurrentNameForDisplay ?? "null");
+
             if (currentProfileModel == profileModel && IsInitialized)
+            {
+                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.SwitchToProfileAsync: Same profile and already initialized, skipping");
                 return Task.CompletedTask;
+            }
 
             if (currentProfileModel != null)
             {
+                loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.SwitchToProfileAsync: Unsubscribing from previous profile '{PreviousProfile}'",
+                    currentProfileModel.CurrentNameForDisplay);
                 UnsubscribeFromEvents();
             }
 
             currentProfileModel = profileModel;
             CurvePreview = profileModel.CurvePreview;
             YXRatio = profileModel.YXRatio;
+
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.SwitchToProfileAsync: New profile has {PointCount} curve points",
+                CurvePreview?.Points?.Count ?? 0);
 
             SubscribeToEvents();
             if (xSeries != null && ySeries != null)
@@ -384,6 +500,7 @@ namespace userinterface.ViewModels.Profile
             }
             UpdateLUTDotsVisibility();
 
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.SwitchToProfileAsync: Profile switch complete");
             return Task.CompletedTask;
         }
 
@@ -446,6 +563,9 @@ namespace userinterface.ViewModels.Profile
 
         public void Dispose()
         {
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.Dispose: Cleaning up resources for profile '{ProfileName}'",
+                currentProfileModel?.CurrentNameForDisplay ?? "null");
+
             StopRealTimeTracking();
 
             themeService.ThemeChanged -= OnThemeChanged;
@@ -464,6 +584,7 @@ namespace userinterface.ViewModels.Profile
             }
 
             previewRenderer.ClearCache();
+            loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.Dispose: Complete");
         }
 
         // ================================================================================================

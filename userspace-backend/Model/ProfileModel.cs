@@ -7,6 +7,7 @@ using System.ComponentModel;
 using userspace_backend.Common;
 using userspace_backend.Display;
 using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.Logging;
 
 namespace userspace_backend.Model
 {
@@ -35,15 +36,19 @@ namespace userspace_backend.Model
         public const string OutputDPIDIKey = $"{nameof(ProfileModel)}.{nameof(OutputDPI)}";
         public const string YXRatioDIKey = $"{nameof(ProfileModel)}.{nameof(YXRatio)}";
 
+        private readonly ILoggingService loggingService;
+
         public ProfileModel(
             [FromKeyedServices(NameDIKey)]IEditableSettingSpecific<string> name,
             [FromKeyedServices(OutputDPIDIKey)]IEditableSettingSpecific<int> outputDPI,
             [FromKeyedServices(YXRatioDIKey)]IEditableSettingSpecific<double> yxRatio,
             IAccelerationModel acceleration,
             IHiddenModel hidden,
-            ICurvePreview curvePreview
+            ICurvePreview curvePreview,
+            ILoggingService loggingService
             ) : base(name, [outputDPI, yxRatio], [acceleration, hidden])
         {
+            this.loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             OutputDPI = outputDPI;
             YXRatio = yxRatio;
             Acceleration = acceleration;
@@ -60,6 +65,7 @@ namespace userspace_backend.Model
 
             CurvePreview = curvePreview;
             RecalculateDriverDataAndCurvePreview();
+            loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}' initialized", Name.ModelValue);
         }
 
         public string CurrentNameForDisplay => Name.ModelValue;
@@ -94,6 +100,7 @@ namespace userspace_backend.Model
         {
             if (string.Equals(e.PropertyName, nameof(IEditableSettingSpecific<IComparable>.ModelValue)))
             {
+                loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Non-preview property changed, recalculating driver data", Name.ModelValue);
                 RecalculateDriverData();
             }
         }
@@ -102,6 +109,7 @@ namespace userspace_backend.Model
         {
             if (string.Equals(e.PropertyName, nameof(IEditableSettingSpecific<IComparable>.ModelValue)))
             {
+                loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Curve preview property changed (e.g., YXRatio), regenerating curve", Name.ModelValue);
                 RecalculateDriverDataAndCurvePreview();
             }
         }
@@ -109,18 +117,22 @@ namespace userspace_backend.Model
         protected void AnyCurveSettingCollectionChangedEventHandler(object? sender, EventArgs e)
         {
             // All settings collections currently require curve preview to be re-generated
+            loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Acceleration or Hidden settings changed, regenerating curve", Name.ModelValue);
             RecalculateDriverDataAndCurvePreview();
         }
 
         protected void RecalculateDriverData()
         {
             CurrentValidatedDriverProfile = DriverHelpers.MapProfileModelToDriver(this);
+            loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Driver data recalculated", Name.ModelValue);
         }
 
         protected void RecalculateDriverDataAndCurvePreview()
         {
+            loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Starting curve regeneration", Name.ModelValue);
             RecalculateDriverData();
             CurvePreview.GeneratePoints(CurrentValidatedDriverProfile);
+            loggingService.LogDebug(LogSource.Backend, "ProfileModel '{ProfileName}': Curve regeneration complete", Name.ModelValue);
         }
 
         protected override bool TryMapEditableSettingsFromData(DATA.Profile data)

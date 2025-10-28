@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using userspace_backend.Logging;
 
 namespace userspace_backend.Model.EditableSettings
 {
@@ -59,6 +60,8 @@ namespace userspace_backend.Model.EditableSettings
         : EditableSettingsCollectionV2<U>,
           IEditableSettingsSelector<T, U> where T : Enum
     {
+        private readonly ILoggingService loggingService;
+
         protected EditableSettingsSelector(
             IServiceProvider serviceProvider,
             IEditableSettingSpecific<T> selection,
@@ -66,9 +69,20 @@ namespace userspace_backend.Model.EditableSettings
             IEnumerable<IEditableSettingsCollectionV2> editableSettingsCollections)
             : base(editableSettings.Union([selection]), editableSettingsCollections)
         {
+            loggingService = serviceProvider.GetService<ILoggingService>();
             SelectionLookup = new Dictionary<T, IEditableSettingsCollectionSpecific<U>>();
             InitSelectionLookup(serviceProvider);
             Selection = selection;
+
+            // Subscribe to AnySettingChanged events for all SelectionLookup items
+            // This ensures that changes within selected items (e.g., FormulaAccelModel) propagate up
+            foreach (var selectableItem in SelectionLookup.Values)
+            {
+                selectableItem.AnySettingChanged += EditableSettingsCollectionChangedEventHandler;
+                loggingService?.LogDebug(LogSource.Backend,
+                    "EditableSettingsSelector<{SelectorType}>: Subscribed to {ItemType}.AnySettingChanged",
+                    typeof(T).Name, selectableItem.GetType().Name);
+            }
         }
 
         public IEditableSettingSpecific<T> Selection { get; }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using userspace_backend.Display.Calculations;
+using userspace_backend.Logging;
 
 namespace userspace_backend.Display
 {
@@ -20,53 +21,94 @@ namespace userspace_backend.Display
 
     public class CurvePreview : ICurvePreview
     {
-        public CurvePreview()
+        private readonly ILoggingService loggingService;
+        private readonly object syncLock = new object();
+
+        public CurvePreview(ILoggingService loggingService)
         {
+            this.loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
             Points = new ObservableCollection<CurvePoint>();
             InitPoints();
+            loggingService.LogDebug(LogSource.Backend, "CurvePreview initialized with {PointCount} points", Points.Count);
         }
 
         public ObservableCollection<CurvePoint> Points { get; }
 
         public void GeneratePoints(Profile profile)
         {
-            // Regenerate points with LUT-aware range if needed
-            if (IsLookupTableProfile(profile))
+            lock (syncLock)
             {
-                double lutMaxX = GetLutMaximumX(profile);
-                RegeneratePointsForRange(CurveCalculationHelpers.SlowestHandSpeed, lutMaxX);
-            }
-            else
-            {
-                // Ensure we have full range points for non-LUT profiles
-                if (Points.Count == 0 || Points.Max(p => p.MouseSpeed) < CurveCalculationHelpers.FastestHandSpeed * 0.9)
+                loggingService.LogDebug(LogSource.Backend, "GeneratePoints START: Current point count={Count}, Mode={Mode}",
+                    Points.Count, profile.argsX.mode);
+
+                int initialCount = Points.Count;
+
+                // Regenerate points with LUT-aware range if needed
+                if (IsLookupTableProfile(profile))
                 {
-                    RegeneratePointsForRange(CurveCalculationHelpers.SlowestHandSpeed, CurveCalculationHelpers.FastestHandSpeed);
+                    double lutMaxX = GetLutMaximumX(profile);
+                    loggingService.LogDebug(LogSource.Backend, "LUT profile detected, max X={MaxX}", lutMaxX);
+                    RegeneratePointsForRange(CurveCalculationHelpers.SlowestHandSpeed, lutMaxX);
                 }
-            }
+                else
+                {
+                    // Ensure we have full range points for non-LUT profiles
+                    if (Points.Count == 0 || Points.Max(p => p.MouseSpeed) < CurveCalculationHelpers.FastestHandSpeed * 0.9)
+                    {
+                        loggingService.LogDebug(LogSource.Backend, "Regenerating points for full range (count was {Count})", Points.Count);
+                        RegeneratePointsForRange(CurveCalculationHelpers.SlowestHandSpeed, CurveCalculationHelpers.FastestHandSpeed);
+                    }
+                }
 
-            ManagedAccel accel = new ManagedAccel(profile).CreateStatelessCopy();
+                if (Points.Count == 0)
+                {
+                    loggingService.LogWarning(LogSource.Backend, "GeneratePoints: No points available after range regeneration");
+                    return;
+                }
 
-            foreach (CurvePoint point in Points)
-            {
-                // Apply acceleration to input speed (counts/second)
-                var output = accel.Accelerate(point.MouseSpeed, 0, 1, 1);
-                
-                // Calculate output speed magnitude (counts/second)
-                var outputSpeed = Math.Sqrt(Math.Pow(output.Item1, 2) + Math.Pow(output.Item2, 2));
-                
-                // Store as acceleration multiplier (dimensionless ratio)
-                // Output = 1.0 means no acceleration, >1.0 means speed up, <1.0 means slow down
-                point.Output = outputSpeed / point.MouseSpeed;
+                ManagedAccel accel = new ManagedAccel(profile).CreateStatelessCopy();
+
+                foreach (CurvePoint point in Points)
+                {
+                    // Apply acceleration to input speed (counts/second)
+                    var output = accel.Accelerate(point.MouseSpeed, 0, 1, 1);
+
+                    // Calculate output speed magnitude (counts/second)
+                    var outputSpeed = Math.Sqrt(Math.Pow(output.Item1, 2) + Math.Pow(output.Item2, 2));
+
+                    // Store as acceleration multiplier (dimensionless ratio)
+                    // Output = 1.0 means no acceleration, >1.0 means speed up, <1.0 means slow down
+                    point.Output = outputSpeed / point.MouseSpeed;
+                }
+
+                // Force collection refresh to notify LiveCharts of changes
+                // ObservableCollection doesn't automatically detect property changes on items
+                var tempPoints = Points.ToList();
+                Points.Clear();
+                foreach (var point in tempPoints)
+                {
+                    Points.Add(point);
+                }
+
+                loggingService.LogDebug(LogSource.Backend, "GeneratePoints COMPLETE: Point count={Count}, Range=[{MinX:F2}, {MaxX:F2}], Output range=[{MinY:F2}, {MaxY:F2}]",
+                    Points.Count,
+                    Points.Min(p => p.MouseSpeed),
+                    Points.Max(p => p.MouseSpeed),
+                    Points.Min(p => p.Output),
+                    Points.Max(p => p.Output));
             }
         }
 
         public void SetPoints(IEnumerable<CurvePoint> points)
         {
-            Points.Clear();
-            foreach (var point in points)
+            lock (syncLock)
             {
-                Points.Add(point);
+                Points.Clear();
+                foreach (var point in points)
+                {
+                    Points.Add(point);
+                }
+                loggingService.LogDebug(LogSource.Backend, "SetPoints: Updated to {Count} points", Points.Count);
             }
         }
 
@@ -112,14 +154,17 @@ namespace userspace_backend.Display
         private void RegeneratePointsForRange(double minSpeed, double maxSpeed)
         {
             Points.Clear();
-            
+
             // Generate logarithmically distributed input speeds for the specified range
             ICollection<double> speeds = CurveCalculationHelpers.CalculateCurvePointSpeeds(minSpeed, maxSpeed);
-            
+
             foreach (double speed in speeds)
             {
                 Points.Add(new CurvePoint() { MouseSpeed = speed, Output = 0.0 });
             }
+
+            loggingService.LogDebug(LogSource.Backend, "RegeneratePointsForRange: Generated {Count} points for range [{MinSpeed:F2}, {MaxSpeed:F2}]",
+                Points.Count, minSpeed, maxSpeed);
         }
     }
 

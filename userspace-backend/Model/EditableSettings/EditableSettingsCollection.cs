@@ -3,9 +3,30 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using userspace_backend.Logging;
 
 namespace userspace_backend.Model.EditableSettings
 {
+    internal static class EditableSettingsLoggingHelper
+    {
+        internal static ILoggingService GetLoggingServiceIfAvailable(object instance)
+        {
+            // Attempt to access logging service if available through reflection
+            // This is a fallback for classes that don't have direct access to ILoggingService
+            try
+            {
+                var field = instance.GetType().GetField("loggingService",
+                    System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Instance);
+                return field?.GetValue(instance) as ILoggingService;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
     public abstract class EditableSettingsCollection<T> : ObservableObject, IEditableSettingsCollectionV2
     {
         public EditableSettingsCollection(T dataObject)
@@ -71,6 +92,12 @@ namespace userspace_backend.Model.EditableSettings
 
         protected void EditableSettingsCollectionChangedEventHandler(object? sender, EventArgs e)
         {
+            // Log when sub-collection events trigger this collection's event
+            var loggingService = EditableSettingsLoggingHelper.GetLoggingServiceIfAvailable(this);
+            loggingService?.LogDebug(LogSource.Backend,
+                "{ParentType}: Sub-collection {SenderType} triggered AnySettingChanged",
+                GetType().Name, sender?.GetType().Name ?? "unknown");
+
             OnAnySettingChanged();
         }
 
@@ -195,6 +222,12 @@ namespace userspace_backend.Model.EditableSettings
 
         protected void EditableSettingsCollectionChangedEventHandler(object? sender, EventArgs e)
         {
+            // Log when sub-collection events trigger this collection's event
+            var loggingService = EditableSettingsLoggingHelper.GetLoggingServiceIfAvailable(this);
+            loggingService?.LogDebug(LogSource.Backend,
+                "{ParentType}: Sub-collection {SenderType} triggered AnySettingChanged",
+                GetType().Name, sender?.GetType().Name ?? "unknown");
+
             OnAnySettingChanged();
         }
 
