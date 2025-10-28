@@ -15,6 +15,7 @@ namespace userinterface.ViewModels.Controls
     {
         private readonly ILoggingService? loggingService;
         private readonly LocalizationService? localizationService;
+        private readonly INotificationManager? notificationManager;
         private readonly IUserInputParser<double> doubleParser;
 
         private string? lastXInterfaceValue;
@@ -52,10 +53,11 @@ namespace userinterface.ViewModels.Controls
         [ObservableProperty]
         private bool canSwapWithNext;
 
-        public LUTPointCardViewModel(double x, double y, int index, ILoggingService? loggingService = null, LocalizationService? localizationService = null)
+        public LUTPointCardViewModel(double x, double y, int index, ILoggingService? loggingService = null, LocalizationService? localizationService = null, INotificationManager? notificationManager = null)
         {
             this.loggingService = loggingService;
             this.localizationService = localizationService;
+            this.notificationManager = notificationManager;
             this.doubleParser = new DoubleParser();
 
             if (this.localizationService != null)
@@ -281,7 +283,7 @@ namespace userinterface.ViewModels.Controls
                         var toastKey = coordinateType == "X" ? "LUT_XValidationError" : "LUT_YValidationError";
                         var errorMessage = $"exceeds maximum of {maxValue}";
 
-                        NotificationManager.TriggerNotification(toastKey, NotificationType.Warning,
+                        notificationManager?.TriggerNotification(toastKey, NotificationType.Warning,
                             $">{maxValue}", errorMessage);
 
                         if (coordinateType == "X")

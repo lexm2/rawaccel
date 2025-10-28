@@ -1,5 +1,6 @@
 ﻿using userinterface.Services;
 using userinterface.ViewModels.Controls;
+using userspace_backend.Logging;
 using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Profile
@@ -9,12 +10,16 @@ namespace userinterface.ViewModels.Profile
         private readonly INotificationService notificationService;
         private readonly LocalizationService localizationService;
         private readonly IModalService modalService;
+        private readonly ILoggingService loggingService;
+        private readonly userspace_backend.INotificationManager notificationManager;
 
-        public ProfileSettingsViewModel(INotificationService notificationService, LocalizationService localizationService, IModalService modalService)
+        public ProfileSettingsViewModel(INotificationService notificationService, LocalizationService localizationService, IModalService modalService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
         {
             this.notificationService = notificationService;
             this.localizationService = localizationService;
             this.modalService = modalService;
+            this.loggingService = loggingService;
+            this.notificationManager = notificationManager;
         }
 
         protected BE.IProfileModel ProfileModelBE { get; private set; } = null!;
@@ -32,7 +37,7 @@ namespace userinterface.ViewModels.Profile
             ProfileModelBE = profileModel;
             OutputDPIField = new EditableFieldViewModel(profileModel.OutputDPI);
             YXRatioField = new EditableFieldViewModel(profileModel.YXRatio);
-            AccelerationSettings = new AccelerationProfileSettingsViewModel(profileModel.Acceleration, notificationService, localizationService, modalService);
+            AccelerationSettings = new AccelerationProfileSettingsViewModel(profileModel.Acceleration, notificationService, localizationService, modalService, loggingService, notificationManager);
             HiddenSettings = new HiddenProfileSettingsViewModel(profileModel.Hidden);
         }
     }

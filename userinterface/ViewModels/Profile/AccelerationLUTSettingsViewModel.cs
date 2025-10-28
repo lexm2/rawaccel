@@ -11,16 +11,18 @@ namespace userinterface.ViewModels.Profile
         private readonly INotificationService? notificationService;
         private readonly IModalService? modalService;
         private readonly LocalizationService? localizationService;
+        private readonly userspace_backend.INotificationManager? notificationManager;
 
-        public AccelerationLUTSettingsViewModel(BE.LookupTableDefinitionModel lutAccelBE, ILoggingService? loggingService = null, INotificationService? notificationService = null, IModalService? modalService = null, LocalizationService? localizationService = null)
+        public AccelerationLUTSettingsViewModel(BE.LookupTableDefinitionModel lutAccelBE, ILoggingService? loggingService = null, INotificationService? notificationService = null, IModalService? modalService = null, LocalizationService? localizationService = null, userspace_backend.INotificationManager? notificationManager = null)
         {
             LUTAccelBE = lutAccelBE;
             this.loggingService = loggingService;
             this.notificationService = notificationService;
             this.modalService = modalService;
             this.localizationService = localizationService;
+            this.notificationManager = notificationManager;
 
-            PointsCollection = new LUTPointsCollectionViewModel(notificationService, loggingService, modalService, localizationService);
+            PointsCollection = new LUTPointsCollectionViewModel(notificationService, loggingService, modalService, localizationService, notificationManager);
 
             LoadPointsFromBackend();
 
