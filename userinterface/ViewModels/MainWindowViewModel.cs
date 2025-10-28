@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Styling;
-using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.ComponentModel;
 using System.Linq;
@@ -45,7 +44,20 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private readonly FrameTimerService frameTimer;
     private readonly BE.INotificationManager notificationManager;
 
-    public MainWindowViewModel(BE.IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer, INotificationService notificationService, BE.INotificationManager notificationManager)
+    public MainWindowViewModel(
+        BE.IBackEnd backEnd,
+        IThemeService themeService,
+        ISettingsService settingsService,
+        FrameTimerService frameTimer,
+        INotificationService notificationService,
+        BE.INotificationManager notificationManager,
+        DevicesPageViewModel devicesPage,
+        ProfilesPageViewModel profilesPage,
+        MappingsPageViewModel mappingsPage,
+        SettingsPageViewModel settingsPage,
+        ProfileListViewModel profileListView,
+        ToastContainerViewModel toastContainerViewModel,
+        IModalService modalService)
     {
         this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
         this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
@@ -53,17 +65,15 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         this.notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         this.frameTimer = frameTimer ?? throw new ArgumentNullException(nameof(frameTimer));
         this.notificationManager = notificationManager ?? throw new ArgumentNullException(nameof(notificationManager));
+        this.devicesPage = devicesPage ?? throw new ArgumentNullException(nameof(devicesPage));
+        this.profilesPage = profilesPage ?? throw new ArgumentNullException(nameof(profilesPage));
+        this.mappingsPage = mappingsPage ?? throw new ArgumentNullException(nameof(mappingsPage));
+        this.settingsPage = settingsPage ?? throw new ArgumentNullException(nameof(settingsPage));
+        this.profileListView = profileListView ?? throw new ArgumentNullException(nameof(profileListView));
+        this.toastContainerViewModel = toastContainerViewModel ?? throw new ArgumentNullException(nameof(toastContainerViewModel));
+        this.modalService = modalService ?? throw new ArgumentNullException(nameof(modalService));
 
         backEnd.LoggingService?.LogInformation(userspace_backend.Logging.LogSource.UI, "MainWindowViewModel initializing");
-
-        devicesPage = App.Services!.GetRequiredService<DevicesPageViewModel>();
-        profilesPage = App.Services!.GetRequiredService<ProfilesPageViewModel>();
-        mappingsPage = App.Services!.GetRequiredService<MappingsPageViewModel>();
-        settingsPage = App.Services!.GetRequiredService<SettingsPageViewModel>();
-        profileListView = App.Services!.GetRequiredService<ProfileListViewModel>();
-        toastContainerViewModel = App.Services!.GetRequiredService<ToastContainerViewModel>();
-        modalService = App.Services!.GetRequiredService<IModalService>();
-        settingsService = App.Services!.GetRequiredService<ISettingsService>();
 
         ApplyCommand = new RelayCommand(() => Apply());
         NavigateCommand = new RelayCommand<NavigationPage>(page => SelectPage(page));

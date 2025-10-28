@@ -143,7 +143,14 @@ public partial class App : Application
                 provider.GetRequiredService<ISettingsService>(),
                 provider.GetRequiredService<FrameTimerService>(),
                 provider.GetRequiredService<INotificationService>(),
-                provider.GetRequiredService<userspace_backend.INotificationManager>()));
+                provider.GetRequiredService<userspace_backend.INotificationManager>(),
+                provider.GetRequiredService<ViewModels.Device.DevicesPageViewModel>(),
+                provider.GetRequiredService<ViewModels.Profile.ProfilesPageViewModel>(),
+                provider.GetRequiredService<ViewModels.Mapping.MappingsPageViewModel>(),
+                provider.GetRequiredService<ViewModels.Settings.SettingsPageViewModel>(),
+                provider.GetRequiredService<ViewModels.Profile.ProfileListViewModel>(),
+                provider.GetRequiredService<ToastContainerViewModel>(),
+                provider.GetRequiredService<IModalService>()));
         services.AddSingleton<ToastContainerViewModel>();
 
         // Device ViewModels
@@ -194,7 +201,9 @@ public partial class App : Application
         services.AddTransient<ViewModels.Settings.SupportViewModel>();
         services.AddTransient<ViewModels.Settings.DevicesSettingsViewModel>();
         services.AddTransient<ViewModels.Settings.MappingsSettingsViewModel>();
-        services.AddTransient<ViewModels.Settings.ProfilesSettingsViewModel>();
+        services.AddTransient<ViewModels.Settings.ProfilesSettingsViewModel>(provider =>
+            new ViewModels.Settings.ProfilesSettingsViewModel(
+                provider.GetRequiredService<ISettingsService>()));
 
         // Control ViewModels
         services.AddTransient<ViewModels.Controls.DualColumnLabelFieldViewModel>(provider =>

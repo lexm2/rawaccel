@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+using System;
 using userinterface.Services;
 
 namespace userinterface.ViewModels.Settings;
@@ -7,9 +7,9 @@ public class ProfilesSettingsViewModel : ViewModelBase
 {
     private readonly ISettingsService settingsService;
 
-    public ProfilesSettingsViewModel()
+    public ProfilesSettingsViewModel(ISettingsService settingsService)
     {
-        settingsService = App.Services!.GetRequiredService<ISettingsService>();
+        this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
     }
 
     public bool ForceProfilesListOpen
