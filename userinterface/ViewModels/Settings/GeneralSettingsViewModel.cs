@@ -15,15 +15,17 @@ public class GeneralSettingsViewModel : ViewModelBase
     private readonly LocalizationService localizationService;
     private readonly IThemeService themeService;
     private readonly ILoggingService loggingService;
+    private readonly INotificationService notificationService;
     private LanguageItem selectedLanguage;
     private string selectedThemeValue;
 
-    public GeneralSettingsViewModel(ISettingsService settingsService, LocalizationService localizationService, IThemeService themeService, ILoggingService loggingService)
+    public GeneralSettingsViewModel(ISettingsService settingsService, LocalizationService localizationService, IThemeService themeService, ILoggingService loggingService, INotificationService notificationService)
     {
         this.settingsService = settingsService;
         this.localizationService = localizationService;
         this.themeService = themeService;
         this.loggingService = loggingService;
+        this.notificationService = notificationService;
 
         AvailableLanguages = new ObservableCollection<LanguageItem>
         {
@@ -92,11 +94,7 @@ public class GeneralSettingsViewModel : ViewModelBase
             settingsService.Language = cultureCode;
 
             // Now show the notification in the new language
-            var notificationService = App.Services?.GetService<INotificationService>();
-            if (notificationService != null)
-            {
-                notificationService.ShowInfoToast("SettingsLanguageChangedTo", 4000, languageName);
-            }
+            notificationService.ShowInfoToast("SettingsLanguageChangedTo", 4000, languageName);
         }
         catch (CultureNotFoundException ex)
         {

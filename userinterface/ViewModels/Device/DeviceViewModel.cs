@@ -11,19 +11,29 @@ using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Device
 {
-    public partial class DeviceViewModel : ViewModelBase
+    public partial class DeviceViewModel : ViewModelBase, IDisposable
     {
-        private readonly IModalService modalService;
-        private readonly userspace_backend.IBackEnd? backEnd;
+        public class DeviceDeleteConfirmedEventArgs : EventArgs
+        {
+            public DeviceViewModel Device { get; }
 
-        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.IDevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false, Func<DeviceViewModel, Task>? animatedDeleteCallback = null)
+            public DeviceDeleteConfirmedEventArgs(DeviceViewModel device)
+            {
+                Device = device;
+            }
+        }
+
+        private bool disposed = false;
+        private readonly IModalService modalService;
+
+        public event EventHandler<DeviceDeleteConfirmedEventArgs>? DeleteConfirmed;
+
+        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.IDevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false)
         {
             DeviceBE = deviceBE;
             DevicesBE = devicesBE;
             IsDefaultDevice = isDefault;
-            AnimatedDeleteCallback = animatedDeleteCallback;
             this.modalService = modalService;
-            backEnd = App.Services?.GetService<userspace_backend.IBackEnd>();
 
             NameField = new NamedEditableFieldViewModel(DeviceBE.Name, localizationService);
 
@@ -53,8 +63,6 @@ namespace userinterface.ViewModels.Device
         internal BE.IDevicesModel DevicesBE { get; }
 
         public bool IsDefaultDevice { get; }
-
-        private Func<DeviceViewModel, Task>? AnimatedDeleteCallback { get; }
 
         public NamedEditableFieldViewModel NameField { get; set; }
 
@@ -139,9 +147,9 @@ namespace userinterface.ViewModels.Device
                     "DeviceDeleteConfirm",
                     "ModalCancel");
 
-                if (confirmed && AnimatedDeleteCallback != null)
+                if (confirmed)
                 {
-                    await AnimatedDeleteCallback(this);
+                    DeleteConfirmed?.Invoke(this, new DeviceDeleteConfirmedEventArgs(this));
                 }
             }
             finally
@@ -153,6 +161,17 @@ namespace userinterface.ViewModels.Device
         public void DeleteSelf()
         {
             DevicesBE.TryRemoveElement(DeviceBE);
+        }
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            IgnoreBool.PropertyChanged -= OnIgnoreBoolChanged;
+
+            disposed = true;
+            GC.SuppressFinalize(this);
         }
 
     }

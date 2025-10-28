@@ -35,12 +35,14 @@ namespace userinterface.Services
         private readonly Queue<ModalQueueItem> modalQueue = new();
         private bool isProcessingQueue = false;
         private readonly ILoggingService? logger;
+        private readonly userspace_backend.INotificationManager notificationManager;
 
-        public ModalService(LocalizationService localizationService, ISettingsService settingsService)
+        public ModalService(LocalizationService localizationService, ISettingsService settingsService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
         {
             this.localizationService = localizationService;
             this.settingsService = settingsService;
-            this.logger = App.Services?.GetService<ILoggingService>();
+            this.logger = loggingService;
+            this.notificationManager = notificationManager;
 
             // Initialize queue with Alpha build warning
             EnqueueModal(new ModalQueueItem
@@ -49,7 +51,7 @@ namespace userinterface.Services
                 IsStartupModal = true
             });
 
-            userspace_backend.NotificationManager.QueuedModalRequested += OnBackEndQueuedModalRequested;
+            notificationManager.QueuedModalRequested += OnBackEndQueuedModalRequested;
 
             if (App.IsAppLoaded)
             {
@@ -453,7 +455,7 @@ namespace userinterface.Services
 
         public void Dispose()
         {
-            userspace_backend.NotificationManager.QueuedModalRequested -= OnBackEndQueuedModalRequested;
+            notificationManager.QueuedModalRequested -= OnBackEndQueuedModalRequested;
             App.AppLoadCompleted -= OnAppLoadCompleted;
             GC.SuppressFinalize(this);
         }

@@ -42,14 +42,14 @@ public class ProfileListAnimationHelper : IDisposable
     // Performance counters
     private volatile int activeAnimationCount = 0;
 
-    public ProfileListAnimationHelper(List<Border> profiles, Panel profileContainer, Border addProfileButton, FrameTimerService frameTimer, IAnimationStateService animationStateService)
+    public ProfileListAnimationHelper(List<Border> profiles, Panel profileContainer, Border addProfileButton, FrameTimerService frameTimer, IAnimationStateService animationStateService, ILoggingService? loggingService = null)
     {
         this.profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
         this.profileContainer = profileContainer ?? throw new ArgumentNullException(nameof(profileContainer));
         this.addProfileButton = addProfileButton ?? throw new ArgumentNullException(nameof(addProfileButton));
         this.frameTimer = frameTimer ?? throw new ArgumentNullException(nameof(frameTimer));
         this.animationStateService = animationStateService ?? throw new ArgumentNullException(nameof(animationStateService));
-        this.loggingService = App.Services?.GetService(typeof(ILoggingService)) as ILoggingService;
+        this.loggingService = loggingService;
     }
 
     public bool AreAnimationsActive

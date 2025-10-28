@@ -10,8 +10,10 @@ using BEData = userspace_backend.Data.Profiles.Acceleration;
 
 namespace userinterface.ViewModels.Profile
 {
-    public partial class AccelerationProfileSettingsViewModel : ViewModelBase
+    public partial class AccelerationProfileSettingsViewModel : ViewModelBase, IDisposable
     {
+        private bool disposed = false;
+
         public static readonly ObservableCollection<string> DefinitionTypes =
             new(Enum.GetValues(typeof(BEData.AccelerationDefinitionType))
                 .Cast<BEData.AccelerationDefinitionType>()
@@ -25,13 +27,12 @@ namespace userinterface.ViewModels.Profile
         [ObservableProperty]
         public bool areAccelSettingsVisible;
 
-        public AccelerationProfileSettingsViewModel(BE.IAccelerationModel accelerationBE, INotificationService notificationService, LocalizationService localizationService, IModalService modalService)
+        public AccelerationProfileSettingsViewModel(BE.IAccelerationModel accelerationBE, INotificationService notificationService, LocalizationService localizationService, IModalService modalService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
         {
             AccelerationBE = accelerationBE;
-            var loggingService = App.Services?.GetService(typeof(ILoggingService)) as ILoggingService;
             var accelModel = (BE.AccelerationModel)accelerationBE;
             AccelerationFormulaSettings = new AccelerationFormulaSettingsViewModel(accelModel.FormulaAccel, notificationService);
-            AccelerationLUTSettings = new AccelerationLUTSettingsViewModel(accelModel.LookupTableAccel, loggingService, notificationService, modalService, localizationService);
+            AccelerationLUTSettings = new AccelerationLUTSettingsViewModel(accelModel.LookupTableAccel, loggingService, notificationService, modalService, localizationService, notificationManager);
             AnisotropySettings = new AnisotropyProfileSettingsViewModel(accelerationBE.Anisotropy, localizationService);
             CoalescionSettings = new CoalescionProfileSettingsViewModel(accelerationBE.Coalescion);
             AccelerationBE.Selection.AutoUpdateFromInterface = true;
@@ -58,6 +59,17 @@ namespace userinterface.ViewModels.Profile
             {
                 AreAccelSettingsVisible = true;
             }
+        }
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            AccelerationBE.Selection.PropertyChanged -= OnDefinitionTypeChanged;
+
+            disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }
