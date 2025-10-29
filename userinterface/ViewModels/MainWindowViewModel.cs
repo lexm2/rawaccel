@@ -11,7 +11,7 @@ using userinterface.Converters;
 using userinterface.Interfaces;
 using userinterface.Models;
 using userinterface.Services;
-using userinterface.ViewModels.Controls;
+using userinterface.ViewModels.Fields;
 using userinterface.ViewModels.Device;
 using userinterface.ViewModels.Mapping;
 using userinterface.ViewModels.Profile;

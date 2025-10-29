@@ -3,7 +3,8 @@
         xmlns:vm="using:userinterface.ViewModels"
         xmlns:v="using:userinterface.Views"
         xmlns:vp="using:userinterface.Views.Profile"
-		xmlns:controls="using:userinterface.Views.Controls"
+		xmlns:controls="using:userinterface.Views.Shared"
+		xmlns:modals="using:userinterface.Views.Modals"
 		xmlns:ext="using:userinterface.Extensions"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -398,6 +399,6 @@
 		<controls:ToastContainerView DataContext="{Binding ToastContainerViewModel}" />
 
 		<!-- Modal Overlay -->
-		<controls:ModalOverlay Name="ModalOverlay" />
+		<modals:ModalOverlay Name="ModalOverlay" />
 	</Panel>
 </Window>

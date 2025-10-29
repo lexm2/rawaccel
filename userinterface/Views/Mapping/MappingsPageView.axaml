@@ -4,7 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:userinterface.ViewModels.Mapping"
              xmlns:ext="using:userinterface.Extensions"
-             xmlns:helpers="using:userinterface.Helpers"
+             xmlns:helpers="using:userinterface.Animations"
              xmlns:mapping="using:userinterface.ViewModels.Mapping"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="userinterface.Views.Mapping.MappingsPageView"

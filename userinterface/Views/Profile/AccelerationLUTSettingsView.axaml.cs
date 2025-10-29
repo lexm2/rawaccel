@@ -3,8 +3,8 @@ using Avalonia.Layout;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using userinterface.Services;
-using userinterface.ViewModels.Controls;
-using userinterface.Views.Controls;
+using userinterface.ViewModels.Fields;
+using userinterface.Views.Shared;
 
 namespace userinterface.Views.Profile;
 

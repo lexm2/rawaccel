@@ -4,9 +4,9 @@ using Avalonia.Layout;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using userinterface.Services;
-using userinterface.ViewModels.Controls;
+using userinterface.ViewModels.Fields;
 using userinterface.ViewModels.Profile;
-using userinterface.Views.Controls;
+using userinterface.Views.Shared;
 using BEData = userspace_backend.Data.Profiles.Accel.FormulaAccel;
 
 namespace userinterface.Views.Profile;

@@ -1,4 +1,4 @@
-﻿using userinterface.ViewModels.Controls;
+﻿using userinterface.ViewModels.Fields;
 using BE = userspace_backend.Model.ProfileComponents;
 
 namespace userinterface.ViewModels.Profile

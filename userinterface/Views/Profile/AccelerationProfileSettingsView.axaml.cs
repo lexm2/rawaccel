@@ -6,9 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 using userinterface.Services;
-using userinterface.ViewModels.Controls;
+using userinterface.ViewModels.Fields;
 using userinterface.ViewModels.Profile;
-using userinterface.Views.Controls;
+using userinterface.Views.Shared;
 
 namespace userinterface.Views.Profile;
 

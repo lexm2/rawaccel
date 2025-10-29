@@ -1,0 +1,215 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:userinterface.ViewModels.Fields"
+             xmlns:ext="using:userinterface.Extensions"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="80"
+             x:Class="userinterface.Views.Shared.LUTPointCardView"
+             x:DataType="vm:LUTPointCardViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="Border.point-card">
+      <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="8"/>
+    </Style>
+
+    <Style Selector="Border.point-card:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}"/>
+    </Style>
+
+    <Style Selector="Border.point-card.error">
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerButtonBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource ErrorBackgroundBrush}"/>
+    </Style>
+
+    <Style Selector="TextBlock.point-header">
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}"/>
+    </Style>
+
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+    </Style>
+
+    <Style Selector="TextBox.coordinate-input">
+      <Setter Property="Width" Value="75"/>
+      <Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="Padding" Value="8"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="SelectionBrush" Value="{DynamicResource PrimaryButtonBrush}"/>
+      <Setter Property="TextAlignment" Value="Center"/>
+    </Style>
+
+    <Style Selector="TextBox.coordinate-input:focus">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}"/>
+    </Style>
+
+    <Style Selector="TextBox.coordinate-input:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}"/>
+    </Style>
+
+    <Style Selector="TextBox.coordinate-input.error">
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerButtonBrush}"/>
+      <Setter Property="BorderThickness" Value="2"/>
+    </Style>
+
+    <Style Selector="TextBox.coordinate-input.error:focus">
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerButtonBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource ErrorBackgroundBrush}"/>
+    </Style>
+
+    <Style Selector="TextBlock.validation-error">
+      <Setter Property="Foreground" Value="{DynamicResource DangerButtonBrush}"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontStyle" Value="Italic"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Margin" Value="0,2,0,0"/>
+    </Style>
+
+    <Style Selector="Button.delete-button">
+      <Setter Property="Width" Value="24"/>
+      <Setter Property="Height" Value="24"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+
+    <Style Selector="Button.delete-button:pointerover">
+      <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}"/>
+    </Style>
+
+    <Style Selector="PathIcon.delete-icon">
+      <Setter Property="Width" Value="14"/>
+      <Setter Property="Height" Value="14"/>
+      <Setter Property="Foreground" Value="{DynamicResource DangerButtonBrush}"/>
+    </Style>
+    
+    <Style Selector="Button.swap-button">
+      <Setter Property="Width" Value="20"/>
+      <Setter Property="Height" Value="20"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="2"/>
+      <Setter Property="Margin" Value="2"/>
+    </Style>
+    
+    <Style Selector="Button.swap-button:pointerover">
+      <Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}"/>
+    </Style>
+    
+    <Style Selector="Button.swap-button:disabled">
+      <Setter Property="Opacity" Value="0.3"/>
+    </Style>
+    
+    <Style Selector="PathIcon.swap-icon">
+      <Setter Property="Width" Value="12"/>
+      <Setter Property="Height" Value="12"/>
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+    </Style>
+    
+    <Style Selector="Button.swap-button:pointerover PathIcon.swap-icon">
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonBrush}"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Border Classes.point-card="True" 
+          Classes.error="{Binding HasValidationErrors}"
+          Padding="8">
+    
+    <Grid ColumnDefinitions="*,Auto,*,Auto,Auto,Auto" RowDefinitions="Auto,Auto,Auto">
+      
+      <!-- Header -->
+      <TextBlock Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="5"
+                 Text="{Binding PointLabel}"
+                 Classes="point-header"
+                 Margin="0,0,0,4"/>
+      
+      <!-- Input Fields -->
+      <TextBlock Grid.Column="0" Grid.Row="1" 
+                 Text="{ext:Localized LutXLabel}" 
+                 Classes="field-label"/>
+      
+      <TextBox Grid.Column="1" Grid.Row="1"
+               Name="XTextBox"
+               Text="{Binding XValueText}"
+               Classes.coordinate-input="True"
+               Classes.error="{Binding HasValidationErrors}"
+               ToolTip.Tip="{ext:Localized LutMouseSpeedTooltip}"
+               TextWrapping="NoWrap"
+               Margin="0,0,12,0"/>
+      
+      <TextBlock Grid.Column="2" Grid.Row="1" 
+                 Text="{ext:Localized LutYLabel}" 
+                 Classes="field-label"/>
+      
+      <TextBox Grid.Column="3" Grid.Row="1"
+               Name="YTextBox"
+               Text="{Binding YValueText}"
+               Classes.coordinate-input="True"
+               Classes.error="{Binding HasValidationErrors}"
+               ToolTip.Tip="{ext:Localized LutOutputValueTooltip}"
+               TextWrapping="NoWrap"
+               Margin="0,0,12,0"/>
+      
+      <Button Grid.Column="4" Grid.Row="1"
+              Command="{Binding DeletePointCommand}"
+              Classes="delete-button"
+              ToolTip.Tip="{ext:Localized LutDeletePointTooltip}">
+        <PathIcon Data="{StaticResource delete_regular}" 
+                  Classes="delete-icon"/>
+      </Button>
+      
+      <!-- Chevron buttons container - centered vertically -->
+      <Grid Grid.Column="5" Grid.Row="0" Grid.RowSpan="3"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="8"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <Button Grid.Row="0"
+                Command="{Binding SwapYWithPreviousCommand}"
+                IsEnabled="{Binding CanSwapWithPrevious}"
+                Classes="swap-button"
+                ToolTip.Tip="{ext:Localized LutSwapWithPreviousTooltip}">
+          <PathIcon Data="{StaticResource chevron_up_regular}" 
+                    Classes="swap-icon"/>
+        </Button>
+        
+        <Button Grid.Row="2"
+                Command="{Binding SwapYWithNextCommand}"
+                IsEnabled="{Binding CanSwapWithNext}"
+                Classes="swap-button"
+                ToolTip.Tip="{ext:Localized LutSwapWithNextTooltip}">
+          <PathIcon Data="{StaticResource chevron_down_regular}" 
+                    Classes="swap-icon"/>
+        </Button>
+        
+      </Grid>
+      
+      <!-- Validation Error Message -->
+      <TextBlock Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="6"
+                 Text="{Binding ValidationMessage}"
+                 Classes="validation-error"
+                 IsVisible="{Binding HasValidationErrors}"/>
+      
+    </Grid>
+  </Border>
+
+</UserControl>

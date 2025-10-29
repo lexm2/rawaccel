@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using userinterface.Commands;
 using userinterface.Services;
-using userinterface.ViewModels.Controls;
+using userinterface.ViewModels.Fields;
 using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Device

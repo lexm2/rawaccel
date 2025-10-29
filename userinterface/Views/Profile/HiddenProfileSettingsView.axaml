@@ -5,7 +5,7 @@
              xmlns:v="using:userinterface.Views"
              xmlns:vm="using:userinterface.ViewModels.Profile"
              xmlns:controls="using:userinterface.Controls"
-             xmlns:localControls="using:userinterface.Views.Controls"
+             xmlns:localControls="using:userinterface.Views.Shared"
              xmlns:ext="using:userinterface.Extensions"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="userinterface.Views.Profile.HiddenProfileSettingsView"

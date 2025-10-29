@@ -6,7 +6,8 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using userinterface.Models;
 using userinterface.Views;
-using userinterface.Views.Controls;
+using userinterface.Views.Modals;
+using userinterface.Views.Shared;
 using userspace_backend.Logging;
 
 namespace userinterface.Services
@@ -434,7 +435,7 @@ namespace userinterface.Services
 
         private async Task ShowAlphaBuildWarningAsync()
         {
-            var warningView = new Views.Controls.AlphaBuildWarningView();
+            var warningView = new AlphaBuildWarningView();
 
             await ShowDialogImmediatelyAsync<bool>(warningView, "");
 

@@ -8,7 +8,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using userinterface.Services;
 using userinterface.ViewModels;
-using userinterface.ViewModels.Controls;
+using userinterface.ViewModels.Fields;
 using userinterface.ViewModels.Settings;
 using userinterface.Views;
 using userspace_backend;
@@ -206,10 +206,10 @@ public partial class App : Application
                 provider.GetRequiredService<ISettingsService>()));
 
         // Control ViewModels
-        services.AddTransient<ViewModels.Controls.DualColumnLabelFieldViewModel>(provider =>
-            new ViewModels.Controls.DualColumnLabelFieldViewModel(
+        services.AddTransient<ViewModels.Fields.DualColumnLabelFieldViewModel>(provider =>
+            new ViewModels.Fields.DualColumnLabelFieldViewModel(
                 provider.GetRequiredService<LocalizationService>()));
-        services.AddTransient<ViewModels.Controls.EditableFieldViewModel>();
+        services.AddTransient<ViewModels.Fields.EditableFieldViewModel>();
     }
 
     protected static Bootstrapper BootstrapBackEnd()
