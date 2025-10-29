@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
-using LiveChartsCore.SkiaSharpView.Avalonia;
+using userinterface.Charting.Controls;
 using userinterface.ViewModels.Profile;
 using userspace_backend.Logging;
 using System;

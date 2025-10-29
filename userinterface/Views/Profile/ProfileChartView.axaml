@@ -3,13 +3,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:userinterface.ViewModels.Profile"
-             xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+             xmlns:chart="using:userinterface.Charting.Controls"
 			 xmlns:ext="using:userinterface.Extensions"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="userinterface.Views.Profile.ProfileChartView"
              x:DataType="vm:ProfileChartViewModel">
 	<UserControl.Styles>
-		<Style Selector="lvc|CartesianChart">
+		<Style Selector="chart|CartesianChart">
 			<Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
 			<Setter Property="Margin" Value="8"/>
 		</Style>
@@ -34,7 +34,7 @@
 		</Style>
 		
 		<!-- Animations for smooth transitions -->
-		<Style Selector="lvc|CartesianChart.interactive-chart">
+		<Style Selector="chart|CartesianChart.interactive-chart">
 			<Setter Property="Transitions">
 				<Transitions>
 					<DoubleTransition Property="Opacity" Duration="0:0:0.5"/>
@@ -82,19 +82,17 @@
 			
 			
 			<!-- Interactive Chart (shown after loading) -->
-			<lvc:CartesianChart x:Name="Chart"
+			<chart:CartesianChart x:Name="Chart"
 			                    Classes="interactive-chart"
 			                    Series="{Binding Series}"
 			                    XAxes="{Binding XAxes}"
 			                    YAxes="{Binding YAxes}"
-			                    TooltipPosition="Top"
 			                    TooltipTextPaint="{Binding TooltipTextPaint}"
 			                    TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"
 			                    TooltipTextSize="12"
 			                    AutoUpdateEnabled="True"
 			                    IsVisible="{Binding IsInteractiveMode}"
-			                    Opacity="{Binding ChartOpacity}"
-			                    ZoomMode="None"/>
+			                    Opacity="{Binding ChartOpacity}"/>
 			
 			<!-- Current Mouse Device Display -->
 			<StackPanel Orientation="Horizontal"

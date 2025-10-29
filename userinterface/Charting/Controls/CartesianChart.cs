@@ -34,6 +34,9 @@ public class CartesianChart : Control, ICartesianChart
     public static readonly StyledProperty<bool> AutoUpdateEnabledProperty =
         AvaloniaProperty.Register<CartesianChart, bool>(nameof(AutoUpdateEnabled), true);
 
+    public static readonly StyledProperty<IBrush?> BackgroundProperty =
+        AvaloniaProperty.Register<CartesianChart, IBrush?>(nameof(Background));
+
     static CartesianChart()
     {
         AffectsRender<CartesianChart>(
@@ -43,7 +46,8 @@ public class CartesianChart : Control, ICartesianChart
             TooltipTextPaintProperty,
             TooltipBackgroundPaintProperty,
             TooltipTextSizeProperty,
-            AutoUpdateEnabledProperty);
+            AutoUpdateEnabledProperty,
+            BackgroundProperty);
     }
 
     private readonly ChartRenderer renderer = new();
@@ -90,6 +94,12 @@ public class CartesianChart : Control, ICartesianChart
         set => SetValue(AutoUpdateEnabledProperty, value);
     }
 
+    public IBrush? Background
+    {
+        get => GetValue(BackgroundProperty);
+        set => SetValue(BackgroundProperty, value);
+    }
+
     public SKPoint ScaleDataToPixels(ChartPoint dataPoint)
     {
         var chartArea = renderer.GetChartArea();
@@ -111,6 +121,11 @@ public class CartesianChart : Control, ICartesianChart
         var bounds = Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0)
             return;
+
+        if (Background != null)
+        {
+            context.FillRectangle(Background, new Rect(bounds.Size));
+        }
 
         context.Custom(new ChartCustomDrawOperation(bounds, renderer, Series, XAxes, YAxes));
     }
@@ -144,7 +159,7 @@ public class CartesianChart : Control, ICartesianChart
 
         public void Render(ImmediateDrawingContext context)
         {
-            var leaseFeature = context.TryGetFeature<ISkiaSharpApiLeaseFeature>();
+            var leaseFeature = context.TryGetFeature(typeof(ISkiaSharpApiLeaseFeature)) as ISkiaSharpApiLeaseFeature;
             if (leaseFeature == null)
                 return;
 

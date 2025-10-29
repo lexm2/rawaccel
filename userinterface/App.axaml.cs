@@ -343,13 +343,7 @@ public partial class App : Application
             {
                 try
                 {
-                    _ = typeof(LiveChartsCore.SkiaSharpView.Avalonia.CartesianChart).Assembly;
-
-                    _ = typeof(SkiaSharp.HarfBuzz.SKShaper).Assembly;
-
                     _ = typeof(SkiaSharp.SKCanvas).Assembly;
-
-                    _ = typeof(LiveChartsCore.CartesianChart<>).Assembly;
 
                     _ = typeof(Avalonia.Controls.ItemsRepeater).Assembly;
 

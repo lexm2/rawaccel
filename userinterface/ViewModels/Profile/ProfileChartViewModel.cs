@@ -1,7 +1,9 @@
-using LiveChartsCore;
-using LiveChartsCore.Kernel;
-using LiveChartsCore.SkiaSharpView;
-using LiveChartsCore.SkiaSharpView.Painting;
+using userinterface.Charting.Axes;
+using userinterface.Charting.Core;
+using userinterface.Charting.Extensions;
+using userinterface.Charting.Interfaces;
+using userinterface.Charting.Painting;
+using userinterface.Charting.Series;
 using Microsoft.Extensions.DependencyInjection;
 using SkiaSharp;
 using System;
@@ -385,16 +387,19 @@ namespace userinterface.ViewModels.Profile
                 Values = points,
                 Fill = null,
                 Stroke = stroke,
-                Mapping = (curvePoint, index) => new LiveChartsCore.Kernel.Coordinate(x: curvePoint.MouseSpeed, y: curvePoint.Output),
+                Mapping = (object curvePointObj, int index) =>
+                {
+                    var curvePoint = (CurvePoint)curvePointObj;
+                    return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
+                },
                 GeometrySize = 0,
                 GeometryStroke = null,
                 GeometryFill = null,
                 AnimationsSpeed = TimeSpan.FromMilliseconds(100),
-                EasingFunction = LiveChartsCore.EasingFunctions.EaseOut,
                 Name = name,
                 LineSmoothness = 0,
-                XToolTipLabelFormatter = (chartPoint) => $"Speed: {chartPoint.Coordinate.SecondaryValue:F2}",
-                YToolTipLabelFormatter = (chartPoint) => $"{axis} Output: {chartPoint.Coordinate.PrimaryValue:F2}"
+                XToolTipLabelFormatter = (chartPoint) => $"Speed: {chartPoint.X:F2}",
+                YToolTipLabelFormatter = (chartPoint) => $"{axis} Output: {chartPoint.Y:F2}"
             };
         }
 
@@ -572,16 +577,8 @@ namespace userinterface.ViewModels.Profile
             localizationService.PropertyChanged -= OnLocalizationChanged;
             UnsubscribeFromEvents();
 
-            if (cachedXStroke != null)
-            {
-                cachedXStroke.Dispose();
-                cachedXStroke = null;
-            }
-            if (cachedYStroke != null)
-            {
-                cachedYStroke.Dispose();
-                cachedYStroke = null;
-            }
+            cachedXStroke = null;
+            cachedYStroke = null;
 
             previewRenderer.ClearCache();
             loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.Dispose: Complete");
@@ -704,7 +701,6 @@ namespace userinterface.ViewModels.Profile
                     TicksPaint = new SolidColorPaint(titleColor) { StrokeThickness = StandardStrokeThickness },
                     SubseparatorsPaint = new SolidColorPaint(separatorColor.WithAlpha(SubSeparatorAlpha)) { StrokeThickness = SubStrokeThickness },
                     AnimationsSpeed = TimeSpan.FromMilliseconds(100),
-                    EasingFunction = LiveChartsCore.EasingFunctions.EaseOut,
                     MinLimit = minLimit ?? 0,
                     MaxLimit = maxLimit
                 }
@@ -859,34 +855,15 @@ namespace userinterface.ViewModels.Profile
                 GeometrySize = 8,
                 Stroke = new SolidColorPaint(color) { StrokeThickness = 2 },
                 Fill = new SolidColorPaint(color),
-                Mapping = (curvePoint, index) => new LiveChartsCore.Kernel.Coordinate(x: curvePoint.MouseSpeed, y: curvePoint.Output),
+                Mapping = (object curvePointObj, int index) =>
+                {
+                    var curvePoint = (CurvePoint)curvePointObj;
+                    return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
+                },
                 Name = name,
                 IsVisible = false,
-                DataPadding = new LiveChartsCore.Drawing.LvcPoint(0, 0)
+                DataPadding = new ChartPadding(0, 0)
             };
-        }
-
-        // Custom ScatterSeries class for LUT points with click logging
-        public class LoggingScatterSeries<T> : ScatterSeries<T>
-        {
-            private readonly ILoggingService? loggingService;
-            private readonly string seriesType;
-
-            public LoggingScatterSeries(ILoggingService? loggingService, string seriesType)
-            {
-                this.loggingService = loggingService;
-                this.seriesType = seriesType;
-            }
-
-            public void LogPointClick(int pointIndex, double xValue, double yValue)
-            {
-                loggingService?.LogInformation(LogSource.LUT,
-                    "{SeriesType} LUT Point clicked on graph - Index: {Index}, X: {XValue}, Y: {YValue}",
-                    seriesType,
-                    pointIndex,
-                    xValue,
-                    yValue);
-            }
         }
 
         private void InitializeLUTDotSeries()
@@ -897,29 +874,54 @@ namespace userinterface.ViewModels.Profile
 
             // Create scatter series for X LUT points
             // TODO: Extract LUT points from currentProfileModel.Acceleration.LookupTableAccel.Data
-            xLUTDotSeries = new LoggingScatterSeries<CurvePoint>(loggingService, "X")
+            xLUTDotSeries = new LoggingScatterSeries<CurvePoint>()
             {
                 Values = null, // currentProfileModel.XLUTPoints removed - need to extract from LookupTableAccel.Data
                 GeometrySize = 8,
                 Stroke = new SolidColorPaint(SKColors.DarkBlue) { StrokeThickness = 2 },
                 Fill = new SolidColorPaint(SKColors.LightBlue),
-                Mapping = (curvePoint, index) => new LiveChartsCore.Kernel.Coordinate(x: curvePoint.MouseSpeed, y: curvePoint.Output),
+                Mapping = (object curvePointObj, int index) =>
+                {
+                    var curvePoint = (CurvePoint)curvePointObj;
+                    return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
+                },
                 Name = "X LUT Points",
                 IsVisible = false,
-                DataPadding = new LiveChartsCore.Drawing.LvcPoint(0, 0)
+                DataPadding = new ChartPadding(0, 0)
             };
 
             // Create scatter series for Y LUT points
-            yLUTDotSeries = new LoggingScatterSeries<CurvePoint>(loggingService, "Y")
+            yLUTDotSeries = new LoggingScatterSeries<CurvePoint>()
             {
                 Values = null, // currentProfileModel.YLUTPoints removed - need to extract from LookupTableAccel.Data
                 GeometrySize = 8,
                 Stroke = new SolidColorPaint(SKColors.DarkRed) { StrokeThickness = 2 },
                 Fill = new SolidColorPaint(SKColors.LightPink),
-                Mapping = (curvePoint, index) => new LiveChartsCore.Kernel.Coordinate(x: curvePoint.MouseSpeed, y: curvePoint.Output),
+                Mapping = (object curvePointObj, int index) =>
+                {
+                    var curvePoint = (CurvePoint)curvePointObj;
+                    return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
+                },
                 Name = "Y LUT Points",
                 IsVisible = false,
-                DataPadding = new LiveChartsCore.Drawing.LvcPoint(0, 0)
+                DataPadding = new ChartPadding(0, 0)
+            };
+
+            // Subscribe to click events
+            xLUTDotSeries.PointClicked += (point) =>
+            {
+                loggingService?.LogInformation(LogSource.LUT,
+                    "X LUT Point clicked on graph - X: {XValue}, Y: {YValue}",
+                    point.X,
+                    point.Y);
+            };
+
+            yLUTDotSeries.PointClicked += (point) =>
+            {
+                loggingService?.LogInformation(LogSource.LUT,
+                    "Y LUT Point clicked on graph - X: {XValue}, Y: {YValue}",
+                    point.X,
+                    point.Y);
             };
 
             // Add to series collection
@@ -948,12 +950,12 @@ namespace userinterface.ViewModels.Profile
             yLUTDotSeries.IsVisible = isLUT && hasYCurve;
         }
 
-        public void HandleChartClick(LiveChartsCore.SkiaSharpView.Avalonia.CartesianChart chart, double pixelX, double pixelY)
+        public void HandleChartClick(userinterface.Charting.Controls.CartesianChart chart, double pixelX, double pixelY)
         {
             if (xLUTDotSeries == null || yLUTDotSeries == null || !xLUTDotSeries.IsVisible)
                 return;
 
-            var clickPoint = new LiveChartsCore.Drawing.LvcPointD(pixelX, pixelY);
+            var clickPoint = new SKPoint((float)pixelX, (float)pixelY);
 
             // Check each LUT series with pixel-based distance calculation
             CheckLUTPointHitsPixelBased(chart, xLUTDotSeries, clickPoint, "X");
@@ -963,9 +965,9 @@ namespace userinterface.ViewModels.Profile
             }
         }
 
-        private void CheckLUTPointHitsPixelBased(LiveChartsCore.SkiaSharpView.Avalonia.CartesianChart chart,
+        private void CheckLUTPointHitsPixelBased(userinterface.Charting.Controls.CartesianChart chart,
                                                 LoggingScatterSeries<CurvePoint>? series, 
-                                                LiveChartsCore.Drawing.LvcPointD clickPixels, 
+                                                SKPoint clickPixels, 
                                                 string seriesType)
         {
             if (series?.Values is not IEnumerable<CurvePoint> points || !series.IsVisible)
@@ -979,18 +981,18 @@ namespace userinterface.ViewModels.Profile
                 var point = pointList[i];
                 
                 // Convert LUT point data coordinates to pixel coordinates
-                var pointDataCoord = new LiveChartsCore.Drawing.LvcPointD(point.MouseSpeed, point.Output);
+                var pointDataCoord = new ChartPoint(point.MouseSpeed, point.Output);
                 var pointPixels = chart.ScaleDataToPixels(pointDataCoord);
-                
+
                 // Calculate pixel distance between click and point
                 var pixelDistance = Math.Sqrt(
-                    Math.Pow(clickPixels.X - pointPixels.X, 2) + 
+                    Math.Pow(clickPixels.X - pointPixels.X, 2) +
                     Math.Pow(clickPixels.Y - pointPixels.Y, 2)
                 );
-                
+
                 if (pixelDistance <= pixelTolerance)
                 {
-                    series.LogPointClick(i, point.MouseSpeed, point.Output);
+                    series.LogPointClick(pointDataCoord);
                 }
             }
         }

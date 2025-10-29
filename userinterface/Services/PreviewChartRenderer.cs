@@ -1,7 +1,9 @@
-using LiveChartsCore;
-using LiveChartsCore.SkiaSharpView;
-using LiveChartsCore.SkiaSharpView.Painting;
-using LiveChartsCore.SkiaSharpView.SKCharts;
+using userinterface.Charting.Axes;
+using userinterface.Charting.Controls;
+using userinterface.Charting.Core;
+using userinterface.Charting.Interfaces;
+using userinterface.Charting.Painting;
+using userinterface.Charting.Series;
 using SkiaSharp;
 using System;
 using System.Collections.Concurrent;
@@ -47,7 +49,11 @@ namespace userinterface.Services
                         AnimationsSpeed = TimeSpan.Zero,
                         LineSmoothness = 0,
                         Name = "X Curve",
-                        Mapping = (curvePoint, index) => new LiveChartsCore.Kernel.Coordinate(x: curvePoint.MouseSpeed, y: curvePoint.Output)
+                        Mapping = (object curvePointObj, int index) =>
+                        {
+                            var curvePoint = (CurvePoint)curvePointObj;
+                            return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
+                        }
                     };
 
                     // Y series if needed
@@ -62,12 +68,16 @@ namespace userinterface.Services
                             AnimationsSpeed = TimeSpan.Zero,
                             LineSmoothness = 0,
                             Name = "Y Curve",
-                            Mapping = (curvePoint, index) => new LiveChartsCore.Kernel.Coordinate(x: curvePoint.MouseSpeed, y: curvePoint.Output)
+                            Mapping = (object curvePointObj, int index) =>
+                            {
+                                var curvePoint = (CurvePoint)curvePointObj;
+                                return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
+                            }
                         };
                     }
 
                     // Create headless chart
-                    var chart = new SKCartesianChart
+                    var chart = new HeadlessCartesianChart
                     {
                         Width = ChartWidth,
                         Height = ChartHeight,
