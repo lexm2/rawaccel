@@ -57,6 +57,11 @@ public partial class App : Application
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IViewModelFactory, ViewModelFactory>();
 
+        // Register Charting services
+        services.AddSingleton<Services.Charting.IChartSeriesManager, Services.Charting.ChartSeriesManager>();
+        services.AddSingleton<Services.Charting.IChartAxisManager, Services.Charting.ChartAxisManager>();
+        services.AddSingleton<Services.Charting.ILUTVisualizationManager, Services.Charting.LUTVisualizationManager>();
+
         services.AddSingleton<INotificationService>(provider =>
             new NotificationService(
                 provider.GetRequiredService<ILocalizationService>(),
