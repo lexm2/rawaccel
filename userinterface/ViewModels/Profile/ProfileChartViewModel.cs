@@ -79,13 +79,30 @@ namespace userinterface.ViewModels.Profile
 
         private readonly object syncObject = new object();
 
-        public ProfileChartViewModel(IThemeService themeService, ILocalizationService localizationService, IPreviewChartRenderer previewRenderer, IBackEnd backEnd, ILoggingService loggingService)
+        private readonly Services.Charting.IChartSeriesManager seriesManager;
+
+        private readonly Services.Charting.IChartAxisManager axisManager;
+
+        private readonly Services.Charting.ILUTVisualizationManager lutVisualizationManager;
+
+        public ProfileChartViewModel(
+            IThemeService themeService,
+            ILocalizationService localizationService,
+            IPreviewChartRenderer previewRenderer,
+            IBackEnd backEnd,
+            ILoggingService loggingService,
+            Services.Charting.IChartSeriesManager seriesManager,
+            Services.Charting.IChartAxisManager axisManager,
+            Services.Charting.ILUTVisualizationManager lutVisualizationManager)
         {
             this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             this.localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
             this.previewRenderer = previewRenderer ?? throw new ArgumentNullException(nameof(previewRenderer));
             this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
             this.loggingService = loggingService ?? throw new ArgumentNullException(nameof(loggingService));
+            this.seriesManager = seriesManager ?? throw new ArgumentNullException(nameof(seriesManager));
+            this.axisManager = axisManager ?? throw new ArgumentNullException(nameof(axisManager));
+            this.lutVisualizationManager = lutVisualizationManager ?? throw new ArgumentNullException(nameof(lutVisualizationManager));
 
             RecreateAxesCommand = new RelayCommand(() =>
             {
@@ -360,12 +377,12 @@ namespace userinterface.ViewModels.Profile
                 CurvePreview?.Points?.Count ?? 0);
 
             if (cachedXStroke == null)
-                cachedXStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
+                cachedXStroke = seriesManager.GetDefaultXStroke(MainStrokeThickness);
             if (cachedYStroke == null)
-                cachedYStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
+                cachedYStroke = seriesManager.GetDefaultYStroke(MainStrokeThickness);
 
-            xSeries = CreateLineSeries(CurvePreview.Points, cachedXStroke, "Curve Profile", "Curve");
-            ySeries = CreateLineSeries(CurvePreview.Points, cachedYStroke, "Curve Profile Y", "Y");
+            xSeries = seriesManager.CreateLineSeries(CurvePreview.Points, cachedXStroke, "Curve Profile", "Curve");
+            ySeries = seriesManager.CreateLineSeries(CurvePreview.Points, cachedYStroke, "Curve Profile Y", "Y");
 
             Series.Clear();
             Series.Add(xSeries);
@@ -378,29 +395,6 @@ namespace userinterface.ViewModels.Profile
 
             loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeSeries: Complete, {SeriesCount} series in collection",
                 Series.Count);
-        }
-
-        private LineSeries<CurvePoint> CreateLineSeries(ObservableCollection<CurvePoint> points, SolidColorPaint stroke, string name, string axis)
-        {
-            return new LineSeries<CurvePoint>
-            {
-                Values = points,
-                Fill = null,
-                Stroke = stroke,
-                Mapping = (object curvePointObj, int index) =>
-                {
-                    var curvePoint = (CurvePoint)curvePointObj;
-                    return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
-                },
-                GeometrySize = 0,
-                GeometryStroke = null,
-                GeometryFill = null,
-                AnimationsSpeed = TimeSpan.FromMilliseconds(100),
-                Name = name,
-                LineSmoothness = 0,
-                XToolTipLabelFormatter = (chartPoint) => $"Speed: {chartPoint.X:F2}",
-                YToolTipLabelFormatter = (chartPoint) => $"{axis} Output: {chartPoint.Y:F2}"
-            };
         }
 
         private void UpdateLineSeriesGeometry()
@@ -554,8 +548,11 @@ namespace userinterface.ViewModels.Profile
 
         public void RecreateAxes(double? xMinLimit = null, double? xMaxLimit = null, double? yMinLimit = null, double? yMaxLimit = null)
         {
-            XAxes = CreateXAxes(xMinLimit, xMaxLimit);
-            YAxes = CreateYAxes(yMinLimit, yMaxLimit);
+            var xAxisName = localizationService?.GetText("ChartAxisMouseSpeed") ?? "Mouse Speed";
+            var yAxisName = localizationService?.GetText("ChartAxisOutput") ?? "Output";
+
+            XAxes = axisManager.CreateXAxes(xAxisName, xMinLimit, xMaxLimit);
+            YAxes = axisManager.CreateYAxes(yAxisName, yMinLimit, yMaxLimit);
 
             // Batch property changes
             OnPropertyChanged(nameof(XAxes));
@@ -669,44 +666,6 @@ namespace userinterface.ViewModels.Profile
         // ================================================================================================
         // CHART AXES CREATION
         // ================================================================================================
-
-        private Axis[] CreateXAxes(double? minLimit = null, double? maxLimit = null)
-        {
-            var axisName = localizationService?.GetText("ChartAxisMouseSpeed") ?? "Mouse Speed";
-            return CreateAxis(axisName, minLimit, maxLimit);
-        }
-
-        private Axis[] CreateYAxes(double? minLimit = null, double? maxLimit = null)
-        {
-            var axisName = localizationService?.GetText("ChartAxisOutput") ?? "Output";
-            return CreateAxis(axisName, minLimit, maxLimit);
-        }
-
-        private Axis[] CreateAxis(string name, double? minLimit, double? maxLimit)
-        {
-            var titleColor = themeService.GetCachedColor(AxisTitleBrush);
-            var labelColor = themeService.GetCachedColor(AxisLabelsBrush);
-            var separatorColor = themeService.GetCachedColor(AxisSeparatorsBrush);
-
-            return new Axis[]
-            {
-                new Axis()
-                {
-                    Name = name,
-                    NameTextSize = AxisNameTextSize,
-                    NamePaint = new SolidColorPaint(titleColor),
-                    LabelsPaint = new SolidColorPaint(labelColor),
-                    TextSize = AxisTextSize,
-                    SeparatorsPaint = new SolidColorPaint(separatorColor) { StrokeThickness = StandardStrokeThickness },
-                    TicksPaint = new SolidColorPaint(titleColor) { StrokeThickness = StandardStrokeThickness },
-                    SubseparatorsPaint = new SolidColorPaint(separatorColor.WithAlpha(SubSeparatorAlpha)) { StrokeThickness = SubStrokeThickness },
-                    AnimationsSpeed = TimeSpan.FromMilliseconds(100),
-                    MinLimit = minLimit ?? 0,
-                    MaxLimit = maxLimit
-                }
-            };
-        }
-
 
         // ================================================================================================
         // AXIS LIMITS MANAGEMENT
@@ -828,12 +787,12 @@ namespace userinterface.ViewModels.Profile
 
             if (currentSpeedDotSeries == null)
             {
-                currentSpeedDotSeries = CreateSpeedDotSeries(currentSpeedData, "Current X Speed", accentColor);
+                currentSpeedDotSeries = seriesManager.CreateScatterSeries(currentSpeedData, "Current X Speed", accentColor, accentColor);
             }
 
             if (currentYSpeedDotSeries == null)
             {
-                currentYSpeedDotSeries = CreateSpeedDotSeries(currentYSpeedData, "Current Y Speed", accentColor);
+                currentYSpeedDotSeries = seriesManager.CreateScatterSeries(currentYSpeedData, "Current Y Speed", accentColor, accentColor);
             }
 
             // Always ensure they're in the series collection after a clear
@@ -847,82 +806,38 @@ namespace userinterface.ViewModels.Profile
             }
         }
 
-        private ScatterSeries<CurvePoint> CreateSpeedDotSeries(ObservableCollection<CurvePoint> data, string name, SKColor color)
-        {
-            return new ScatterSeries<CurvePoint>
-            {
-                Values = data,
-                GeometrySize = 8,
-                Stroke = new SolidColorPaint(color) { StrokeThickness = 2 },
-                Fill = new SolidColorPaint(color),
-                Mapping = (object curvePointObj, int index) =>
-                {
-                    var curvePoint = (CurvePoint)curvePointObj;
-                    return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
-                },
-                Name = name,
-                IsVisible = false,
-                DataPadding = new ChartPadding(0, 0)
-            };
-        }
-
         private void InitializeLUTDotSeries()
         {
             if (currentProfileModel == null) return;
 
-            // Use injected logging service for LUT point click logging
-
             // Create scatter series for X LUT points
             // TODO: Extract LUT points from currentProfileModel.Acceleration.LookupTableAccel.Data
-            xLUTDotSeries = new LoggingScatterSeries<CurvePoint>()
-            {
-                Values = null, // currentProfileModel.XLUTPoints removed - need to extract from LookupTableAccel.Data
-                GeometrySize = 8,
-                Stroke = new SolidColorPaint(SKColors.DarkBlue) { StrokeThickness = 2 },
-                Fill = new SolidColorPaint(SKColors.LightBlue),
-                Mapping = (object curvePointObj, int index) =>
+            xLUTDotSeries = seriesManager.CreateLUTSeries(
+                null, // currentProfileModel.XLUTPoints removed - need to extract from LookupTableAccel.Data
+                "X LUT Points",
+                SKColors.DarkBlue,
+                SKColors.LightBlue,
+                (point) =>
                 {
-                    var curvePoint = (CurvePoint)curvePointObj;
-                    return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
-                },
-                Name = "X LUT Points",
-                IsVisible = false,
-                DataPadding = new ChartPadding(0, 0)
-            };
+                    loggingService?.LogInformation(LogSource.LUT,
+                        "X LUT Point clicked on graph - X: {XValue}, Y: {YValue}",
+                        point.X,
+                        point.Y);
+                });
 
             // Create scatter series for Y LUT points
-            yLUTDotSeries = new LoggingScatterSeries<CurvePoint>()
-            {
-                Values = null, // currentProfileModel.YLUTPoints removed - need to extract from LookupTableAccel.Data
-                GeometrySize = 8,
-                Stroke = new SolidColorPaint(SKColors.DarkRed) { StrokeThickness = 2 },
-                Fill = new SolidColorPaint(SKColors.LightPink),
-                Mapping = (object curvePointObj, int index) =>
+            yLUTDotSeries = seriesManager.CreateLUTSeries(
+                null, // currentProfileModel.YLUTPoints removed - need to extract from LookupTableAccel.Data
+                "Y LUT Points",
+                SKColors.DarkRed,
+                SKColors.LightPink,
+                (point) =>
                 {
-                    var curvePoint = (CurvePoint)curvePointObj;
-                    return new ChartPoint(curvePoint.MouseSpeed, curvePoint.Output);
-                },
-                Name = "Y LUT Points",
-                IsVisible = false,
-                DataPadding = new ChartPadding(0, 0)
-            };
-
-            // Subscribe to click events
-            xLUTDotSeries.PointClicked += (point) =>
-            {
-                loggingService?.LogInformation(LogSource.LUT,
-                    "X LUT Point clicked on graph - X: {XValue}, Y: {YValue}",
-                    point.X,
-                    point.Y);
-            };
-
-            yLUTDotSeries.PointClicked += (point) =>
-            {
-                loggingService?.LogInformation(LogSource.LUT,
-                    "Y LUT Point clicked on graph - X: {XValue}, Y: {YValue}",
-                    point.X,
-                    point.Y);
-            };
+                    loggingService?.LogInformation(LogSource.LUT,
+                        "Y LUT Point clicked on graph - X: {XValue}, Y: {YValue}",
+                        point.X,
+                        point.Y);
+                });
 
             // Add to series collection
             if (!Series.Contains(xLUTDotSeries))
@@ -943,58 +858,15 @@ namespace userinterface.ViewModels.Profile
             var isLUT = currentProfileModel.Acceleration?.Selection?.ModelValue ==
                 userspace_backend.Data.Profiles.Acceleration.AccelerationDefinitionType.LookupTable;
 
-            xLUTDotSeries.IsVisible = isLUT;
-
             // Y LUT dots are visible only if LUT and Y curve is separate
             var hasYCurve = YXRatio.ModelValue != 1.0;
-            yLUTDotSeries.IsVisible = isLUT && hasYCurve;
+
+            lutVisualizationManager.UpdateLUTSeriesVisibility(xLUTDotSeries, yLUTDotSeries, isLUT, hasYCurve);
         }
 
         public void HandleChartClick(userinterface.Charting.Controls.CartesianChart chart, double pixelX, double pixelY)
         {
-            if (xLUTDotSeries == null || yLUTDotSeries == null || !xLUTDotSeries.IsVisible)
-                return;
-
-            var clickPoint = new SKPoint((float)pixelX, (float)pixelY);
-
-            // Check each LUT series with pixel-based distance calculation
-            CheckLUTPointHitsPixelBased(chart, xLUTDotSeries, clickPoint, "X");
-            if (yLUTDotSeries.IsVisible)
-            {
-                CheckLUTPointHitsPixelBased(chart, yLUTDotSeries, clickPoint, "Y");
-            }
-        }
-
-        private void CheckLUTPointHitsPixelBased(userinterface.Charting.Controls.CartesianChart chart,
-                                                LoggingScatterSeries<CurvePoint>? series, 
-                                                SKPoint clickPixels, 
-                                                string seriesType)
-        {
-            if (series?.Values is not IEnumerable<CurvePoint> points || !series.IsVisible)
-                return;
-
-            double pixelTolerance = 100.0; // 100 pixels as requested
-            
-            var pointList = points.ToList();
-            for (int i = 0; i < pointList.Count; i++)
-            {
-                var point = pointList[i];
-                
-                // Convert LUT point data coordinates to pixel coordinates
-                var pointDataCoord = new ChartPoint(point.MouseSpeed, point.Output);
-                var pointPixels = chart.ScaleDataToPixels(pointDataCoord);
-
-                // Calculate pixel distance between click and point
-                var pixelDistance = Math.Sqrt(
-                    Math.Pow(clickPixels.X - pointPixels.X, 2) +
-                    Math.Pow(clickPixels.Y - pointPixels.Y, 2)
-                );
-
-                if (pixelDistance <= pixelTolerance)
-                {
-                    series.LogPointClick(pointDataCoord);
-                }
-            }
+            lutVisualizationManager.HandleChartClick(chart, xLUTDotSeries, yLUTDotSeries, pixelX, pixelY);
         }
 
         private void ToggleRealTimeTracking()
