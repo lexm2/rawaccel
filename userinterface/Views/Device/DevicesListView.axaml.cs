@@ -20,6 +20,7 @@ public partial class DevicesListView : UserControl
     private bool isInitialLoad = true;
 
     private readonly IAnimationStateService animationStateService;
+    private readonly Animation.IAnimationService animationService;
     private readonly ILoggingService? loggingService;
 
     public bool AreAnimationsActive => animationStateService.AreAnimationsActive;
@@ -27,6 +28,7 @@ public partial class DevicesListView : UserControl
     public DevicesListView()
     {
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");
+        animationService = App.Services?.GetRequiredService<Animation.IAnimationService>() ?? throw new InvalidOperationException("AnimationService not available");
         loggingService = App.Services?.GetService(typeof(ILoggingService)) as ILoggingService;
 
         InitializeComponent();
@@ -190,14 +192,7 @@ public partial class DevicesListView : UserControl
 
                 try
                 {
-                    var transform = animationStateService.EnsureTranslateTransform(container, 0, animationStateService.Config.SlideUpDistance);
-
-                    var opacityAnimation = animationStateService.CreateOpacityAnimation(0.0, 1.0, animationStateService.Config.InitialLoadAnimationDurationMs, new QuadraticEaseOut());
-
-                    var opacityTask = opacityAnimation.RunAsync(container, cancellationToken);
-                    var transformTask = animationStateService.AnimateTransformAsync(transform, TransformAxis.Y, animationStateService.Config.SlideUpDistance, 0.0, animationStateService.Config.InitialLoadAnimationDurationMs, EaseOutBack, cancellationToken);
-
-                    await Task.WhenAll(opacityTask, transformTask);
+                    await animationService.SlideAndFadeInAsync(container, Animation.SlideDirection.Up, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -228,14 +223,7 @@ public partial class DevicesListView : UserControl
 
                 try
                 {
-                    var transform = animationStateService.EnsureTranslateTransform(container, 0, 0);
-
-                    var opacityAnimation = animationStateService.CreateOpacityAnimation(1.0, 0.0, animationStateService.Config.DeleteAnimationDurationMs, new QuadraticEaseIn());
-
-                    var opacityTask = opacityAnimation.RunAsync(container, cancellationToken);
-                    var transformTask = animationStateService.AnimateTransformAsync(transform, TransformAxis.X, 0.0, -animationStateService.Config.SlideLeftDistance, animationStateService.Config.DeleteAnimationDurationMs, EaseInQuad, cancellationToken);
-
-                    await Task.WhenAll(opacityTask, transformTask);
+                    await animationService.SlideAndFadeOutAsync(container, Animation.SlideDirection.Left, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -334,21 +322,13 @@ public partial class DevicesListView : UserControl
 
             try
             {
-                var transform = animationStateService.EnsureTranslateTransform(container, 0, animationStateService.Config.SlideUpDistance);
-                container.Opacity = 0;
-
-                loggingService?.LogDebug(LogSource.UI, "ShowDevice: Index {Index}, Initial transform: ({X},{Y}), Target: (0,0), SlideUpDistance: {Distance}",
-                    index, transform.X, transform.Y, animationStateService.Config.SlideUpDistance);
-
-                var showAnimation = animationStateService.CreateOpacityAnimation(0.0, 1.0, animationStateService.Config.AnimationDurationMs, new QuadraticEaseOut());
-
                 var cancellationToken = await animationStateService.RegisterAnimationAsync(animationKey, index);
-                var opacityTask = showAnimation.RunAsync(container);
-                var transformTask = animationStateService.AnimateTransformAsync(transform, TransformAxis.Y, animationStateService.Config.SlideUpDistance, 0.0, animationStateService.Config.AnimationDurationMs, EaseOutBack, cancellationToken);
+
+                loggingService?.LogDebug(LogSource.UI, "ShowDevice: Index {Index}, Starting slide and fade in", index);
 
                 try
                 {
-                    await Task.WhenAll(opacityTask, transformTask);
+                    await animationService.SlideAndFadeInAsync(container, Animation.SlideDirection.Up, cancellationToken);
                 }
                 catch (TaskCanceledException)
                 {
@@ -370,15 +350,4 @@ public partial class DevicesListView : UserControl
         });
     }
 
-    private static double EaseOutBack(double t)
-    {
-        const double c1 = 1.70158;
-        const double c3 = c1 + 1;
-        return 1 + c3 * Math.Pow(t - 1, 3) + c1 * Math.Pow(t - 1, 2);
-    }
-
-    private static double EaseInQuad(double t)
-    {
-        return t * t;
-    }
 }

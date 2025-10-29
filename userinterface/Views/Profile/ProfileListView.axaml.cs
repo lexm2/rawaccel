@@ -28,6 +28,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private int GetProfileCount() => allItems.Count - 1;
     private readonly IAnimationStateService animationStateService;
+    private readonly Animation.IAnimationService animationService;
 
     public new event PropertyChangedEventHandler? PropertyChanged;
     private readonly IModalService modalService;
@@ -41,6 +42,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         modalService = App.Services?.GetRequiredService<IModalService>() ?? throw new InvalidOperationException("ModalService not available");
         localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");
+        animationService = App.Services?.GetRequiredService<Animation.IAnimationService>() ?? throw new InvalidOperationException("AnimationService not available");
 
         profilesModel = backEnd.Profiles ?? throw new ArgumentNullException(nameof(backEnd.Profiles));
         localizationService.PropertyChanged += OnLocalizationPropertyChanged;

@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Microsoft.Extensions.DependencyInjection;
 using Styles;
 using System;
 using System.Collections.Generic;
@@ -48,6 +49,8 @@ public partial class EditableExpanderView : UserControl, INotifyPropertyChanged,
     private NoInteractionButtonView? CachedContentButton;
     private PathIcon? CachedExpandIcon;
 
+    private readonly Services.Animation.IAnimationService animationService;
+
     public new event PropertyChangedEventHandler? PropertyChanged;
 
     public object Header
@@ -82,6 +85,8 @@ public partial class EditableExpanderView : UserControl, INotifyPropertyChanged,
 
     public EditableExpanderView()
     {
+        animationService = App.Services?.GetRequiredService<Services.Animation.IAnimationService>() ?? throw new InvalidOperationException("AnimationService not available");
+
         InitializeComponent();
 
         this.PropertyChanged += OnSelfPropertyChanged;
@@ -240,86 +245,6 @@ public partial class EditableExpanderView : UserControl, INotifyPropertyChanged,
 
         await animation.RunAsync(expandIcon, CancellationToken.None);
         rotateTransform.Angle = targetAngle;
-    }
-
-    private static async Task AnimateContentExpand(Control contentControl)
-    {
-        contentControl.Opacity = 0.0;
-        contentControl.RenderTransform = new ScaleTransform { ScaleY = 0.0 };
-        contentControl.RenderTransformOrigin = new RelativePoint(0.5, 0.0, RelativeUnit.Relative); // Scale from top
-
-        var animation = new Animation
-        {
-            Duration = TimeSpan.FromMilliseconds(ContentAnimationDurationMilliseconds),
-            Easing = new CubicEaseOut(),
-            FillMode = FillMode.Forward,
-            Children =
-            {
-                new KeyFrame
-                {
-                    Cue = new Cue(0.0),
-                    Setters =
-                    {
-                        new Setter { Property = Visual.OpacityProperty, Value = 0.0 },
-                        new Setter { Property = ScaleTransform.ScaleYProperty, Value = 0.0 }
-                    }
-                },
-                new KeyFrame
-                {
-                    Cue = new Cue(1.0),
-                    Setters =
-                    {
-                        new Setter { Property = Visual.OpacityProperty, Value = 1.0 },
-                        new Setter { Property = ScaleTransform.ScaleYProperty, Value = 1.0 }
-                    }
-                }
-            }
-        };
-
-        await animation.RunAsync(contentControl, CancellationToken.None);
-
-        // Ensure final state
-        contentControl.Opacity = 1.0;
-        if (contentControl.RenderTransform is ScaleTransform scaleTransform)
-        {
-            scaleTransform.ScaleY = 1.0;
-        }
-    }
-
-    private static async Task AnimateContentCollapse(Control contentControl)
-    {
-        // Ensure transform origin is set for consistent scaling direction
-        contentControl.RenderTransformOrigin = new RelativePoint(0.5, 0.0, RelativeUnit.Relative); // Scale from top
-
-        var animation = new Animation
-        {
-            Duration = TimeSpan.FromMilliseconds(ContentAnimationDurationMilliseconds),
-            Easing = new CubicEaseIn(),
-            FillMode = FillMode.Forward,
-            Children =
-            {
-                new KeyFrame
-                {
-                    Cue = new Cue(0.0),
-                    Setters =
-                    {
-                        new Setter { Property = Visual.OpacityProperty, Value = 1.0 },
-                        new Setter { Property = ScaleTransform.ScaleYProperty, Value = 1.0 }
-                    }
-                },
-                new KeyFrame
-                {
-                    Cue = new Cue(1.0),
-                    Setters =
-                    {
-                        new Setter { Property = Visual.OpacityProperty, Value = 0.0 },
-                        new Setter { Property = ScaleTransform.ScaleYProperty, Value = 0.0 }
-                    }
-                }
-            }
-        };
-
-        await animation.RunAsync(contentControl, CancellationToken.None);
     }
 
     private static async Task AnimateHeightExpand(Control contentControl)
