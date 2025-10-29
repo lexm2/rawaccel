@@ -28,7 +28,7 @@ namespace userinterface.ViewModels.Device
 
         public event EventHandler<DeviceDeleteConfirmedEventArgs>? DeleteConfirmed;
 
-        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.IDevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false)
+        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.IDevicesModel devicesBE, IModalService modalService, ILocalizationService localizationService, bool isDefault = false)
         {
             DeviceBE = deviceBE;
             DevicesBE = devicesBE;

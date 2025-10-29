@@ -12,7 +12,7 @@ public class DualColumnLabelFieldViewModel : INotifyPropertyChanged
 {
     private const double DefaultLabelWidth = 120.0;
     private double labelWidth = DefaultLabelWidth;
-    private readonly LocalizationService localizationService;
+    private readonly ILocalizationService localizationService;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -24,7 +24,7 @@ public class DualColumnLabelFieldViewModel : INotifyPropertyChanged
 
     public ObservableCollection<FieldItemViewModel> Fields { get; }
 
-    public DualColumnLabelFieldViewModel(LocalizationService localizationService)
+    public DualColumnLabelFieldViewModel(ILocalizationService localizationService)
     {
         Fields = [];
         this.localizationService = localizationService;
@@ -108,11 +108,11 @@ public class FieldItemViewModel : INotifyPropertyChanged
 {
     private readonly BE.IEditableSetting? setting;
     private readonly string? localizationKey;
-    private readonly LocalizationService localizationService;
+    private readonly ILocalizationService localizationService;
     private string cachedLabel;
 
     // Constructor for EditableSetting
-    public FieldItemViewModel(BE.IEditableSetting setting, object inputControl, LocalizationService localizationService)
+    public FieldItemViewModel(BE.IEditableSetting setting, object inputControl, ILocalizationService localizationService)
     {
         this.setting = setting ?? throw new ArgumentNullException(nameof(setting));
         InputControl = inputControl ?? throw new ArgumentNullException(nameof(inputControl));
@@ -121,7 +121,7 @@ public class FieldItemViewModel : INotifyPropertyChanged
     }
 
     // Constructor for localization key
-    public FieldItemViewModel(string localizationKey, object inputControl, LocalizationService localizationService)
+    public FieldItemViewModel(string localizationKey, object inputControl, ILocalizationService localizationService)
     {
         this.localizationKey = localizationKey ?? throw new ArgumentNullException(nameof(localizationKey));
         InputControl = inputControl ?? throw new ArgumentNullException(nameof(inputControl));

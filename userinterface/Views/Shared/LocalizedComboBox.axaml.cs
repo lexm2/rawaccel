@@ -17,13 +17,13 @@ namespace userinterface.Views.Shared
         public static readonly StyledProperty<IEnumerable<string>> EnumValuesProperty =
             AvaloniaProperty.Register<LocalizedComboBox, IEnumerable<string>>(nameof(EnumValues));
 
-        private readonly LocalizationService localizationService;
+        private readonly ILocalizationService localizationService;
         public readonly ObservableCollection<LocalizedComboItem> localizedItems;
 
         public LocalizedComboBox()
         {
             InitializeComponent();
-            localizationService = App.Services.GetRequiredService<LocalizationService>();
+            localizationService = App.Services.GetRequiredService<ILocalizationService>();
             localizationService.PropertyChanged += OnLocalizationChanged;
             localizedItems = new ObservableCollection<LocalizedComboItem>();
 

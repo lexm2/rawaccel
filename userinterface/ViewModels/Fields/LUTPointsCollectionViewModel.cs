@@ -21,7 +21,7 @@ namespace userinterface.ViewModels.Fields
         private readonly INotificationService? notificationService;
         private readonly ILoggingService? loggingService;
         private readonly IModalService? modalService;
-        private readonly LocalizationService? localizationService;
+        private readonly ILocalizationService? localizationService;
         private readonly userspace_backend.INotificationManager? notificationManager;
         private readonly DebouncedAction<LUTPointCardViewModel> debouncedValidation;
 
@@ -47,7 +47,7 @@ namespace userinterface.ViewModels.Fields
 
         public LUTPointCardViewModel? NextPoint => CurrentPointIndex < Points.Count - 1 ? Points[CurrentPointIndex + 1] : null;
 
-        public LUTPointsCollectionViewModel(INotificationService? notificationService = null, ILoggingService? loggingService = null, IModalService? modalService = null, LocalizationService? localizationService = null, userspace_backend.INotificationManager? notificationManager = null)
+        public LUTPointsCollectionViewModel(INotificationService? notificationService = null, ILoggingService? loggingService = null, IModalService? modalService = null, ILocalizationService? localizationService = null, userspace_backend.INotificationManager? notificationManager = null)
         {
             this.notificationService = notificationService;
             this.loggingService = loggingService;

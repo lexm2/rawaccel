@@ -5,7 +5,7 @@ using userspace_backend.Logging;
 
 namespace userinterface.Services;
 
-public class LocalizationService : INotifyPropertyChanged
+public class LocalizationService : ILocalizationService
 {
     private readonly ILoggingService loggingService;
 

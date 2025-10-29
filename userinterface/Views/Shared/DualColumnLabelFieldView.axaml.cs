@@ -11,7 +11,7 @@ public partial class DualColumnLabelFieldView : UserControl
     public DualColumnLabelFieldView()
     {
         InitializeComponent();
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
+        var localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         DataContext = new DualColumnLabelFieldViewModel(localizationService);
     }
 

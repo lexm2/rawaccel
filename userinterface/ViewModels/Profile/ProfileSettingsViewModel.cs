@@ -8,12 +8,12 @@ namespace userinterface.ViewModels.Profile
     public partial class ProfileSettingsViewModel : ViewModelBase
     {
         private readonly INotificationService notificationService;
-        private readonly LocalizationService localizationService;
+        private readonly ILocalizationService localizationService;
         private readonly IModalService modalService;
         private readonly ILoggingService loggingService;
         private readonly userspace_backend.INotificationManager notificationManager;
 
-        public ProfileSettingsViewModel(INotificationService notificationService, LocalizationService localizationService, IModalService modalService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
+        public ProfileSettingsViewModel(INotificationService notificationService, ILocalizationService localizationService, IModalService modalService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
         {
             this.notificationService = notificationService;
             this.localizationService = localizationService;

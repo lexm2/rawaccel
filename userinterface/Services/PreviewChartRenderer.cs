@@ -10,7 +10,7 @@ using userspace_backend.Display;
 
 namespace userinterface.Services
 {
-    public class PreviewChartRenderer
+    public class PreviewChartRenderer : IPreviewChartRenderer
     {
         private readonly ConcurrentDictionary<string, byte[]> bitmapCache = new();
         private const int ChartWidth = 400;

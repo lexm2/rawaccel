@@ -12,9 +12,9 @@ namespace userinterface.ViewModels.Device
     {
         private bool disposed = false;
         private readonly IModalService modalService;
-        private readonly LocalizationService localizationService;
+        private readonly ILocalizationService localizationService;
 
-        public DevicesListViewModel(BE.IDevicesModel devicesBE, IModalService modalService, LocalizationService localizationService)
+        public DevicesListViewModel(BE.IDevicesModel devicesBE, IModalService modalService, ILocalizationService localizationService)
         {
             DevicesBE = devicesBE;
             this.modalService = modalService;

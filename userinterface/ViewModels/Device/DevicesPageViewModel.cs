@@ -10,9 +10,9 @@ namespace userinterface.ViewModels.Device
         private DeviceGroupsViewModel? deviceGroups;
         private readonly BE.DevicesModel devicesModel;
         private readonly IModalService modalService;
-        private readonly LocalizationService localizationService;
+        private readonly ILocalizationService localizationService;
 
-        public DevicesPageViewModel(userspace_backend.IBackEnd backEnd, IModalService modalService, LocalizationService localizationService)
+        public DevicesPageViewModel(userspace_backend.IBackEnd backEnd, IModalService modalService, ILocalizationService localizationService)
         {
             devicesModel = backEnd?.Devices ?? throw new ArgumentNullException(nameof(backEnd));
             this.modalService = modalService;

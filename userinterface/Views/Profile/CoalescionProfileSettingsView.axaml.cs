@@ -43,7 +43,7 @@ public partial class CoalescionProfileSettingsView : UserControl
 
     private void CreateCoalescionFieldViewModel()
     {
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
+        var localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         CoalescionFieldViewModel = new DualColumnLabelFieldViewModel(localizationService);
         CoalescionField = new DualColumnLabelFieldView(CoalescionFieldViewModel);
     }

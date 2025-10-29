@@ -12,14 +12,14 @@ namespace userinterface.ViewModels.Settings;
 public class GeneralSettingsViewModel : ViewModelBase
 {
     private readonly ISettingsService settingsService;
-    private readonly LocalizationService localizationService;
+    private readonly ILocalizationService localizationService;
     private readonly IThemeService themeService;
     private readonly ILoggingService loggingService;
     private readonly INotificationService notificationService;
     private LanguageItem selectedLanguage;
     private string selectedThemeValue;
 
-    public GeneralSettingsViewModel(ISettingsService settingsService, LocalizationService localizationService, IThemeService themeService, ILoggingService loggingService, INotificationService notificationService)
+    public GeneralSettingsViewModel(ISettingsService settingsService, ILocalizationService localizationService, IThemeService themeService, ILoggingService loggingService, INotificationService notificationService)
     {
         this.settingsService = settingsService;
         this.localizationService = localizationService;

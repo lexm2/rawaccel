@@ -6,9 +6,9 @@ namespace userinterface.ViewModels.Fields
 {
     public partial class NamedEditableFieldViewModel : ViewModelBase
     {
-        private readonly LocalizationService localizationService;
+        private readonly ILocalizationService localizationService;
 
-        public NamedEditableFieldViewModel(BE.IEditableSetting settingBE, LocalizationService localizationService)
+        public NamedEditableFieldViewModel(BE.IEditableSetting settingBE, ILocalizationService localizationService)
         {
             SettingBE = settingBE;
             Field = new EditableFieldViewModel(settingBE);

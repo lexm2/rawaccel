@@ -10,8 +10,8 @@ namespace userinterface.Services
     // - Call StartMonitoring("context") before performance-critical operations  
     // - Call StopMonitoring("context") after completion
     // - Use MonitorOperation("name", action) for automatic monitoring
-    // 
-    public class FrameTimerService
+    //
+    public class FrameTimerService : IFrameTimerService
     {
         private readonly Stopwatch frameStopwatch = new();
         private readonly DispatcherTimer frameTimer;

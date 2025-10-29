@@ -10,10 +10,10 @@ namespace userinterface.ViewModels.Profile
         private readonly ILoggingService? loggingService;
         private readonly INotificationService? notificationService;
         private readonly IModalService? modalService;
-        private readonly LocalizationService? localizationService;
+        private readonly ILocalizationService? localizationService;
         private readonly userspace_backend.INotificationManager? notificationManager;
 
-        public AccelerationLUTSettingsViewModel(BE.LookupTableDefinitionModel lutAccelBE, ILoggingService? loggingService = null, INotificationService? notificationService = null, IModalService? modalService = null, LocalizationService? localizationService = null, userspace_backend.INotificationManager? notificationManager = null)
+        public AccelerationLUTSettingsViewModel(BE.LookupTableDefinitionModel lutAccelBE, ILoggingService? loggingService = null, INotificationService? notificationService = null, IModalService? modalService = null, ILocalizationService? localizationService = null, userspace_backend.INotificationManager? notificationManager = null)
         {
             LUTAccelBE = lutAccelBE;
             this.loggingService = loggingService;

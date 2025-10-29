@@ -31,14 +31,14 @@ namespace userinterface.Services
         private Control? currentModalContent;
         private TaskCompletionSource<bool>? currentConfirmationTask;
         private TaskCompletionSource<object?>? currentDialogTask;
-        private readonly LocalizationService localizationService;
+        private readonly ILocalizationService localizationService;
         private readonly ISettingsService settingsService;
         private readonly Queue<ModalQueueItem> modalQueue = new();
         private bool isProcessingQueue = false;
         private readonly ILoggingService? logger;
         private readonly userspace_backend.INotificationManager notificationManager;
 
-        public ModalService(LocalizationService localizationService, ISettingsService settingsService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
+        public ModalService(ILocalizationService localizationService, ISettingsService settingsService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
         {
             this.localizationService = localizationService;
             this.settingsService = settingsService;

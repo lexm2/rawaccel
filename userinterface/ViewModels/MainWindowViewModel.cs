@@ -41,14 +41,14 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private readonly BE.IBackEnd backEnd;
     private readonly IThemeService themeService;
     private readonly INotificationService notificationService;
-    private readonly FrameTimerService frameTimer;
+    private readonly IFrameTimerService frameTimer;
     private readonly BE.INotificationManager notificationManager;
 
     public MainWindowViewModel(
         BE.IBackEnd backEnd,
         IThemeService themeService,
         ISettingsService settingsService,
-        FrameTimerService frameTimer,
+        IFrameTimerService frameTimer,
         INotificationService notificationService,
         BE.INotificationManager notificationManager,
         DevicesPageViewModel devicesPage,

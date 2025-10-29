@@ -33,7 +33,7 @@ public partial class HiddenProfileSettingsView : UserControl
         if (DataContext is not HiddenProfileSettingsViewModel viewModel)
             return;
 
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
+        var localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         var hiddenSettingsFieldViewModel = new DualColumnLabelFieldViewModel(localizationService);
         hiddenSettingsFieldViewModel.AddField("HiddenRotation", CreateInputControl(viewModel.RotationField));
         hiddenSettingsFieldViewModel.AddField("HiddenLRRatio", CreateInputControl(viewModel.LRRatioField));

@@ -13,7 +13,7 @@ namespace userinterface.Views.Shared
         {
             InitializeComponent();
 
-            var localizationService = App.Services?.GetService<LocalizationService>();
+            var localizationService = App.Services?.GetService<ILocalizationService>();
             if (localizationService != null)
             {
                 var messageTemplate = localizationService.GetText("UnconfiguredDeviceMessage");

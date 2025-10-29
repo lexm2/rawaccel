@@ -14,7 +14,7 @@ namespace userinterface.ViewModels.Fields
     public partial class LUTPointCardViewModel : ViewModelBase
     {
         private readonly ILoggingService? loggingService;
-        private readonly LocalizationService? localizationService;
+        private readonly ILocalizationService? localizationService;
         private readonly INotificationManager? notificationManager;
         private readonly IUserInputParser<double> doubleParser;
 
@@ -53,7 +53,7 @@ namespace userinterface.ViewModels.Fields
         [ObservableProperty]
         private bool canSwapWithNext;
 
-        public LUTPointCardViewModel(double x, double y, int index, ILoggingService? loggingService = null, LocalizationService? localizationService = null, INotificationManager? notificationManager = null)
+        public LUTPointCardViewModel(double x, double y, int index, ILoggingService? loggingService = null, ILocalizationService? localizationService = null, INotificationManager? notificationManager = null)
         {
             this.loggingService = loggingService;
             this.localizationService = localizationService;

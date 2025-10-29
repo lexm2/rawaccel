@@ -7,11 +7,11 @@ namespace userinterface.Views.Profile;
 
 public partial class ProfilesPageView : UserControl
 {
-    private readonly FrameTimerService? frameTimer;
+    private readonly IFrameTimerService? frameTimer;
 
     public ProfilesPageView()
     {
-        frameTimer = App.Services?.GetService<FrameTimerService>();
+        frameTimer = App.Services?.GetService<IFrameTimerService>();
         InitializeComponent();
 
         var contentControl = this.FindControl<ContentControl>("ProfileContentControl");

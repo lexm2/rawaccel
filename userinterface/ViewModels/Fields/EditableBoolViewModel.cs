@@ -10,9 +10,9 @@ namespace userinterface.ViewModels.Fields
         [ObservableProperty]
         private bool valueInDisplay;
 
-        private readonly LocalizationService localizationService;
+        private readonly ILocalizationService localizationService;
 
-        public EditableBoolViewModel(BE.IEditableSetting settingBE, LocalizationService localizationService)
+        public EditableBoolViewModel(BE.IEditableSetting settingBE, ILocalizationService localizationService)
         {
             SettingBE = settingBE;
             this.localizationService = localizationService;

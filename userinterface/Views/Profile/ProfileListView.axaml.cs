@@ -31,7 +31,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     public new event PropertyChangedEventHandler? PropertyChanged;
     private readonly IModalService modalService;
-    private readonly LocalizationService localizationService;
+    private readonly ILocalizationService localizationService;
     private TextBlock? addProfileTextBlock;
 
 
@@ -39,7 +39,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
     {
         var backEnd = App.Services?.GetRequiredService<IBackEnd>() ?? throw new InvalidOperationException("BackEnd service not available");
         modalService = App.Services?.GetRequiredService<IModalService>() ?? throw new InvalidOperationException("ModalService not available");
-        localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
+        localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");
 
         profilesModel = backEnd.Profiles ?? throw new ArgumentNullException(nameof(backEnd.Profiles));

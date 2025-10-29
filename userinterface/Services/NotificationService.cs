@@ -6,13 +6,13 @@ namespace userinterface.Services
 {
     public class NotificationService : INotificationService
     {
-        private readonly LocalizationService localizationService;
+        private readonly ILocalizationService localizationService;
         private readonly ISettingsService settingsService;
         private readonly ILoggingService loggingService;
 
         private const int DefaultToastDurationMs = 3000;
 
-        public NotificationService(LocalizationService localizationService, ISettingsService settingsService, ILoggingService loggingService)
+        public NotificationService(ILocalizationService localizationService, ISettingsService settingsService, ILoggingService loggingService)
         {
             this.localizationService = localizationService;
             this.settingsService = settingsService;

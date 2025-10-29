@@ -59,8 +59,8 @@ namespace userinterface.ViewModels.Profile
 
 
         private readonly IThemeService themeService;
-        private readonly LocalizationService localizationService;
-        private readonly PreviewChartRenderer previewRenderer;
+        private readonly ILocalizationService localizationService;
+        private readonly IPreviewChartRenderer previewRenderer;
         private readonly IBackEnd backEnd;
         private readonly ILoggingService loggingService;
         private BE.IProfileModel currentProfileModel = null!;
@@ -77,7 +77,7 @@ namespace userinterface.ViewModels.Profile
 
         private readonly object syncObject = new object();
 
-        public ProfileChartViewModel(IThemeService themeService, LocalizationService localizationService, PreviewChartRenderer previewRenderer, IBackEnd backEnd, ILoggingService loggingService)
+        public ProfileChartViewModel(IThemeService themeService, ILocalizationService localizationService, IPreviewChartRenderer previewRenderer, IBackEnd backEnd, ILoggingService loggingService)
         {
             this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             this.localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));

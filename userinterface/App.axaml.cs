@@ -50,22 +50,22 @@ public partial class App : Application
         });
 
         // Register UI services
-        services.AddSingleton<LocalizationService>();
-        services.AddSingleton<FrameTimerService>();
-        services.AddSingleton<PreviewChartRenderer>();
+        services.AddSingleton<ILocalizationService, LocalizationService>();
+        services.AddSingleton<IFrameTimerService, FrameTimerService>();
+        services.AddSingleton<IPreviewChartRenderer, PreviewChartRenderer>();
         services.AddSingleton<IAnimationStateService, AnimationStateService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IViewModelFactory, ViewModelFactory>();
 
         services.AddSingleton<INotificationService>(provider =>
             new NotificationService(
-                provider.GetRequiredService<LocalizationService>(),
+                provider.GetRequiredService<ILocalizationService>(),
                 provider.GetRequiredService<ISettingsService>(),
                 provider.GetRequiredService<userspace_backend.Logging.ILoggingService>()));
 
         services.AddSingleton<IModalService>(provider =>
             new ModalService(
-                provider.GetRequiredService<LocalizationService>(),
+                provider.GetRequiredService<ILocalizationService>(),
                 provider.GetRequiredService<ISettingsService>(),
                 provider.GetRequiredService<userspace_backend.Logging.ILoggingService>(),
                 provider.GetRequiredService<userspace_backend.INotificationManager>()));
@@ -141,7 +141,7 @@ public partial class App : Application
                 provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IThemeService>(),
                 provider.GetRequiredService<ISettingsService>(),
-                provider.GetRequiredService<FrameTimerService>(),
+                provider.GetRequiredService<IFrameTimerService>(),
                 provider.GetRequiredService<INotificationService>(),
                 provider.GetRequiredService<userspace_backend.INotificationManager>(),
                 provider.GetRequiredService<ViewModels.Device.DevicesPageViewModel>(),
@@ -158,12 +158,12 @@ public partial class App : Application
             new ViewModels.Device.DevicesPageViewModel(
                 provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IModalService>(),
-                provider.GetRequiredService<LocalizationService>()));
+                provider.GetRequiredService<ILocalizationService>()));
         services.AddTransient<ViewModels.Device.DevicesListViewModel>(provider =>
             new ViewModels.Device.DevicesListViewModel(
                 provider.GetRequiredService<IBackEnd>().Devices,
                 provider.GetRequiredService<IModalService>(),
-                provider.GetRequiredService<LocalizationService>()));
+                provider.GetRequiredService<ILocalizationService>()));
         services.AddTransient<ViewModels.Device.DeviceGroupsViewModel>();
         services.AddTransient<ViewModels.Device.DeviceGroupViewModel>();
         services.AddTransient<ViewModels.Device.DeviceGroupSelectorViewModel>();
@@ -179,7 +179,7 @@ public partial class App : Application
         services.AddTransient<ViewModels.Profile.ProfileSettingsViewModel>(provider =>
             new ViewModels.Profile.ProfileSettingsViewModel(
                 provider.GetRequiredService<INotificationService>(),
-                provider.GetRequiredService<LocalizationService>(),
+                provider.GetRequiredService<ILocalizationService>(),
                 provider.GetRequiredService<IModalService>(),
                 provider.GetRequiredService<userspace_backend.Logging.ILoggingService>(),
                 provider.GetRequiredService<userspace_backend.INotificationManager>()));
@@ -208,7 +208,7 @@ public partial class App : Application
         // Control ViewModels
         services.AddTransient<ViewModels.Fields.DualColumnLabelFieldViewModel>(provider =>
             new ViewModels.Fields.DualColumnLabelFieldViewModel(
-                provider.GetRequiredService<LocalizationService>()));
+                provider.GetRequiredService<ILocalizationService>()));
         services.AddTransient<ViewModels.Fields.EditableFieldViewModel>();
     }
 
@@ -375,7 +375,7 @@ public partial class App : Application
         try
         {
             var settingsService = Services?.GetService<ISettingsService>();
-            var localizationService = Services?.GetService<LocalizationService>();
+            var localizationService = Services?.GetService<ILocalizationService>();
             var themeService = Services?.GetService<IThemeService>();
 
             if (settingsService != null && localizationService != null)

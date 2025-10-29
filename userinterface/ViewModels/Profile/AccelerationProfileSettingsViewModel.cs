@@ -27,7 +27,7 @@ namespace userinterface.ViewModels.Profile
         [ObservableProperty]
         public bool areAccelSettingsVisible;
 
-        public AccelerationProfileSettingsViewModel(BE.IAccelerationModel accelerationBE, INotificationService notificationService, LocalizationService localizationService, IModalService modalService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
+        public AccelerationProfileSettingsViewModel(BE.IAccelerationModel accelerationBE, INotificationService notificationService, ILocalizationService localizationService, IModalService modalService, ILoggingService loggingService, userspace_backend.INotificationManager notificationManager)
         {
             AccelerationBE = accelerationBE;
             var accelModel = (BE.AccelerationModel)accelerationBE;

@@ -30,7 +30,7 @@ public partial class ProfilesSettingsView : UserControl
     {
         SettingsStackPanel.Children.Clear();
 
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
+        var localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         var settingsFieldViewModel = new DualColumnLabelFieldViewModel(localizationService);
         var settingsField = new DualColumnLabelFieldView(settingsFieldViewModel);
 

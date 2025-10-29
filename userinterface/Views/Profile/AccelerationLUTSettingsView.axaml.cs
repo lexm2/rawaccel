@@ -43,7 +43,7 @@ public partial class AccelerationLUTSettingsView : UserControl
 
     private static DualColumnLabelFieldViewModel CreateDualColumnViewModel(ComboBox applyAsComboBox)
     {
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
+        var localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         var viewModel = new DualColumnLabelFieldViewModel(localizationService);
         viewModel.AddField("LookupTableApplyAs", applyAsComboBox);
         return viewModel;

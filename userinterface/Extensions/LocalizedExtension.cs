@@ -19,7 +19,7 @@ public class LocalizedExtension : MarkupExtension, INotifyPropertyChanged
         _resourceManager = GetResourceManagerForKey(key);
 
         // Subscribe to language changes from the DI service
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>();
+        var localizationService = App.Services?.GetRequiredService<ILocalizationService>();
         if (localizationService != null)
         {
             localizationService.PropertyChanged += OnLanguageChanged;

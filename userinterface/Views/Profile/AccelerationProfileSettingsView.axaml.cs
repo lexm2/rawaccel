@@ -95,7 +95,7 @@ public partial class AccelerationProfileSettingsView : UserControl
         if (AccelerationComboBox == null)
             return;
 
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
+        var localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         var fieldViewModel = new DualColumnLabelFieldViewModel(localizationService);
         fieldViewModel.AddField("AccelDefinitionType", AccelerationComboBox);
         AccelerationField = new DualColumnLabelFieldView(fieldViewModel);
