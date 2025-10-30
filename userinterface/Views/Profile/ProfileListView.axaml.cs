@@ -48,7 +48,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         modalService = App.Services?.GetRequiredService<IModalService>() ?? throw new InvalidOperationException("ModalService not available");
         localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");
-        animationService = App.Services?.GetRequiredService<Animation.IAnimationService>() ?? throw new InvalidOperationException("AnimationService not available");
+        animationService = App.Services?.GetRequiredService<IAnimationService>() ?? throw new InvalidOperationException("AnimationService not available");
         frameTimer = App.Services?.GetRequiredService<IFrameTimerService>() ?? throw new InvalidOperationException("FrameTimerService not available");
         loggingService = App.Services?.GetService(typeof(userspace_backend.Logging.ILoggingService)) as userspace_backend.Logging.ILoggingService;
 
@@ -94,8 +94,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         {
             animationHelper = new ProfileListAnimationHelper(
                 profileItems,
-                addProfileButton,
                 profileContainer,
+                addProfileButton,
                 frameTimer,
                 animationStateService,
                 loggingService
