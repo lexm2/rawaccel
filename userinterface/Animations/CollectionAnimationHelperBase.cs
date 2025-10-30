@@ -682,8 +682,13 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
 
             if (cancellationToken.IsCancellationRequested) return;
 
-            var animation = GetOrCreateMoveAnimation();
-            animation.Children.Clear();
+            var animation = new Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(300),
+                FillMode = FillMode.Forward,
+                Easing = Easing.Parse("0.25,0.1,0.25,1")
+            };
+
             animation.Children.Add(new KeyFrame
             {
                 Cue = new Cue(0d),
