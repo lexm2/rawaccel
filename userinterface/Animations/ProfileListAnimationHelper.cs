@@ -201,7 +201,7 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
                 }
             });
 
-            await animation.RunAsync(transform, cancellationToken);
+            await animation.RunAsync(addProfileButton, cancellationToken);
 
             if (!cancellationToken.IsCancellationRequested)
             {
