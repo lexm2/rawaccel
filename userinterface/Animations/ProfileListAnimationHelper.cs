@@ -42,6 +42,8 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
 
     protected override string GetAnimationContext() => "ProfileList";
 
+    protected override PositioningMode GetPositioningMode() => PositioningMode.TransformOperations;
+
     public double CalculatePositionForIndex(int index, bool includeAddButton)
     {
         var adjustedIndex = includeAddButton ? index + 1 : index;
@@ -78,8 +80,8 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
 
     public async ValueTask AnimateProfileToPositionAsync(int profileIndex, int position, int staggerIndex = 0)
     {
-        var targetPosition = CalculatePositionForIndex(position + 1);
-        await AnimateItemToPositionAsync(profileIndex, targetPosition, staggerIndex);
+        var targetY = CalculatePositionForIndex(position + 1);
+        await AnimateItemToTransformPositionAsync(profileIndex, targetY, staggerIndex);
     }
 
     public async ValueTask AnimateAllProfilesToCorrectPositionsAsync(int focusIndex = -1)
@@ -123,8 +125,8 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
 
             for (int i = 0; i < profiles.Count; i++)
             {
-                var targetPosition = CalculatePositionForIndex(0, false);
-                animationTasks.Add(AnimateItemCollapseAsync(i, targetPosition, i).AsTask());
+                var targetY = CalculatePositionForIndex(0, false);
+                animationTasks.Add(AnimateItemToTransformPositionAsync(i, targetY, i).AsTask());
             }
 
             if (animationTasks.Count > 0)
@@ -151,9 +153,9 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
         if (addProfileButton == null) return;
 
         var targetY = CalculatePositionForIndex(targetPosition, includeAddButton);
-        var targetMargin = new Thickness(8, targetY, 8, 0);
+        var currentY = ExtractYFromRenderTransform(addProfileButton);
 
-        if (addProfileButton.Margin == targetMargin) return;
+        if (Math.Abs(currentY - targetY) < 0.1) return;
 
         var animation = GetOrCreateMoveAnimation();
         animation.Children.Clear();
@@ -162,7 +164,11 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
             Cue = new Cue(0d),
             Setters =
             {
-                new Setter { Property = Layoutable.MarginProperty, Value = addProfileButton.Margin }
+                new Setter
+                {
+                    Property = Control.RenderTransformProperty,
+                    Value = TransformOperations.Parse($"translate(0px, {currentY}px)")
+                }
             }
         });
         animation.Children.Add(new KeyFrame
@@ -170,12 +176,16 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
             Cue = new Cue(1d),
             Setters =
             {
-                new Setter { Property = Layoutable.MarginProperty, Value = targetMargin }
+                new Setter
+                {
+                    Property = Control.RenderTransformProperty,
+                    Value = TransformOperations.Parse($"translate(0px, {targetY}px)")
+                }
             }
         });
 
         await animation.RunAsync(addProfileButton);
-        addProfileButton.Margin = targetMargin;
+        addProfileButton.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
     }
 
     public async Task AnimateProfileToPosition(int profileIndex, int position, int staggerIndex = 0)

@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Styling;
 using System;
+using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -245,7 +246,14 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
             foreach (var (index, staggerIndex) in deduplicatedAnimations)
             {
                 var targetPosition = CalculatePositionForIndex(index);
-                animationTasks.Add(AnimateItemToPositionAsync(index, targetPosition, staggerIndex).AsTask());
+                if (GetPositioningMode() == PositioningMode.TransformOperations)
+                {
+                    animationTasks.Add(AnimateItemToTransformPositionAsync(index, targetPosition, staggerIndex).AsTask());
+                }
+                else
+                {
+                    animationTasks.Add(AnimateItemToPositionAsync(index, targetPosition, staggerIndex).AsTask());
+                }
             }
 
             if (animationTasks.Count > 0)
@@ -356,7 +364,14 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
 
             for (int i = 0; i < itemCount; i++)
             {
-                animationTasks.Add(AnimateItemCollapseAsync(i, targetPosition, i).AsTask());
+                if (GetPositioningMode() == PositioningMode.TransformOperations)
+                {
+                    animationTasks.Add(AnimateItemToTransformPositionAsync(i, targetPosition, i).AsTask());
+                }
+                else
+                {
+                    animationTasks.Add(AnimateItemCollapseAsync(i, targetPosition, i).AsTask());
+                }
             }
 
             if (animationTasks.Count > 0)
@@ -602,6 +617,110 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
         await AnimateTransformAsync(itemIndex, targetX, targetY, targetOpacity, durationMs, staggerIndex);
     }
 
+    protected virtual PositioningMode GetPositioningMode() => PositioningMode.Margin;
+
+    protected double ExtractYFromRenderTransform(Control container)
+    {
+        if (container.RenderTransform is ITransform transform)
+        {
+            var transformString = transform.ToString();
+            if (!string.IsNullOrEmpty(transformString))
+            {
+                var match = Regex.Match(transformString, @"translate\(0px,\s*(-?\d+(?:\.\d+)?)px\)");
+                if (match.Success && double.TryParse(match.Groups[1].Value, out var y))
+                {
+                    return y;
+                }
+            }
+        }
+        return 0.0;
+    }
+
+    protected virtual async ValueTask AnimateItemToTransformPositionAsync(int itemIndex, double targetY, int staggerIndex = 0)
+    {
+        var container = GetContainerAtIndex(itemIndex);
+        if (container == null)
+        {
+            if (SupportsVirtualization)
+            {
+                loggingService?.LogDebug(LogSource.UI, "Container at index {Index} not found (virtualized), skipping transform position animation", itemIndex);
+                return;
+            }
+            loggingService?.LogWarning(LogSource.UI, "Container at index {Index} not found", itemIndex);
+            return;
+        }
+
+        var currentY = ExtractYFromRenderTransform(container);
+        if (Math.Abs(currentY - targetY) < 0.1)
+        {
+            container.ZIndex = (int)(targetY / (GetItemHeight() + GetItemSpacing()));
+            return;
+        }
+
+        var cancellationToken = await animationStateService.RegisterAnimationAsync(GetAnimationContext(), itemIndex);
+        Interlocked.Increment(ref activeAnimationCount);
+
+        try
+        {
+            if (staggerIndex > 0 && !cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(staggerIndex * animationStateService.Config.StaggerDelayMs, cancellationToken);
+            }
+
+            if (cancellationToken.IsCancellationRequested) return;
+
+            var animation = GetOrCreateMoveAnimation();
+            animation.Children.Clear();
+            animation.Children.Add(new KeyFrame
+            {
+                Cue = new Cue(0d),
+                Setters =
+                {
+                    new Setter
+                    {
+                        Property = Control.RenderTransformProperty,
+                        Value = TransformOperations.Parse($"translate(0px, {currentY}px)")
+                    }
+                }
+            });
+            animation.Children.Add(new KeyFrame
+            {
+                Cue = new Cue(1d),
+                Setters =
+                {
+                    new Setter
+                    {
+                        Property = Control.RenderTransformProperty,
+                        Value = TransformOperations.Parse($"translate(0px, {targetY}px)")
+                    }
+                }
+            });
+
+            await animation.RunAsync(container, cancellationToken);
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                container.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+                container.ZIndex = (int)(targetY / (GetItemHeight() + GetItemSpacing()));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            container.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+            container.ZIndex = (int)(targetY / (GetItemHeight() + GetItemSpacing()));
+        }
+        catch (Exception ex)
+        {
+            loggingService?.LogError(LogSource.UI, ex, "Transform position animation error for item {ItemIndex}", itemIndex);
+        }
+        finally
+        {
+            animationStateService.UnregisterAnimation(GetAnimationContext(), itemIndex);
+            var remainingCount = Interlocked.Decrement(ref activeAnimationCount);
+            loggingService?.LogDebug(LogSource.UI, "[ANIMATION] Cleaned up transform position animation for item {ItemIndex}, remaining: {RemainingCount}", itemIndex, remainingCount);
+        }
+    }
+
     public virtual void Dispose()
     {
         if (!disposed)
@@ -628,4 +747,10 @@ public enum SlideDirection
     Down,
     Left,
     Right
+}
+
+public enum PositioningMode
+{
+    Margin,
+    TransformOperations
 }
