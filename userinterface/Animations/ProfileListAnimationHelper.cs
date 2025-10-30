@@ -157,7 +157,15 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
         if (addProfileButton == null) return;
 
         var targetY = CalculatePositionForIndex(targetPosition, includeAddButton);
-        var currentY = ExtractYFromRenderTransform(addProfileButton);
+
+        var transform = addProfileButton.RenderTransform as TranslateTransform;
+        if (transform == null)
+        {
+            transform = new TranslateTransform();
+            addProfileButton.RenderTransform = transform;
+        }
+
+        var currentY = transform.Y;
 
         if (Math.Abs(currentY - targetY) < 0.1) return;
 
@@ -175,11 +183,7 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
                 Cue = new Cue(0d),
                 Setters =
                 {
-                    new Setter
-                    {
-                        Property = Control.RenderTransformProperty,
-                        Value = TransformOperations.Parse($"translate(0px, {currentY}px)")
-                    }
+                    new Setter { Property = TranslateTransform.YProperty, Value = currentY }
                 }
             });
             animation.Children.Add(new KeyFrame
@@ -187,24 +191,20 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
                 Cue = new Cue(1d),
                 Setters =
                 {
-                    new Setter
-                    {
-                        Property = Control.RenderTransformProperty,
-                        Value = TransformOperations.Parse($"translate(0px, {targetY}px)")
-                    }
+                    new Setter { Property = TranslateTransform.YProperty, Value = targetY }
                 }
             });
 
-            await animation.RunAsync(addProfileButton, cancellationToken);
+            await animation.RunAsync(transform, cancellationToken);
 
             if (!cancellationToken.IsCancellationRequested)
             {
-                addProfileButton.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+                transform.Y = targetY;
             }
         }
         catch (OperationCanceledException)
         {
-            addProfileButton.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+            transform.Y = targetY;
         }
         catch (Exception ex)
         {
