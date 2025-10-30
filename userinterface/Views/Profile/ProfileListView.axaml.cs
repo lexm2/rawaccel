@@ -217,8 +217,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         for (int i = 0; i < itemCount && replaceIndex + i < GetProfileCount(); i++)
         {
-            int itemIndex = replaceIndex + i + 1; // +1 for add button
-            if (itemIndex < allItems.Count && allItems[itemIndex].Child is Grid grid)
+            int itemIndex = replaceIndex + i;
+            if (itemIndex < profileItems.Count && profileItems[itemIndex].Child is Grid grid)
             {
                 var textBlock = grid.Children.OfType<TextBlock>().FirstOrDefault();
                 if (textBlock != null)
@@ -532,11 +532,10 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             var profileBorder = CreateProfileBorder(null!, i);
             profileBorder.ZIndex = 1000;
             profileBorder.Opacity = 1.0;
-            // Elements start in collapsed state with Y=0 margin (already set in CreateProfileBorder)
 
-            int itemIndex = i + 1; // +1 for add button
-            allItems.Insert(itemIndex, profileBorder);
-            profileContainer?.Children.Insert(itemIndex, profileBorder);
+            profileItems.Add(profileBorder);
+            int containerIndex = i + (addProfileButton != null ? 1 : 0);
+            profileContainer?.Children.Insert(containerIndex, profileBorder);
         }
 
         UpdateAllZIndexes();
@@ -547,9 +546,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private async Task AnimateElementToTransformPosition(int elementIndex, int position, int staggerIndex = 0)
     {
-        if (elementIndex >= allItems.Count) return;
+        if (elementIndex >= profileItems.Count) return;
 
-        var element = allItems[elementIndex];
+        var element = profileItems[elementIndex];
         var targetY = CalculatePositionForIndex(position);
 
         // Get current transform Y position
@@ -577,54 +576,11 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private async Task AnimateAllElementsToPositions(int focusIndex = -1)
     {
-        animationStateService.SetAnimationsActive(true);
+        if (animationHelper == null) return;
+
+        await animationHelper.AnimateAllProfilesToCorrectPositionsAsync(focusIndex);
+
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AreAnimationsActive)));
-        UpdateDeleteButtonStates();
-
-        var animationTasks = new List<Task>();
-
-        for (int i = 0; i < profileItems.Count; i++)
-        {
-            int targetPosition = i + 1;
-            var targetY = CalculatePositionForIndex(targetPosition);
-
-            var currentTransform = profileItems[i].RenderTransform as TransformOperations;
-            var currentY = ExtractYFromTransform(currentTransform);
-            if (Math.Abs(currentY - targetY) < 0.1)
-            {
-                profileItems[i].ZIndex = targetPosition;
-                continue;
-            }
-
-            int staggerIndex = 0;
-            if (focusIndex >= 0)
-            {
-                staggerIndex = (i != focusIndex) ? Math.Min(Math.Abs(i - focusIndex), 2) : 0;
-            }
-            else
-            {
-                staggerIndex = Math.Min(i, 3);
-            }
-
-            animationTasks.Add(AnimateElementToTransformPosition(i, targetPosition, staggerIndex));
-        }
-
-        if (animationTasks.Count > 0)
-        {
-            try
-            {
-                await Task.WhenAll(animationTasks);
-
-                await Task.Delay(animationStateService.Config.AnimationCompleteDelayMs);
-            }
-            catch (Exception)
-            {
-            }
-        }
-
-        animationStateService.SetAnimationsActive(false);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AreAnimationsActive)));
-        UpdateDeleteButtonStates();
     }
 
     private void SetSelectedProfile(BE.IProfileModel? profile)
@@ -676,43 +632,21 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     public async Task ExpandElements()
     {
-        // Small delay to ensure elements are rendered before animating
-        await Task.Delay(animationStateService.Config.ElementRenderDelayMs);
+        if (animationHelper == null) return;
 
-        await AnimateAllElementsToPositions(-1);
+        await Task.Delay(animationStateService.Config.ElementRenderDelayMs);
+        await animationHelper.ExpandProfileAnimationAsync();
+
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AreAnimationsActive)));
     }
 
     public async Task CollapseElements()
     {
-        if (profileItems.Count == 0 && addProfileButton == null) return;
+        if (animationHelper == null) return;
 
-        animationStateService.SetAnimationsActive(true);
+        await animationHelper.CollapseProfileAnimationAsync();
+
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AreAnimationsActive)));
-        UpdateDeleteButtonStates();
-
-        var animationTasks = new List<Task>();
-
-        if (addProfileButton != null)
-        {
-            animationTasks.Add(CollapseElementToTransformPosition(addProfileButton, 0));
-        }
-
-        for (int i = 0; i < profileItems.Count; i++)
-        {
-            animationTasks.Add(CollapseElementToTransformPosition(profileItems[i], i * animationStateService.Config.CollapseStaggerDelayMs));
-        }
-
-        try
-        {
-            await Task.WhenAll(animationTasks);
-            await Task.Delay(animationStateService.Config.AnimationCompleteDelayMs);
-        }
-        finally
-        {
-            animationStateService.SetAnimationsActive(false);
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AreAnimationsActive)));
-            UpdateDeleteButtonStates();
-        }
     }
 
     private async Task CollapseElementToTransformPosition(Border element, int delayMs = 0)
