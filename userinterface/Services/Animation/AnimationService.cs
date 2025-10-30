@@ -120,12 +120,12 @@ public class AnimationService : IAnimationService
                 new Avalonia.Animation.KeyFrame
                 {
                     Cue = new Avalonia.Animation.Cue(0.0),
-                    Setters = { new Avalonia.Setter(Control.HeightProperty, control.Height) }
+                    Setters = { new Setter(Control.HeightProperty, control.Height) }
                 },
                 new Avalonia.Animation.KeyFrame
                 {
                     Cue = new Avalonia.Animation.Cue(1.0),
-                    Setters = { new Avalonia.Setter(Control.HeightProperty, targetHeight) }
+                    Setters = { new Setter(Control.HeightProperty, targetHeight) }
                 }
             }
         };
@@ -150,12 +150,12 @@ public class AnimationService : IAnimationService
                 new Avalonia.Animation.KeyFrame
                 {
                     Cue = new Avalonia.Animation.Cue(0.0),
-                    Setters = { new Avalonia.Setter(Control.HeightProperty, currentHeight) }
+                    Setters = { new Setter(Control.HeightProperty, currentHeight) }
                 },
                 new Avalonia.Animation.KeyFrame
                 {
                     Cue = new Avalonia.Animation.Cue(1.0),
-                    Setters = { new Avalonia.Setter(Control.HeightProperty, 0.0) }
+                    Setters = { new Setter(Control.HeightProperty, 0.0) }
                 }
             }
         };

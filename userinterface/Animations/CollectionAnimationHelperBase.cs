@@ -4,6 +4,7 @@ using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using Avalonia.Styling;
 using System;
 using System.Text.RegularExpressions;
