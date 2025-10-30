@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Transformation;
@@ -176,8 +177,13 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
         {
             if (cancellationToken.IsCancellationRequested) return;
 
-            var animation = GetOrCreateMoveAnimation();
-            animation.Children.Clear();
+            var animation = new Avalonia.Animation.Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(300),
+                FillMode = FillMode.Forward,
+                Easing = Easing.Parse("0.25,0.1,0.25,1")
+            };
+
             animation.Children.Add(new KeyFrame
             {
                 Cue = new Cue(0d),
