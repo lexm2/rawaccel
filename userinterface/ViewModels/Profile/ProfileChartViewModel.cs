@@ -231,8 +231,10 @@ namespace userinterface.ViewModels.Profile
                             {
                                 loggingService.LogDebug(LogSource.UI, "ProfileChartViewModel.InitializeAsync: Creating axes and UI elements on UI thread");
 
-                                XAxes = CreateXAxes();
-                                YAxes = CreateYAxes();
+                                var xAxisName = localizationService?.GetText("ChartAxisMouseSpeed") ?? "Mouse Speed";
+                                var yAxisName = localizationService?.GetText("ChartAxisOutput") ?? "Output";
+                                XAxes = axisManager.CreateXAxes(xAxisName);
+                                YAxes = axisManager.CreateYAxes(yAxisName);
                                 TooltipTextPaint = new SolidColorPaint(themeService.GetCachedColor(AxisTitleBrush));
                                 TooltipBackgroundPaint = new SolidColorPaint(themeService.GetCachedColor(TooltipBackgroundBrush).WithAlpha(TooltipBackgroundAlpha));
 
