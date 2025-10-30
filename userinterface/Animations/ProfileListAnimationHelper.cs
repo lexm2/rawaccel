@@ -7,6 +7,7 @@ using Avalonia.Styling;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using userinterface.Services;
 using userspace_backend.Logging;
@@ -160,35 +161,60 @@ public class ProfileListAnimationHelper : CollectionAnimationHelperBase<Border>
 
         if (Math.Abs(currentY - targetY) < 0.1) return;
 
-        var animation = GetOrCreateMoveAnimation();
-        animation.Children.Clear();
-        animation.Children.Add(new KeyFrame
-        {
-            Cue = new Cue(0d),
-            Setters =
-            {
-                new Setter
-                {
-                    Property = Control.RenderTransformProperty,
-                    Value = TransformOperations.Parse($"translate(0px, {currentY}px)")
-                }
-            }
-        });
-        animation.Children.Add(new KeyFrame
-        {
-            Cue = new Cue(1d),
-            Setters =
-            {
-                new Setter
-                {
-                    Property = Control.RenderTransformProperty,
-                    Value = TransformOperations.Parse($"translate(0px, {targetY}px)")
-                }
-            }
-        });
+        var cancellationToken = await animationStateService.RegisterAnimationAsync(GetAnimationContext(), -1);
+        Interlocked.Increment(ref activeAnimationCount);
 
-        await animation.RunAsync(addProfileButton);
-        addProfileButton.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+        try
+        {
+            if (cancellationToken.IsCancellationRequested) return;
+
+            var animation = GetOrCreateMoveAnimation();
+            animation.Children.Clear();
+            animation.Children.Add(new KeyFrame
+            {
+                Cue = new Cue(0d),
+                Setters =
+                {
+                    new Setter
+                    {
+                        Property = Control.RenderTransformProperty,
+                        Value = TransformOperations.Parse($"translate(0px, {currentY}px)")
+                    }
+                }
+            });
+            animation.Children.Add(new KeyFrame
+            {
+                Cue = new Cue(1d),
+                Setters =
+                {
+                    new Setter
+                    {
+                        Property = Control.RenderTransformProperty,
+                        Value = TransformOperations.Parse($"translate(0px, {targetY}px)")
+                    }
+                }
+            });
+
+            await animation.RunAsync(addProfileButton, cancellationToken);
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                addProfileButton.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            addProfileButton.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+        }
+        catch (Exception ex)
+        {
+            loggingService?.LogError(LogSource.UI, ex, "Add profile button animation error");
+        }
+        finally
+        {
+            animationStateService.UnregisterAnimation(GetAnimationContext(), -1);
+            Interlocked.Decrement(ref activeAnimationCount);
+        }
     }
 
     public async Task AnimateProfileToPosition(int profileIndex, int position, int staggerIndex = 0)
