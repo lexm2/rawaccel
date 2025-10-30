@@ -152,9 +152,9 @@ namespace userinterface.Services
             }
         }
 
-        public Animation CreateOpacityAnimation(double from, double to, int durationMs, Easing? easing = null)
+        public Avalonia.Animation.Animation CreateOpacityAnimation(double from, double to, int durationMs, Easing? easing = null)
         {
-            return new Animation
+            return new Avalonia.Animation.Animation
             {
                 Duration = TimeSpan.FromMilliseconds(durationMs),
                 FillMode = FillMode.Forward,

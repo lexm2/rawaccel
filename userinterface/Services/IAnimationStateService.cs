@@ -32,7 +32,7 @@ namespace userinterface.Services
 
         Task ExecuteWithSemaphoreAsync(Func<Task> operation);
 
-        Animation CreateOpacityAnimation(double from, double to, int durationMs, Easing? easing = null);
+        Avalonia.Animation.Animation CreateOpacityAnimation(double from, double to, int durationMs, Easing? easing = null);
 
         TranslateTransform EnsureTranslateTransform(Control control, double x, double y);
 
