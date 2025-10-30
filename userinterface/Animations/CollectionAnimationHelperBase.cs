@@ -706,7 +706,7 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
                 }
             });
 
-            await animation.RunAsync(transform, cancellationToken);
+            await animation.RunAsync(container, cancellationToken);
 
             if (!cancellationToken.IsCancellationRequested)
             {
