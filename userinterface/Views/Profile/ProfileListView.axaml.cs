@@ -562,29 +562,23 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         var animationTasks = new List<Task>();
 
-        var itemCount = allItems.Count;
-        for (int i = 0; i < itemCount; i++)
+        for (int i = 0; i < profileItems.Count; i++)
         {
-            if (i >= allItems.Count) break;
-
             int targetPosition = i + 1;
             var targetY = CalculatePositionForIndex(targetPosition);
 
-            // Check if already at target position
-            var currentTransform = allItems[i].RenderTransform as TransformOperations;
+            var currentTransform = profileItems[i].RenderTransform as TransformOperations;
             var currentY = ExtractYFromTransform(currentTransform);
             if (Math.Abs(currentY - targetY) < 0.1)
             {
-                allItems[i].ZIndex = targetPosition;
+                profileItems[i].ZIndex = targetPosition;
                 continue;
             }
 
-            // Calculate stagger based on focus index
             int staggerIndex = 0;
             if (focusIndex >= 0)
             {
-                int focusElementIndex = focusIndex + 1;
-                staggerIndex = (i != focusElementIndex) ? Math.Min(Math.Abs(i - focusElementIndex), 2) : 0;
+                staggerIndex = (i != focusIndex) ? Math.Min(Math.Abs(i - focusIndex), 2) : 0;
             }
             else
             {
@@ -616,12 +610,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
     {
         if (selectedProfile == profile) return;
 
-        var itemCount = allItems.Count;
-        for (int i = 1; i < itemCount; i++)
+        for (int i = 0; i < profileItems.Count; i++)
         {
-            if (i >= allItems.Count) break;
-
-            allItems[i].Classes.Remove("Selected");
+            profileItems[i].Classes.Remove("Selected");
         }
 
         selectedProfile = profile;
@@ -629,14 +620,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         if (selectedProfile != null)
         {
             var currentIndex = profilesModel.Elements.IndexOf(selectedProfile);
-            if (currentIndex >= 0 && currentIndex < GetProfileCount())
+            if (currentIndex >= 0 && currentIndex < profileItems.Count)
             {
-                int itemIndex = currentIndex + 1;
-
-                if (itemIndex < allItems.Count)
-                {
-                    allItems[itemIndex].Classes.Add("Selected");
-                }
+                profileItems[currentIndex].Classes.Add("Selected");
             }
         }
     }
@@ -677,7 +663,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     public async Task CollapseElements()
     {
-        if (allItems.Count == 0) return;
+        if (profileItems.Count == 0 && addProfileButton == null) return;
 
         animationStateService.SetAnimationsActive(true);
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AreAnimationsActive)));
@@ -685,12 +671,14 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         var animationTasks = new List<Task>();
 
-        var itemCount = allItems.Count;
-        for (int i = 0; i < itemCount; i++)
+        if (addProfileButton != null)
         {
-            if (i >= allItems.Count) break;
+            animationTasks.Add(CollapseElementToTransformPosition(addProfileButton, 0));
+        }
 
-            animationTasks.Add(CollapseElementToTransformPosition(i, i * animationStateService.Config.CollapseStaggerDelayMs));
+        for (int i = 0; i < profileItems.Count; i++)
+        {
+            animationTasks.Add(CollapseElementToTransformPosition(profileItems[i], i * animationStateService.Config.CollapseStaggerDelayMs));
         }
 
         try
@@ -706,11 +694,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         }
     }
 
-    private async Task CollapseElementToTransformPosition(int elementIndex, int delayMs = 0)
+    private async Task CollapseElementToTransformPosition(Border element, int delayMs = 0)
     {
-        if (elementIndex >= allItems.Count) return;
-
-        var element = allItems[elementIndex];
+        if (element == null) return;
 
         // Add animation class to enable CSS transitions
         element.Classes.Add("animate-position");
