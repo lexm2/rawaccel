@@ -656,7 +656,14 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
             return;
         }
 
-        var currentY = ExtractYFromRenderTransform(container);
+        var transform = container.RenderTransform as TranslateTransform;
+        if (transform == null)
+        {
+            transform = new TranslateTransform();
+            container.RenderTransform = transform;
+        }
+
+        var currentY = transform.Y;
         if (Math.Abs(currentY - targetY) < 0.1)
         {
             container.ZIndex = (int)(targetY / (GetItemHeight() + GetItemSpacing()));
@@ -682,11 +689,7 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
                 Cue = new Cue(0d),
                 Setters =
                 {
-                    new Setter
-                    {
-                        Property = Control.RenderTransformProperty,
-                        Value = TransformOperations.Parse($"translate(0px, {currentY}px)")
-                    }
+                    new Setter { Property = TranslateTransform.YProperty, Value = currentY }
                 }
             });
             animation.Children.Add(new KeyFrame
@@ -694,25 +697,21 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
                 Cue = new Cue(1d),
                 Setters =
                 {
-                    new Setter
-                    {
-                        Property = Control.RenderTransformProperty,
-                        Value = TransformOperations.Parse($"translate(0px, {targetY}px)")
-                    }
+                    new Setter { Property = TranslateTransform.YProperty, Value = targetY }
                 }
             });
 
-            await animation.RunAsync(container, cancellationToken);
+            await animation.RunAsync(transform, cancellationToken);
 
             if (!cancellationToken.IsCancellationRequested)
             {
-                container.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+                transform.Y = targetY;
                 container.ZIndex = (int)(targetY / (GetItemHeight() + GetItemSpacing()));
             }
         }
         catch (OperationCanceledException)
         {
-            container.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
+            transform.Y = targetY;
             container.ZIndex = (int)(targetY / (GetItemHeight() + GetItemSpacing()));
         }
         catch (Exception ex)
