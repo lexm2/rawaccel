@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Styling;
 using System;
 using System.Collections.Generic;
@@ -383,6 +384,224 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
         }
     }
 
+    protected virtual bool SupportsVirtualization => false;
+
+    protected virtual double GetSlideDistance(SlideDirection direction)
+    {
+        return direction switch
+        {
+            SlideDirection.Left or SlideDirection.Right => animationStateService.Config.SlideLeftDistance,
+            SlideDirection.Up or SlideDirection.Down => animationStateService.Config.SlideUpDistance,
+            _ => animationStateService.Config.SlideUpDistance
+        };
+    }
+
+    protected virtual async ValueTask AnimateTransformAsync(int itemIndex, double targetX, double targetY, double targetOpacity, int durationMs, int staggerIndex = 0)
+    {
+        var container = GetContainerAtIndex(itemIndex);
+        if (container == null)
+        {
+            if (SupportsVirtualization)
+            {
+                loggingService?.LogDebug(LogSource.UI, "Container at index {Index} not found (virtualized), skipping animation", itemIndex);
+                return;
+            }
+            loggingService?.LogWarning(LogSource.UI, "Container at index {Index} not found", itemIndex);
+            return;
+        }
+
+        var cancellationToken = await animationStateService.RegisterAnimationAsync(GetAnimationContext(), itemIndex);
+        Interlocked.Increment(ref activeAnimationCount);
+
+        try
+        {
+            if (staggerIndex > 0 && !cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(staggerIndex * animationStateService.Config.StaggerDelayMs, cancellationToken);
+            }
+
+            if (cancellationToken.IsCancellationRequested) return;
+
+            var transform = container.RenderTransform as TranslateTransform ?? new TranslateTransform();
+            if (container.RenderTransform == null)
+            {
+                container.RenderTransform = transform;
+            }
+
+            var startX = transform.X;
+            var startY = transform.Y;
+            var startOpacity = container.Opacity;
+
+            var animation = new Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(durationMs),
+                FillMode = FillMode.Forward,
+                Easing = Easing.Parse("0.25,0.1,0.25,1")
+            };
+
+            animation.Children.Add(new KeyFrame
+            {
+                Cue = new Cue(0d),
+                Setters =
+                {
+                    new Setter { Property = TranslateTransform.XProperty, Value = startX },
+                    new Setter { Property = TranslateTransform.YProperty, Value = startY },
+                    new Setter { Property = Control.OpacityProperty, Value = startOpacity }
+                }
+            });
+
+            animation.Children.Add(new KeyFrame
+            {
+                Cue = new Cue(1d),
+                Setters =
+                {
+                    new Setter { Property = TranslateTransform.XProperty, Value = targetX },
+                    new Setter { Property = TranslateTransform.YProperty, Value = targetY },
+                    new Setter { Property = Control.OpacityProperty, Value = targetOpacity }
+                }
+            });
+
+            await animation.RunAsync(transform, cancellationToken);
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                transform.X = targetX;
+                transform.Y = targetY;
+                container.Opacity = targetOpacity;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (container != null)
+            {
+                var transform = container.RenderTransform as TranslateTransform;
+                if (transform != null)
+                {
+                    transform.X = targetX;
+                    transform.Y = targetY;
+                }
+                container.Opacity = targetOpacity;
+            }
+        }
+        catch (Exception ex)
+        {
+            loggingService?.LogError(LogSource.UI, ex, "Transform animation error for item {ItemIndex}", itemIndex);
+        }
+        finally
+        {
+            animationStateService.UnregisterAnimation(GetAnimationContext(), itemIndex);
+            var remainingCount = Interlocked.Decrement(ref activeAnimationCount);
+            loggingService?.LogDebug(LogSource.UI, "[ANIMATION] Cleaned up transform animation for item {ItemIndex}, remaining: {RemainingCount}", itemIndex, remainingCount);
+        }
+    }
+
+    protected virtual async ValueTask AnimateOpacityAsync(int itemIndex, double targetOpacity, int durationMs, int staggerIndex = 0)
+    {
+        var container = GetContainerAtIndex(itemIndex);
+        if (container == null)
+        {
+            if (SupportsVirtualization)
+            {
+                loggingService?.LogDebug(LogSource.UI, "Container at index {Index} not found (virtualized), skipping opacity animation", itemIndex);
+                return;
+            }
+            loggingService?.LogWarning(LogSource.UI, "Container at index {Index} not found", itemIndex);
+            return;
+        }
+
+        var cancellationToken = await animationStateService.RegisterAnimationAsync(GetAnimationContext(), itemIndex);
+        Interlocked.Increment(ref activeAnimationCount);
+
+        try
+        {
+            if (staggerIndex > 0 && !cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(staggerIndex * animationStateService.Config.StaggerDelayMs, cancellationToken);
+            }
+
+            if (cancellationToken.IsCancellationRequested) return;
+
+            var startOpacity = container.Opacity;
+            var animation = new Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(durationMs),
+                FillMode = FillMode.Forward,
+                Easing = new LinearEasing()
+            };
+
+            animation.Children.Add(new KeyFrame
+            {
+                Cue = new Cue(0d),
+                Setters =
+                {
+                    new Setter { Property = Control.OpacityProperty, Value = startOpacity }
+                }
+            });
+
+            animation.Children.Add(new KeyFrame
+            {
+                Cue = new Cue(1d),
+                Setters =
+                {
+                    new Setter { Property = Control.OpacityProperty, Value = targetOpacity }
+                }
+            });
+
+            await animation.RunAsync(container, cancellationToken);
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                container.Opacity = targetOpacity;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (container != null)
+            {
+                container.Opacity = targetOpacity;
+            }
+        }
+        catch (Exception ex)
+        {
+            loggingService?.LogError(LogSource.UI, ex, "Opacity animation error for item {ItemIndex}", itemIndex);
+        }
+        finally
+        {
+            animationStateService.UnregisterAnimation(GetAnimationContext(), itemIndex);
+            Interlocked.Decrement(ref activeAnimationCount);
+        }
+    }
+
+    protected virtual async ValueTask AnimateSlideAsync(int itemIndex, SlideDirection direction, int durationMs, int staggerIndex = 0)
+    {
+        var distance = GetSlideDistance(direction);
+        var (targetX, targetY) = direction switch
+        {
+            SlideDirection.Up => (0.0, -distance),
+            SlideDirection.Down => (0.0, distance),
+            SlideDirection.Left => (-distance, 0.0),
+            SlideDirection.Right => (distance, 0.0),
+            _ => (0.0, -distance)
+        };
+
+        await AnimateTransformAsync(itemIndex, targetX, targetY, 1.0, durationMs, staggerIndex);
+    }
+
+    protected virtual async ValueTask AnimateSlideAndFadeAsync(int itemIndex, SlideDirection direction, double targetOpacity, int durationMs, int staggerIndex = 0)
+    {
+        var distance = GetSlideDistance(direction);
+        var (targetX, targetY) = direction switch
+        {
+            SlideDirection.Up => (0.0, -distance),
+            SlideDirection.Down => (0.0, distance),
+            SlideDirection.Left => (-distance, 0.0),
+            SlideDirection.Right => (distance, 0.0),
+            _ => (0.0, -distance)
+        };
+
+        await AnimateTransformAsync(itemIndex, targetX, targetY, targetOpacity, durationMs, staggerIndex);
+    }
+
     public virtual void Dispose()
     {
         if (!disposed)
@@ -401,4 +620,12 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
             cachedItemCollapseAnimation = null;
         }
     }
+}
+
+public enum SlideDirection
+{
+    Up,
+    Down,
+    Left,
+    Right
 }

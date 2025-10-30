@@ -1,12 +1,11 @@
-using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Threading.Tasks;
+using userinterface.Animations;
 using userinterface.Services;
 using userinterface.ViewModels.Device;
 using userspace_backend.Logging;
@@ -20,15 +19,16 @@ public partial class DevicesListView : UserControl
     private bool isInitialLoad = true;
 
     private readonly IAnimationStateService animationStateService;
-    private readonly Animation.IAnimationService animationService;
+    private readonly IFrameTimerService frameTimer;
     private readonly ILoggingService? loggingService;
+    private DeviceListAnimationHelper? animationHelper;
 
     public bool AreAnimationsActive => animationStateService.AreAnimationsActive;
 
     public DevicesListView()
     {
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");
-        animationService = App.Services?.GetRequiredService<Animation.IAnimationService>() ?? throw new InvalidOperationException("AnimationService not available");
+        frameTimer = App.Services?.GetRequiredService<IFrameTimerService>() ?? throw new InvalidOperationException("FrameTimerService not available");
         loggingService = App.Services?.GetService(typeof(ILoggingService)) as ILoggingService;
 
         InitializeComponent();
@@ -90,6 +90,16 @@ public partial class DevicesListView : UserControl
 
             viewModel = vm;
             lastKnownItemCount = vm.DeviceViews.Count;
+
+            if (animationHelper == null)
+            {
+                animationHelper = new DeviceListAnimationHelper(
+                    DevicesListInView,
+                    frameTimer,
+                    animationStateService,
+                    loggingService
+                );
+            }
 
             vm.DeviceViews.CollectionChanged += OnDevicesCollectionChanged;
 
@@ -180,174 +190,36 @@ public partial class DevicesListView : UserControl
 
     private async Task AnimateDeviceIn(Control container, int index)
     {
-        await animationStateService.ExecuteWithSemaphoreAsync(async () =>
-        {
-            var animationKey = $"DevicesListView_In_{DateTime.Now.Ticks}_{index}";
-            var cancellationToken = await animationStateService.RegisterAnimationAsync(animationKey, index);
-
-            await Dispatcher.UIThread.InvokeAsync(async () =>
-            {
-                var originalTransitions = container.Transitions;
-                container.Transitions = null;
-
-                try
-                {
-                    await animationService.SlideAndFadeInAsync(container, Animation.SlideDirection.Up, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    // If animation was cancelled, ensure we still reach the target position
-                    container.RenderTransform = new TranslateTransform(0, 0);
-                    container.Opacity = 1.0;
-                }
-                finally
-                {
-                    container.Transitions = originalTransitions;
-                    animationStateService.UnregisterAnimation(animationKey, index);
-                }
-            });
-        });
+        if (animationHelper == null) return;
+        await animationHelper.SlideAndFadeInAsync(index);
     }
 
     private async Task AnimateDeviceOut(Control container, int index)
     {
-        await animationStateService.ExecuteWithSemaphoreAsync(async () =>
-        {
-            var animationKey = $"DevicesListView_Out_{DateTime.Now.Ticks}_{index}";
-            var cancellationToken = await animationStateService.RegisterAnimationAsync(animationKey, index);
-
-            await Dispatcher.UIThread.InvokeAsync(async () =>
-            {
-                var originalTransitions = container.Transitions;
-                container.Transitions = null;
-
-                try
-                {
-                    await animationService.SlideAndFadeOutAsync(container, Animation.SlideDirection.Left, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-                finally
-                {
-                    container.Transitions = originalTransitions;
-                    animationStateService.UnregisterAnimation(animationKey, index);
-                }
-            });
-        });
+        if (animationHelper == null) return;
+        await animationHelper.SlideAndFadeOutAsync(index, SlideDirection.Left);
     }
 
     private async Task HideAllOtherDevices(int exceptIndex)
     {
-        if (viewModel == null) return;
-
-        var hideTasks = new List<Task>();
-
-        for (int i = 0; i < viewModel.DeviceViews.Count; i++)
-        {
-            if (i != exceptIndex)
-            {
-                var container = DevicesListInView.ContainerFromIndex(i) as Control;
-                if (container != null && container.Opacity > 0)
-                {
-                    hideTasks.Add(HideDevice(container, i));
-                }
-            }
-        }
-
-        await Task.WhenAll(hideTasks);
-    }
-
-    private async Task HideDevice(Control container, int index)
-    {
-        await Dispatcher.UIThread.InvokeAsync(async () =>
-        {
-            var originalTransitions = container.Transitions;
-            container.Transitions = null;
-
-            try
-            {
-                var hideAnimation = animationStateService.CreateOpacityAnimation(container.Opacity, 0.0, animationStateService.Config.HideOthersAnimationDurationMs, new LinearEasing());
-                await hideAnimation.RunAsync(container);
-            }
-            finally
-            {
-                container.Transitions = originalTransitions;
-            }
-        });
+        if (animationHelper == null) return;
+        await animationHelper.FadeOutAllExceptAsync(exceptIndex);
     }
 
     private async Task AnimateAllDevicesIn()
     {
-        if (viewModel == null) return;
+        if (animationHelper == null) return;
 
-        loggingService?.LogDebug(LogSource.UI, "AnimateAllDevicesIn: Starting animation for {Count} devices", viewModel.DeviceViews.Count);
+        loggingService?.LogDebug(LogSource.UI, "AnimateAllDevicesIn: Starting animation for {Count} devices", viewModel?.DeviceViews.Count ?? 0);
 
         await Task.Delay(100);
-
-        var showTasks = new List<Task>();
-
-        for (int i = 0; i < viewModel.DeviceViews.Count; i++)
-        {
-            var container = DevicesListInView.ContainerFromIndex(i) as Control;
-            if (container != null)
-            {
-                var transform = container.RenderTransform as TranslateTransform;
-                loggingService?.LogDebug(LogSource.UI, "AnimateAllDevicesIn: Device {Index}, Container found, Current position: ({X},{Y}), Opacity: {Opacity}",
-                    i, transform?.X ?? 0, transform?.Y ?? 0, container.Opacity);
-
-                int delay = i * animationStateService.Config.StaggerDelayMs;
-                showTasks.Add(Task.Delay(delay).ContinueWith(_ => ShowDevice(container, i)).Unwrap());
-            }
-            else
-            {
-                loggingService?.LogWarning(LogSource.UI, "AnimateAllDevicesIn: No container for device at index {Index}", i);
-            }
-        }
-
-        await Task.WhenAll(showTasks);
+        await animationHelper.AnimateAllDevicesInAsync();
     }
 
     private async Task ShowDevice(Control container, int index)
     {
-        await Dispatcher.UIThread.InvokeAsync(async () =>
-        {
-            var originalTransitions = container.Transitions;
-            container.Transitions = null;
-
-            bool isLastElement = viewModel != null && index == viewModel.DeviceViews.Count - 1;
-            loggingService?.LogDebug(LogSource.UI, "ShowDevice START: Index {Index}, IsLast: {IsLast}", index, isLastElement);
-
-            var animationKey = $"DevicesListView_Show_{DateTime.Now.Ticks}_{index}";
-
-            try
-            {
-                var cancellationToken = await animationStateService.RegisterAnimationAsync(animationKey, index);
-
-                loggingService?.LogDebug(LogSource.UI, "ShowDevice: Index {Index}, Starting slide and fade in", index);
-
-                try
-                {
-                    await animationService.SlideAndFadeInAsync(container, Animation.SlideDirection.Up, cancellationToken);
-                }
-                catch (TaskCanceledException)
-                {
-                    // If animation was cancelled, ensure we still reach the target position
-                    loggingService?.LogDebug(LogSource.UI, "ShowDevice CANCELLED: Index {Index}, forcing to target position (0,0)", index);
-                    container.RenderTransform = new TranslateTransform(0, 0);
-                    container.Opacity = 1.0;
-                }
-
-                var finalTransform = container.RenderTransform as TranslateTransform;
-                loggingService?.LogDebug(LogSource.UI, "ShowDevice END: Index {Index}, Final transform: ({X},{Y}), Final opacity: {Opacity}",
-                    index, finalTransform?.X ?? 0, finalTransform?.Y ?? 0, container.Opacity);
-            }
-            finally
-            {
-                container.Transitions = originalTransitions;
-                animationStateService.UnregisterAnimation(animationKey, index);
-            }
-        });
+        if (animationHelper == null) return;
+        await animationHelper.FadeInAsync(index);
     }
 
 }
