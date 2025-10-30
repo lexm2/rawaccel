@@ -488,30 +488,6 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         }
     }
 
-    private double CalculatePositionForIndex(int itemIndex)
-    {
-        return itemIndex == 0 ? 0 : (itemIndex * (animationStateService.Config.ProfileHeight + animationStateService.Config.ProfileSpacing)) + animationStateService.Config.FirstIndexOffset;
-    }
-
-    private static double ExtractYFromTransform(TransformOperations? transform)
-    {
-        if (transform == null) return 0;
-
-        // Parse the transform string to extract Y position
-        // TransformOperations typically stores as "translate(0px, YYpx)"
-        var transformString = transform.ToString();
-        if (string.IsNullOrEmpty(transformString)) return 0;
-
-        // Look for translate pattern
-        var match = System.Text.RegularExpressions.Regex.Match(transformString, @"translate\([^,]+,\s*([+-]?\d*\.?\d+)px\)");
-        if (match.Success && double.TryParse(match.Groups[1].Value, out var y))
-        {
-            return y;
-        }
-
-        return 0;
-    }
-
     private void UpdateAllZIndexes()
     {
         if (addProfileButton != null)
@@ -543,36 +519,6 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         UpdateDeleteButtonStates();
     }
 
-
-    private async Task AnimateElementToTransformPosition(int elementIndex, int position, int staggerIndex = 0)
-    {
-        if (elementIndex >= profileItems.Count) return;
-
-        var element = profileItems[elementIndex];
-        var targetY = CalculatePositionForIndex(position);
-
-        // Get current transform Y position
-        var currentTransform = element.RenderTransform as TransformOperations;
-        var currentY = ExtractYFromTransform(currentTransform);
-
-        // Skip animation if already at target position
-        if (Math.Abs(currentY - targetY) < 0.1)
-        {
-            element.ZIndex = position;
-            return;
-        }
-
-        // Add animation class to enable CSS transitions
-        element.Classes.Add("animate-position");
-
-        if (staggerIndex > 0)
-        {
-            await Task.Delay(staggerIndex * animationStateService.Config.StaggerDelayMs);
-        }
-
-        element.RenderTransform = TransformOperations.Parse($"translate(0px, {targetY}px)");
-        element.ZIndex = position;
-    }
 
     private async Task AnimateAllElementsToPositions(int focusIndex = -1)
     {
@@ -647,21 +593,6 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         await animationHelper.CollapseProfileAnimationAsync();
 
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AreAnimationsActive)));
-    }
-
-    private async Task CollapseElementToTransformPosition(Border element, int delayMs = 0)
-    {
-        if (element == null) return;
-
-        // Add animation class to enable CSS transitions
-        element.Classes.Add("animate-position");
-
-        if (delayMs > 0)
-        {
-            await Task.Delay(delayMs);
-        }
-
-        element.RenderTransform = TransformOperations.Parse("translate(0px, 0px)");
     }
 
     public bool AreAnimationsActive => animationStateService.AreAnimationsActive;
