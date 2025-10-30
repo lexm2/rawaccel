@@ -13,6 +13,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using userinterface.Services;
+using userinterface.Services.Animation;
 using userinterface.ViewModels.Profile;
 using userspace_backend;
 using BE = userspace_backend.Model;
@@ -21,14 +22,15 @@ namespace userinterface.Views.Profile;
 
 public partial class ProfileListView : UserControl, INotifyPropertyChanged
 {
-    private readonly List<Border> allItems = [];
+    private readonly List<Border> profileItems = [];
+    private Border? addProfileButton;
     private Panel? profileContainer;
     private readonly BE.IProfilesModel profilesModel;
     private BE.IProfileModel? selectedProfile;
 
-    private int GetProfileCount() => allItems.Count - 1;
+    private int GetProfileCount() => profileItems.Count;
     private readonly IAnimationStateService animationStateService;
-    private readonly Animation.IAnimationService animationService;
+    private readonly IAnimationService animationService;
 
     public new event PropertyChangedEventHandler? PropertyChanged;
     private readonly IModalService modalService;
@@ -76,9 +78,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             viewModel.PropertyChanged += OnViewModelPropertyChanged;
         }
 
-        var addButton = CreateAddProfileButton();
-        allItems.Add(addButton);
-        profileContainer?.Children.Add(addButton);
+        addProfileButton = CreateAddProfileButton();
+        profileContainer?.Children.Add(addProfileButton);
 
         CreateProfilesWithStagger();
 
@@ -224,14 +225,12 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private Task HandleProfilesReset()
     {
-        var addButton = allItems.Count > 0 ? allItems[0] : null;
-        allItems.Clear();
+        profileItems.Clear();
         profileContainer?.Children.Clear();
 
-        if (addButton != null)
+        if (addProfileButton != null)
         {
-            allItems.Add(addButton);
-            profileContainer?.Children.Add(addButton);
+            profileContainer?.Children.Add(addProfileButton);
         }
 
         for (int i = 0; i < profilesModel.Elements.Count; i++)
@@ -246,29 +245,26 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private void RemoveProfileAt(int index)
     {
-        int itemIndex = index + 1;
-        if (itemIndex < 0 || itemIndex >= allItems.Count) return;
+        if (index < 0 || index >= profileItems.Count) return;
 
-        var item = allItems[itemIndex];
-        allItems.RemoveAt(itemIndex);
+        var item = profileItems[index];
+        profileItems.RemoveAt(index);
         profileContainer?.Children.Remove(item);
     }
 
     private void MoveProfile(int fromIndex, int toIndex)
     {
-        int fromItemIndex = fromIndex + 1;
-        int toItemIndex = toIndex + 1;
+        if (fromIndex < 0 || fromIndex >= profileItems.Count ||
+            toIndex < 0 || toIndex >= profileItems.Count ||
+            fromIndex == toIndex) return;
 
-        if (fromItemIndex < 1 || fromItemIndex >= allItems.Count ||
-            toItemIndex < 1 || toItemIndex >= allItems.Count ||
-            fromItemIndex == toItemIndex) return;
+        var item = profileItems[fromIndex];
+        profileItems.RemoveAt(fromIndex);
+        profileItems.Insert(toIndex, item);
 
-        var item = allItems[fromItemIndex];
-        allItems.RemoveAt(fromItemIndex);
-        allItems.Insert(toItemIndex, item);
-
-        profileContainer?.Children.RemoveAt(fromItemIndex);
-        profileContainer?.Children.Insert(toItemIndex, item);
+        profileContainer?.Children.Remove(item);
+        int containerIndex = toIndex + (addProfileButton != null ? 1 : 0);
+        profileContainer?.Children.Insert(containerIndex, item);
     }
 
     private void AddProfileAtPosition(int targetIndex)
@@ -278,11 +274,11 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         var profileBorder = CreateProfileBorder(null!, targetIndex);
 
         profileBorder.ZIndex = 1000;
-        profileBorder.Opacity = 1.0; // Ensure full visibility
+        profileBorder.Opacity = 1.0;
 
-        int itemIndex = targetIndex + 1;
-        allItems.Insert(itemIndex, profileBorder);
-        profileContainer?.Children.Insert(itemIndex, profileBorder);
+        profileItems.Insert(targetIndex, profileBorder);
+        int containerIndex = targetIndex + (addProfileButton != null ? 1 : 0);
+        profileContainer?.Children.Insert(containerIndex, profileBorder);
 
         UpdateAllZIndexes();
 
@@ -374,9 +370,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private void UpdateDeleteButtonStates()
     {
-        for (int i = 2; i < allItems.Count; i++)
+        for (int i = 1; i < profileItems.Count; i++)
         {
-            if (allItems[i].Child is Grid grid)
+            if (profileItems[i].Child is Grid grid)
             {
                 var deleteButton = grid.Children.OfType<Button>().FirstOrDefault(b => b.Classes.Contains("DeleteButton"));
                 if (deleteButton != null)
@@ -391,7 +387,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
     {
         if (sender is Border border && DataContext is ProfileListViewModel viewModel)
         {
-            int profileIndex = allItems.IndexOf(border) - 1;
+            int profileIndex = profileItems.IndexOf(border);
             if (profileIndex >= 0 && profileIndex < profilesModel.Elements.Count)
             {
                 var clickedProfile = profilesModel.Elements[profileIndex];
@@ -432,7 +428,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
             deleteButton.Parent is Grid grid &&
             grid.Parent is Border border)
         {
-            var profileIndex = allItems.IndexOf(border) - 1; // Subtract 1 for add button
+            var profileIndex = profileItems.IndexOf(border);
             logger?.LogInformation(userspace_backend.Logging.LogSource.Modal, $"OnDeleteButtonClicked: Profile index = {profileIndex}, Total profiles = {profilesModel.Elements.Count}");
 
             if (profileIndex >= 0 && profileIndex < profilesModel.Elements.Count)
@@ -497,12 +493,14 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     private void UpdateAllZIndexes()
     {
-        var itemCount = allItems.Count;
-        for (int i = 0; i < itemCount; i++)
+        if (addProfileButton != null)
         {
-            if (i >= allItems.Count) break;
+            addProfileButton.ZIndex = 0;
+        }
 
-            allItems[i].ZIndex = i;
+        for (int i = 0; i < profileItems.Count; i++)
+        {
+            profileItems[i].ZIndex = i + 1;
         }
     }
 
@@ -653,11 +651,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
     {
         for (int i = 0; i < GetProfileCount() && i < profilesModel.Elements.Count; i++)
         {
-            int itemIndex = i + 1; // Convert to item index
+            if (i >= profileItems.Count) break;
 
-            if (itemIndex >= allItems.Count) break;
-
-            var border = allItems[itemIndex];
+            var border = profileItems[i];
             var profile = profilesModel.Elements[i];
 
             if (border.Child is Grid grid)
