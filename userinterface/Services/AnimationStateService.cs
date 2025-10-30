@@ -39,7 +39,7 @@ namespace userinterface.Services
         {
             var contextDict = contextAnimations.GetOrAdd(context, _ => new ConcurrentDictionary<int, CancellationTokenSource>());
 
-            CancellationTokenSource cts;
+            CancellationToken token;
             lock (animationLock)
             {
                 if (contextDict.TryGetValue(index, out var existingCts))
@@ -48,13 +48,14 @@ namespace userinterface.Services
                     existingCts.Dispose();
                 }
 
-                cts = new CancellationTokenSource();
+                var cts = new CancellationTokenSource();
+                token = cts.Token;
                 contextDict[index] = cts;
                 SetAnimationsActive(true);
             }
 
             await Task.Yield();
-            return cts.Token;
+            return token;
         }
 
         public void UnregisterAnimation(string context, int index)
