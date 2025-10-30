@@ -216,7 +216,11 @@ public abstract class CollectionAnimationHelperBase<TContainer> : ICollectionAni
         var animationTasks = taskListPool.Get();
         try
         {
-            animationStateService.CancelAllAnimations(GetAnimationContext());
+            if (activeAnimationCount > 0)
+            {
+                animationStateService.CancelAllAnimations(GetAnimationContext());
+                await Task.Delay(animationStateService.Config.AnimationCompleteDelayMs);
+            }
 
             var animationsToRun = new List<(int index, int staggerIndex)>();
             var itemCount = GetItemCount();
