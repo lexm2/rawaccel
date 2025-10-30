@@ -12,6 +12,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using userinterface.Animations;
 using userinterface.Services;
 using userinterface.Services.Animation;
 using userinterface.ViewModels.Profile;
@@ -31,6 +32,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
     private int GetProfileCount() => profileItems.Count;
     private readonly IAnimationStateService animationStateService;
     private readonly IAnimationService animationService;
+    private readonly IFrameTimerService frameTimer;
+    private readonly userspace_backend.Logging.ILoggingService? loggingService;
+    private ProfileListAnimationHelper? animationHelper;
 
     public new event PropertyChangedEventHandler? PropertyChanged;
     private readonly IModalService modalService;
@@ -45,6 +49,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         localizationService = App.Services?.GetRequiredService<ILocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");
         animationService = App.Services?.GetRequiredService<Animation.IAnimationService>() ?? throw new InvalidOperationException("AnimationService not available");
+        frameTimer = App.Services?.GetRequiredService<IFrameTimerService>() ?? throw new InvalidOperationException("FrameTimerService not available");
+        loggingService = App.Services?.GetService(typeof(userspace_backend.Logging.ILoggingService)) as userspace_backend.Logging.ILoggingService;
 
         profilesModel = backEnd.Profiles ?? throw new ArgumentNullException(nameof(backEnd.Profiles));
         localizationService.PropertyChanged += OnLocalizationPropertyChanged;
@@ -67,6 +73,9 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         {
             viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         }
+
+        animationHelper?.Dispose();
+        animationHelper = null;
     }
 
     private void OnLoaded(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -80,6 +89,18 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         addProfileButton = CreateAddProfileButton();
         profileContainer?.Children.Add(addProfileButton);
+
+        if (addProfileButton != null && profileContainer != null)
+        {
+            animationHelper = new ProfileListAnimationHelper(
+                profileItems,
+                addProfileButton,
+                profileContainer,
+                frameTimer,
+                animationStateService,
+                loggingService
+            );
+        }
 
         CreateProfilesWithStagger();
 
