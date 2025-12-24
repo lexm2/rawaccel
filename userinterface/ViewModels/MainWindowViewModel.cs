@@ -1,11 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Styling;
-using Microsoft.Extensions.DependencyInjection;
+using CommunityToolkit.Mvvm.ComponentModel;
 using System;
-using System.ComponentModel;
-using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using userinterface.Commands;
@@ -24,10 +21,14 @@ using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels;
 
-public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
+public partial class MainWindowViewModel : ViewModelBase
 {
-    private NavigationPage selectedPageValue = NavigationPage.Devices;
-    private bool isProfilesExpandedValue = false;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentPageContent))]
+    private NavigationPage selectedPage = NavigationPage.Devices;
+
+    [ObservableProperty]
+    private bool isProfilesExpanded = false;
 
     // Pre-created ViewModels
     private readonly DevicesPageViewModel devicesPage;
@@ -41,23 +42,31 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private readonly IThemeService themeService;
     private readonly ISettingsService settingsService;
 
-    public MainWindowViewModel(IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService)
+    public MainWindowViewModel(
+        IBackEnd backEnd,
+        IThemeService themeService,
+        ISettingsService settingsService,
+        DevicesPageViewModel devicesPage,
+        ProfilesPageViewModel profilesPage,
+        MappingsPageViewModel mappingsPage,
+        SettingsPageViewModel settingsPage,
+        ProfileListViewModel profileListView,
+        ToastViewModel toastViewModel)
     {
         this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
         this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
         this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-
-        devicesPage = App.Services!.GetRequiredService<DevicesPageViewModel>();
-        profilesPage = App.Services!.GetRequiredService<ProfilesPageViewModel>();
-        mappingsPage = App.Services!.GetRequiredService<MappingsPageViewModel>();
-        settingsPage = App.Services!.GetRequiredService<SettingsPageViewModel>();
-        profileListView = App.Services!.GetRequiredService<ProfileListViewModel>();
-        toastViewModel = App.Services!.GetRequiredService<ToastViewModel>();
+        this.devicesPage = devicesPage ?? throw new ArgumentNullException(nameof(devicesPage));
+        this.profilesPage = profilesPage ?? throw new ArgumentNullException(nameof(profilesPage));
+        this.mappingsPage = mappingsPage ?? throw new ArgumentNullException(nameof(mappingsPage));
+        this.settingsPage = settingsPage ?? throw new ArgumentNullException(nameof(settingsPage));
+        this.profileListView = profileListView ?? throw new ArgumentNullException(nameof(profileListView));
+        this.toastViewModel = toastViewModel ?? throw new ArgumentNullException(nameof(toastViewModel));
 
         ApplyCommand = new RelayCommand(() => Apply());
         NavigateCommand = new RelayCommand<NavigationPage>(page => SelectPage(page));
         ToggleThemeCommand = new RelayCommand(() => ToggleTheme());
-        
+
         profileListView.SelectedProfileChanged += OnProfileSelected;
     }
 
@@ -80,42 +89,6 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     public ICommand NavigateCommand { get; }
 
     public ICommand ToggleThemeCommand { get; }
-
-    public NavigationPage SelectedPage
-    {
-        get => selectedPageValue;
-        set
-        {
-            if (selectedPageValue != value)
-            {
-                selectedPageValue = value;
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(CurrentPageContent));
-            }
-        }
-    }
-
-    public bool IsProfilesExpanded
-    {
-        get => isProfilesExpandedValue;
-        set
-        {
-            if (isProfilesExpandedValue != value)
-            {
-                isProfilesExpandedValue = value;
-                OnPropertyChanged();
-
-                if (value)
-                {
-                    ExpandProfiles();
-                }
-                else
-                {
-                    CollapseProfiles();
-                }
-            }
-        }
-    }
 
     public object? CurrentPageContent =>
         SelectedPage switch
@@ -248,10 +221,15 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         }
     }
 
-    public new event PropertyChangedEventHandler? PropertyChanged;
-
-    protected virtual new void OnPropertyChanged([CallerMemberName] string? PropertyName = null)
+    partial void OnIsProfilesExpandedChanged(bool value)
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(PropertyName));
+        if (value)
+        {
+            ExpandProfiles();
+        }
+        else
+        {
+            CollapseProfiles();
+        }
     }
 }

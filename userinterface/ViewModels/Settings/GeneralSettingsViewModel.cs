@@ -16,11 +16,14 @@ public class GeneralSettingsViewModel : ViewModelBase
     private LanguageItem selectedLanguage;
     private string selectedThemeValue;
 
-    public GeneralSettingsViewModel()
+    public GeneralSettingsViewModel(
+        ISettingsService settingsService,
+        LocalizationService localizationService,
+        IThemeService themeService)
     {
-        settingsService = App.Services!.GetRequiredService<ISettingsService>();
-        localizationService = App.Services!.GetRequiredService<LocalizationService>();
-        themeService = App.Services!.GetRequiredService<IThemeService>();
+        this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        this.localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
+        this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
 
         AvailableLanguages = new ObservableCollection<LanguageItem>
         {

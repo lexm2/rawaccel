@@ -1,27 +1,19 @@
-using Microsoft.Extensions.DependencyInjection;
+using CommunityToolkit.Mvvm.ComponentModel;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using userinterface.Services;
 using BE = userspace_backend.Model.EditableSettings;
 
 namespace userinterface.ViewModels.Controls;
 
-public class DualColumnLabelFieldViewModel : INotifyPropertyChanged
+public partial class DualColumnLabelFieldViewModel : ViewModelBase
 {
     private const double DefaultLabelWidth = 120.0;
+
+    [ObservableProperty]
     private double labelWidth = DefaultLabelWidth;
+
     private readonly LocalizationService localizationService;
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    public double LabelWidth
-    {
-        get => labelWidth;
-        set => SetProperty(ref labelWidth, value);
-    }
 
     public ObservableCollection<FieldItemViewModel> Fields { get; }
 
@@ -76,23 +68,7 @@ public class DualColumnLabelFieldViewModel : INotifyPropertyChanged
         Fields.Clear();
     }
 
-    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-
-    protected bool SetProperty<T>(ref T backingStore, T value, [CallerMemberName] string? propertyName = null)
-    {
-        if (EqualityComparer<T>.Default.Equals(backingStore, value))
-            return false;
-
-        backingStore = value;
-        OnPropertyChanged(propertyName);
-        return true;
-    }
-
-
-    private void OnLanguageChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == LocalizationService.LanguageChangedPropertyName)
         {
@@ -105,12 +81,16 @@ public class DualColumnLabelFieldViewModel : INotifyPropertyChanged
     }
 }
 
-public class FieldItemViewModel : INotifyPropertyChanged
+public partial class FieldItemViewModel : ViewModelBase
 {
     private readonly BE.IEditableSetting? setting;
     private readonly string? localizationKey;
     private readonly LocalizationService localizationService;
-    private string cachedLabel;
+
+    [ObservableProperty]
+    private string label = string.Empty;
+
+    public object InputControl { get; }
 
     // Constructor for EditableSetting
     public FieldItemViewModel(BE.IEditableSetting setting, object inputControl, LocalizationService localizationService)
@@ -118,7 +98,7 @@ public class FieldItemViewModel : INotifyPropertyChanged
         this.setting = setting ?? throw new ArgumentNullException(nameof(setting));
         InputControl = inputControl ?? throw new ArgumentNullException(nameof(inputControl));
         this.localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
-        cachedLabel = GetLocalizedLabel();
+        label = GetLocalizedLabel();
     }
 
     // Constructor for localization key
@@ -127,22 +107,12 @@ public class FieldItemViewModel : INotifyPropertyChanged
         this.localizationKey = localizationKey ?? throw new ArgumentNullException(nameof(localizationKey));
         InputControl = inputControl ?? throw new ArgumentNullException(nameof(inputControl));
         this.localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
-        cachedLabel = GetLocalizedLabel();
+        label = GetLocalizedLabel();
     }
-
-    public string Label => cachedLabel;
-    public object InputControl { get; }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
 
     public void UpdateLabel()
     {
-        var newLabel = GetLocalizedLabel();
-        if (cachedLabel != newLabel)
-        {
-            cachedLabel = newLabel;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Label)));
-        }
+        Label = GetLocalizedLabel();
     }
 
     private string GetLocalizedLabel()
@@ -162,4 +132,4 @@ public class FieldItemViewModel : INotifyPropertyChanged
         // Otherwise, use the display name directly (for user input settings)
         return setting?.DisplayText ?? string.Empty;
     }
-};
+}

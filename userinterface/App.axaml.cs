@@ -111,16 +111,15 @@ public partial class App : Application
 
     private void RegisterViewModels(IServiceCollection services)
     {
-        // Main ViewModels
-        services.AddSingleton<MainWindowViewModel>(provider =>
-            new MainWindowViewModel(
-                provider.GetRequiredService<IBackEnd>(),
-                provider.GetRequiredService<IThemeService>(),
-                provider.GetRequiredService<ISettingsService>()));
-        services.AddSingleton<ToastViewModel>();
+        // Control ViewModels (registered first as they may be dependencies)
+        services.AddSingleton<ViewModels.Controls.ToastViewModel>();
+        services.AddTransient<ViewModels.Controls.DualColumnLabelFieldViewModel>(provider =>
+            new ViewModels.Controls.DualColumnLabelFieldViewModel(
+                provider.GetRequiredService<LocalizationService>()));
+        services.AddTransient<ViewModels.Controls.EditableFieldViewModel>();
 
         // Device ViewModels
-        services.AddTransient<ViewModels.Device.DevicesPageViewModel>(provider =>
+        services.AddSingleton<ViewModels.Device.DevicesPageViewModel>(provider =>
             new ViewModels.Device.DevicesPageViewModel(
                 provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IModalService>(),
@@ -136,7 +135,7 @@ public partial class App : Application
         services.AddTransient<ViewModels.Device.DeviceViewModel>();
 
         // Profile ViewModels
-        services.AddTransient<ViewModels.Profile.ProfilesPageViewModel>();
+        services.AddSingleton<ViewModels.Profile.ProfilesPageViewModel>();
         services.AddSingleton<ViewModels.Profile.ProfileListViewModel>();
         services.AddTransient<ViewModels.Profile.ProfileViewModel>();
         services.AddTransient<ViewModels.Profile.ProfileSettingsViewModel>(provider =>
@@ -152,20 +151,35 @@ public partial class App : Application
         services.AddTransient<ViewModels.Profile.HiddenProfileSettingsViewModel>();
 
         // Mapping ViewModels
-        services.AddTransient<ViewModels.Mapping.MappingsPageViewModel>();
+        services.AddSingleton<ViewModels.Mapping.MappingsPageViewModel>();
         services.AddTransient<ViewModels.Mapping.MappingViewModel>();
         services.AddTransient<ViewModels.Mapping.MappingListElementViewModel>();
 
         // Settings ViewModels
-        services.AddTransient<SettingsPageViewModel>();
-        services.AddTransient<ViewModels.Settings.GeneralSettingsViewModel>();
-        services.AddTransient<ViewModels.Settings.SupportViewModel>();
+        services.AddSingleton<ViewModels.Settings.SupportViewModel>();
+        services.AddSingleton<ViewModels.Settings.GeneralSettingsViewModel>(provider =>
+            new ViewModels.Settings.GeneralSettingsViewModel(
+                provider.GetRequiredService<ISettingsService>(),
+                provider.GetRequiredService<LocalizationService>(),
+                provider.GetRequiredService<IThemeService>()));
+        services.AddSingleton<SettingsPageViewModel>(provider =>
+            new SettingsPageViewModel(
+                provider.GetService<INotificationService>(),
+                provider.GetRequiredService<ViewModels.Settings.GeneralSettingsViewModel>(),
+                provider.GetRequiredService<ViewModels.Settings.SupportViewModel>()));
 
-        // Control ViewModels
-        services.AddTransient<ViewModels.Controls.DualColumnLabelFieldViewModel>(provider =>
-            new ViewModels.Controls.DualColumnLabelFieldViewModel(
-                provider.GetRequiredService<LocalizationService>()));
-        services.AddTransient<ViewModels.Controls.EditableFieldViewModel>();
+        // Main ViewModels (registered last as they depend on other ViewModels)
+        services.AddSingleton<MainWindowViewModel>(provider =>
+            new MainWindowViewModel(
+                provider.GetRequiredService<IBackEnd>(),
+                provider.GetRequiredService<IThemeService>(),
+                provider.GetRequiredService<ISettingsService>(),
+                provider.GetRequiredService<ViewModels.Device.DevicesPageViewModel>(),
+                provider.GetRequiredService<ViewModels.Profile.ProfilesPageViewModel>(),
+                provider.GetRequiredService<ViewModels.Mapping.MappingsPageViewModel>(),
+                provider.GetRequiredService<SettingsPageViewModel>(),
+                provider.GetRequiredService<ViewModels.Profile.ProfileListViewModel>(),
+                provider.GetRequiredService<ViewModels.Controls.ToastViewModel>()));
     }
 
     protected static Bootstrapper BootstrapBackEnd()

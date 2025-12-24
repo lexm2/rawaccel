@@ -1,8 +1,6 @@
-﻿using Avalonia.Animation;
-using Avalonia.Threading;
+﻿using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using System;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -12,13 +10,22 @@ using userinterface.Services;
 
 namespace userinterface.ViewModels.Controls
 {
-    public class ToastViewModel : INotifyPropertyChanged, IDisposable
+    public partial class ToastViewModel : ViewModelBase, IDisposable
     {
         private readonly INotificationService notificationService;
+
+        [ObservableProperty]
         private bool isVisible;
+
+        [ObservableProperty]
         private string message = string.Empty;
+
+        [ObservableProperty]
         private ToastType type;
+
+        [ObservableProperty]
         private double progress = 100;
+
         private CancellationTokenSource? animationCancellation;
 
         public ToastViewModel(INotificationService notificationService)
@@ -27,46 +34,6 @@ namespace userinterface.ViewModels.Controls
             this.notificationService.ToastRequested += OnToastRequested;
             this.notificationService.ToastDismissed += OnToastDismissed;
             CloseCommand = new RelayCommand(Close);
-        }
-
-        public bool IsVisible
-        {
-            get => isVisible;
-            set
-            {
-                isVisible = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public string Message
-        {
-            get => message;
-            set
-            {
-                message = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public ToastType Type
-        {
-            get => type;
-            set
-            {
-                type = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public double Progress
-        {
-            get => progress;
-            set
-            {
-                progress = value;
-                OnPropertyChanged();
-            }
         }
 
         public ICommand CloseCommand { get; }
@@ -141,13 +108,6 @@ namespace userinterface.ViewModels.Controls
         private void Close()
         {
             notificationService.HideToast();
-        }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
         public void Dispose()

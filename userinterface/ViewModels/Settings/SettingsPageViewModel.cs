@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+using System;
 using userinterface.Services;
 
 namespace userinterface.ViewModels.Settings;
@@ -7,12 +7,14 @@ public class SettingsPageViewModel : ViewModelBase
 {
     private readonly INotificationService? notificationService;
 
-    public SettingsPageViewModel()
+    public SettingsPageViewModel(
+        INotificationService? notificationService,
+        GeneralSettingsViewModel generalSettingsViewModel,
+        SupportViewModel supportViewModel)
     {
-        notificationService = App.Services?.GetService<INotificationService>();
-
-        GeneralSettingsViewModel = App.Services!.GetRequiredService<GeneralSettingsViewModel>();
-        SupportViewModel = App.Services!.GetRequiredService<SupportViewModel>();
+        this.notificationService = notificationService;
+        GeneralSettingsViewModel = generalSettingsViewModel ?? throw new ArgumentNullException(nameof(generalSettingsViewModel));
+        SupportViewModel = supportViewModel ?? throw new ArgumentNullException(nameof(supportViewModel));
 
         GeneralSettingsViewModel.PropertyChanged += OnGeneralSettingsChanged;
     }
