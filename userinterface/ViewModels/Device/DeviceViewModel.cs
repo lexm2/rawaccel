@@ -13,12 +13,11 @@ namespace userinterface.ViewModels.Device
     {
         private readonly IModalService modalService;
 
-        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.DevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false, Func<DeviceViewModel, Task>? animatedDeleteCallback = null)
+        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.DevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false)
         {
             DeviceBE = deviceBE;
             DevicesBE = devicesBE;
             IsDefaultDevice = isDefault;
-            AnimatedDeleteCallback = animatedDeleteCallback;
             this.modalService = modalService;
 
             NameField = new NamedEditableFieldViewModel(DeviceBE.Name, localizationService);
@@ -34,7 +33,7 @@ namespace userinterface.ViewModels.Device
 
             DeviceGroup = new DeviceGroupSelectorViewModel(DeviceBE, DevicesBE.DeviceGroups);
 
-            DeleteCommand = new RelayCommand(async () => await DeleteWithAnimation());
+            DeleteCommand = new RelayCommand(async () => await DeleteWithConfirmation());
         }
 
         internal BE.IDeviceModel DeviceBE { get; }
@@ -42,8 +41,6 @@ namespace userinterface.ViewModels.Device
         internal BE.DevicesModel DevicesBE { get; }
 
         public bool IsDefaultDevice { get; }
-
-        private Func<DeviceViewModel, Task>? AnimatedDeleteCallback { get; }
 
         public NamedEditableFieldViewModel NameField { get; set; }
 
@@ -71,13 +68,13 @@ namespace userinterface.ViewModels.Device
             }
         }
 
-        private async Task DeleteWithAnimation()
+        private async Task DeleteWithConfirmation()
         {
             if (isDeleting)
                 return;
-            
+
             isDeleting = true;
-            
+
             try
             {
                 var confirmed = await modalService.ShowConfirmationAsync(
@@ -86,9 +83,9 @@ namespace userinterface.ViewModels.Device
                     "DeviceDeleteConfirm",
                     "ModalCancel");
 
-                if (confirmed && AnimatedDeleteCallback != null)
+                if (confirmed)
                 {
-                    await AnimatedDeleteCallback(this);
+                    DeleteSelf();
                 }
             }
             finally

@@ -156,46 +156,10 @@ namespace userinterface.ViewModels.Profile
             }
         }
 
-        private async Task WaitForAnimationsToComplete()
+        private Task WaitForAnimationsToComplete()
         {
-            if (profileListView != null)
-            {
-                if (!profileListView.AreAnimationsActive)
-                {
-                    return;
-                }
-
-                var tcs = new TaskCompletionSource<bool>();
-
-                void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-                {
-                    if (e.PropertyName == nameof(profileListView.AreAnimationsActive) && !profileListView.AreAnimationsActive)
-                    {
-                        tcs.TrySetResult(true);
-                    }
-                }
-
-                profileListView.PropertyChanged += OnPropertyChanged;
-
-                try
-                {
-                    // Double-check in case animations completed between the initial check and event subscription
-                    if (!profileListView.AreAnimationsActive)
-                    {
-                        return;
-                    }
-
-                    await tcs.Task;
-                }
-                finally
-                {
-                    profileListView.PropertyChanged -= OnPropertyChanged;
-                }
-            }
-            else
-            {
-                await Task.Delay(400);
-            }
+            // Animations removed - positions are set immediately
+            return Task.CompletedTask;
         }
 
 

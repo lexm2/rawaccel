@@ -63,9 +63,7 @@ public partial class App : Application
             new ThemeService(provider.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IViewModelFactory, ViewModelFactory>();
         services.AddSingleton<LocalizationService>();
-        services.AddSingleton<FrameTimerService>();
         services.AddSingleton<PreviewChartRenderer>();
-        services.AddSingleton<IAnimationStateService, AnimationStateService>();
         services.AddSingleton<ISettingsService, SettingsService>();
 
         RegisterViewModels(services);
@@ -118,8 +116,7 @@ public partial class App : Application
             new MainWindowViewModel(
                 provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IThemeService>(),
-                provider.GetRequiredService<ISettingsService>(),
-                provider.GetRequiredService<FrameTimerService>()));
+                provider.GetRequiredService<ISettingsService>()));
         services.AddSingleton<ToastViewModel>();
 
         // Device ViewModels

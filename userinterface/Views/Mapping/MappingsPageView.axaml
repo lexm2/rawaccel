@@ -4,7 +4,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:userinterface.ViewModels.Mapping"
              xmlns:ext="using:userinterface.Extensions"
-             xmlns:helpers="using:userinterface.Helpers"
              xmlns:mapping="using:userinterface.ViewModels.Mapping"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="userinterface.Views.Mapping.MappingsPageView"
@@ -106,7 +105,6 @@
 							<Path Classes="SelectionBorder"
 								  Data="{Binding SelectionBorderPath}"
 								  IsVisible="False"
-								  helpers:MappingAnimationHelper.EnableAnimation="True"
 								  HorizontalAlignment="Left"
 								  VerticalAlignment="Top"
 								  Margin="8,8,0,0"/>

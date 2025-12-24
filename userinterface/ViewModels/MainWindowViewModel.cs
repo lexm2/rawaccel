@@ -40,14 +40,12 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private readonly IBackEnd backEnd;
     private readonly IThemeService themeService;
     private readonly ISettingsService settingsService;
-    private readonly FrameTimerService frameTimer;
 
-    public MainWindowViewModel(IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer)
+    public MainWindowViewModel(IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService)
     {
         this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
         this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
         this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        this.frameTimer = frameTimer ?? throw new ArgumentNullException(nameof(frameTimer));
 
         devicesPage = App.Services!.GetRequiredService<DevicesPageViewModel>();
         profilesPage = App.Services!.GetRequiredService<ProfilesPageViewModel>();

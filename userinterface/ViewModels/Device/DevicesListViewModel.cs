@@ -1,18 +1,14 @@
-﻿using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Threading.Tasks;
 using System.Windows.Input;
 using userinterface.Commands;
 using userinterface.Services;
-using userinterface.Views.Device;
 using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Device
 {
     public partial class DevicesListViewModel : ViewModelBase
     {
-        private DevicesListView? devicesListView;
         private readonly IModalService modalService;
         private readonly LocalizationService localizationService;
 
@@ -37,14 +33,6 @@ namespace userinterface.ViewModels.Device
 
         public ICommand AddDeviceCommand { get; }
 
-        public void SetView(DevicesListView view)
-        {
-            devicesListView = view;
-            
-            // Refresh existing DeviceViewModels to include the animation callback
-            UpdateDeviceViews();
-        }
-
         private void DevicesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             switch (e.Action)
@@ -56,8 +44,7 @@ namespace userinterface.ViewModels.Device
                         {
                             int index = e.NewStartingIndex;
                             bool isDefault = index == 0;
-                            var animateCallback = devicesListView != null ? (Func<DeviceViewModel, Task>)devicesListView.AnimateDeviceDelete : null;
-                            var deviceViewModel = new DeviceViewModel(device, DevicesBE, modalService, localizationService, isDefault, animateCallback);
+                            var deviceViewModel = new DeviceViewModel(device, DevicesBE, modalService, localizationService, isDefault);
                             DeviceViews.Insert(index, deviceViewModel);
                         }
                     }
@@ -89,8 +76,7 @@ namespace userinterface.ViewModels.Device
             {
                 var device = DevicesBE.Elements[i];
                 bool isDefault = i == 0;
-                var animateCallback = devicesListView != null ? (Func<DeviceViewModel, Task>)devicesListView.AnimateDeviceDelete : null;
-                DeviceViews.Add(new DeviceViewModel(device, DevicesBE, modalService, localizationService, isDefault, animateCallback));
+                DeviceViews.Add(new DeviceViewModel(device, DevicesBE, modalService, localizationService, isDefault));
             }
         }
 
