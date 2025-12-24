@@ -15,7 +15,7 @@ namespace userinterface.ViewModels.Profile
             this.localizationService = localizationService;
         }
 
-        protected BE.ProfileModel ProfileModelBE { get; private set; } = null!;
+        protected BE.IProfileModel ProfileModelBE { get; private set; } = null!;
 
         public EditableFieldViewModel OutputDPIField { get; private set; } = null!;
 
@@ -25,7 +25,7 @@ namespace userinterface.ViewModels.Profile
 
         public HiddenProfileSettingsViewModel HiddenSettings { get; private set; } = null!;
 
-        public void Initialize(BE.ProfileModel profileModel)
+        public void Initialize(BE.IProfileModel profileModel)
         {
             ProfileModelBE = profileModel;
             OutputDPIField = new EditableFieldViewModel(profileModel.OutputDPI);

@@ -25,8 +25,8 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 {
     private readonly List<Border> allItems = [];
     private Panel? profileContainer;
-    private readonly BE.ProfilesModel profilesModel;
-    private BE.ProfileModel? selectedProfile;
+    private readonly BE.IProfilesModel profilesModel;
+    private BE.IProfileModel? selectedProfile;
 
     private int GetProfileCount() => allItems.Count - 1;
     private readonly IAnimationStateService animationStateService;
@@ -39,14 +39,14 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
     public ProfileListView()
     {
-        var backEnd = App.Services?.GetRequiredService<BackEnd>() ?? throw new InvalidOperationException("BackEnd service not available");
+        var backEnd = App.Services?.GetRequiredService<IBackEnd>() ?? throw new InvalidOperationException("BackEnd service not available");
         modalService = App.Services?.GetRequiredService<IModalService>() ?? throw new InvalidOperationException("ModalService not available");
         localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
         animationStateService = App.Services?.GetRequiredService<IAnimationStateService>() ?? throw new InvalidOperationException("AnimationStateService not available");
-        
+
         profilesModel = backEnd.Profiles ?? throw new ArgumentNullException(nameof(backEnd.Profiles));
         localizationService.PropertyChanged += OnLocalizationPropertyChanged;
-        profilesModel.Profiles.CollectionChanged += OnProfilesCollectionChanged;
+        ((INotifyCollectionChanged)profilesModel.Profiles).CollectionChanged += OnProfilesCollectionChanged;
 
         InitializeComponent();
 
@@ -160,7 +160,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
 
         if (selectedProfile != null && !profilesModel.Profiles.Contains(selectedProfile))
         {
-            var defaultProfile = profilesModel.Profiles.FirstOrDefault(p => p == BE.ProfilesModel.DefaultProfile);
+            var defaultProfile = profilesModel.DefaultProfile;
             if (defaultProfile != null)
             {
                 SetSelectedProfile(defaultProfile);
@@ -308,7 +308,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
     private Border CreateProfileBorder(IBrush color, int targetIndex)
     {
         var profileName = targetIndex < profilesModel.Profiles.Count ? profilesModel.Profiles[targetIndex].CurrentNameForDisplay : $"Profile {targetIndex + 1}";
-        var isDefaultProfile = targetIndex < profilesModel.Profiles.Count && profilesModel.Profiles[targetIndex] == BE.ProfilesModel.DefaultProfile;
+        var isDefaultProfile = targetIndex < profilesModel.Profiles.Count && profilesModel.Profiles[targetIndex] == profilesModel.DefaultProfile;
 
         var profileText = new TextBlock
         {
@@ -559,7 +559,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         UpdateDeleteButtonStates();
     }
 
-    public void SetSelectedProfile(BE.ProfileModel? profile, bool updateViewModel = true)
+    public void SetSelectedProfile(BE.IProfileModel? profile, bool updateViewModel = true)
     {
         if (selectedProfile == profile) return;
 
@@ -593,7 +593,7 @@ public partial class ProfileListView : UserControl, INotifyPropertyChanged
         }
     }
 
-    public BE.ProfileModel? GetSelectedProfile()
+    public BE.IProfileModel? GetSelectedProfile()
     {
         return selectedProfile;
     }

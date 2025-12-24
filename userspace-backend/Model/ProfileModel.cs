@@ -24,6 +24,11 @@ namespace userspace_backend.Model
 
         IHiddenModel Hidden { get; }
 
+        ICurvePreview XCurvePreview { get; }
+
+        ICurvePreview YCurvePreview { get; }
+
+        [Obsolete("Use XCurvePreview instead")]
         ICurvePreview CurvePreview { get; }
 
         string CurrentNameForDisplay { get; }

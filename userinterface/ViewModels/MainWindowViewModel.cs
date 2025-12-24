@@ -19,7 +19,8 @@ using userinterface.ViewModels.Mapping;
 using userinterface.ViewModels.Profile;
 using userinterface.ViewModels.Settings;
 using userinterface.Views;
-using BE = userspace_backend;
+using IBackEnd = userspace_backend.IBackEnd;
+using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels;
 
@@ -36,12 +37,12 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
     private readonly ProfileListViewModel profileListView;
     private readonly ToastViewModel toastViewModel;
 
-    private readonly BE.IBackEnd backEnd;
+    private readonly IBackEnd backEnd;
     private readonly IThemeService themeService;
     private readonly ISettingsService settingsService;
     private readonly FrameTimerService frameTimer;
 
-    public MainWindowViewModel(BE.IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer)
+    public MainWindowViewModel(IBackEnd backEnd, IThemeService themeService, ISettingsService settingsService, FrameTimerService frameTimer)
     {
         this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
         this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
@@ -74,7 +75,7 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
     public ToastViewModel ToastViewModel => toastViewModel;
 
-    protected BE.IBackEnd BackEnd => backEnd;
+    protected IBackEnd BackEnd => backEnd;
 
     public ICommand ApplyCommand { get; }
 
@@ -133,10 +134,10 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         Console.WriteLine($"SelectPage called with: {page}");
         SelectedPage = page;
         IsProfilesExpanded = page == NavigationPage.Profiles;
-        
+
         if (page == NavigationPage.Profiles && profileListView.SelectedProfile == null)
         {
-            var defaultProfile = backEnd.Profiles.Profiles.FirstOrDefault(p => p == BE.Model.ProfilesModel.DefaultProfile);
+            var defaultProfile = backEnd.Profiles.DefaultProfile;
             if (defaultProfile != null)
             {
                 profileListView.SelectedProfile = defaultProfile;
@@ -146,7 +147,7 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
                 profileListView.SelectedProfile = backEnd.Profiles.Profiles[0];
             }
         }
-        
+
         UpdateNavigationButtonSelection(page);
     }
     
@@ -179,10 +180,10 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
 
         SelectedPage = page;
         IsProfilesExpanded = page == NavigationPage.Profiles;
-        
+
         if (page == NavigationPage.Profiles && profileListView.SelectedProfile == null)
         {
-            var defaultProfile = backEnd.Profiles.Profiles.FirstOrDefault(p => p == BE.Model.ProfilesModel.DefaultProfile);
+            var defaultProfile = backEnd.Profiles.DefaultProfile;
             if (defaultProfile != null)
             {
                 profileListView.SelectedProfile = defaultProfile;
@@ -241,7 +242,7 @@ public partial class MainWindowViewModel : ViewModelBase, INotifyPropertyChanged
         settingsService.Theme = newTheme;
     }
     
-    private void OnProfileSelected(BE.Model.ProfileModel selectedProfile)
+    private void OnProfileSelected(BE.IProfileModel selectedProfile)
     {
         if (selectedProfile != null && SelectedPage != NavigationPage.Profiles)
         {

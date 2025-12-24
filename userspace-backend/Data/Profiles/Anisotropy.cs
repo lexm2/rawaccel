@@ -8,9 +8,9 @@ namespace userspace_backend.Data.Profiles
 {
     public class Anisotropy
     {
-        public Vector2 Domain { get; set; }
+        public Vector2 Domain { get; set; } = new Vector2();
 
-        public Vector2 Range { get; set; }
+        public Vector2 Range { get; set; } = new Vector2();
 
         public double LPNorm { get; set; }
 

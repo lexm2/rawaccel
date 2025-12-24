@@ -23,13 +23,13 @@ public partial class MappingListElementViewModel : ViewModelBase
 
     public BE.MappingGroup MappingGroup => mappingGroup;
 
-    public string DeviceGroupName => mappingGroup.DeviceGroup.CurrentValidatedValue;
+    public string DeviceGroupName => mappingGroup.DeviceGroup;
 
-    public ObservableCollection<BE.ProfileModel> AvailableProfiles => mappingGroup.Profiles.Profiles;
+    public ReadOnlyObservableCollection<BE.IProfileModel> AvailableProfiles => mappingGroup.Profiles.Profiles;
 
     public bool CanDelete => parentMapping.IndividualMappings.Count > 1;
 
-    public BE.ProfileModel? SelectedProfile
+    public BE.IProfileModel? SelectedProfile
     {
         get => mappingGroup.Profile;
         set

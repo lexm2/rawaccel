@@ -20,7 +20,7 @@ namespace userinterface.ViewModels.Mapping
         private bool isInitialized = false;
         private bool isInitializing = false;
 
-        public MappingsPageViewModel(userspace_backend.BackEnd backEnd, IViewModelFactory viewModelFactory)
+        public MappingsPageViewModel(userspace_backend.IBackEnd backEnd, IViewModelFactory viewModelFactory)
         {
             mappingsModel = backEnd?.Mappings ?? throw new ArgumentNullException(nameof(backEnd));
             this.viewModelFactory = viewModelFactory ?? throw new ArgumentNullException(nameof(viewModelFactory));

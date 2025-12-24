@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using userinterface.Interfaces;
 using userinterface.Services;
+using IBackEnd = userspace_backend.IBackEnd;
 using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Profile
@@ -17,13 +18,13 @@ namespace userinterface.ViewModels.Profile
         public ProfileViewModel? selectedProfileView;
 
         private readonly INotificationService notificationService;
-        private readonly BE.ProfilesModel profilesModel;
+        private readonly BE.IProfilesModel profilesModel;
         private readonly ProfileListViewModel profileListView;
         private readonly IViewModelFactory viewModelFactory;
 
         public ProfilesPageViewModel(
             INotificationService notificationService,
-            userspace_backend.BackEnd backEnd,
+            IBackEnd backEnd,
             ProfileListViewModel profileListView,
             IViewModelFactory viewModelFactory)
         {
@@ -39,10 +40,10 @@ namespace userinterface.ViewModels.Profile
         }
 
         private INotificationService NotificationService => notificationService;
-        private BE.ProfilesModel ProfilesModel => profilesModel;
+        private BE.IProfilesModel ProfilesModel => profilesModel;
         public ProfileListViewModel ProfileListView => profileListView;
 
-        private IEnumerable<BE.ProfileModel> ProfileModels => ProfilesModel.Profiles;
+        private IEnumerable<BE.IProfileModel> ProfileModels => ProfilesModel.Profiles;
 
         protected ObservableCollection<ProfileViewModel> ProfileViewModels { get; }
 
@@ -72,7 +73,7 @@ namespace userinterface.ViewModels.Profile
             UpdateSelectedProfileView(ProfileListView.SelectedProfile);
         }
 
-        private void UpdateSelectedProfileView(BE.ProfileModel? currentProfile)
+        private void UpdateSelectedProfileView(BE.IProfileModel? currentProfile)
         {
             if (currentProfile?.CurrentNameForDisplay != null)
             {
@@ -97,7 +98,7 @@ namespace userinterface.ViewModels.Profile
             }
         }
 
-        private void OnProfileSelectionChanged(BE.ProfileModel selectedProfile)
+        private void OnProfileSelectionChanged(BE.IProfileModel selectedProfile)
         {
             UpdateSelectedProfileView(selectedProfile);
         }

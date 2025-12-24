@@ -65,7 +65,7 @@ namespace userinterface.ViewModels.Profile
         private readonly IThemeService themeService;
         private readonly LocalizationService localizationService;
         private readonly PreviewChartRenderer previewRenderer;
-        private BE.ProfileModel currentProfileModel = null!;
+        private BE.IProfileModel currentProfileModel = null!;
         
         // Cached paint objects to avoid recreation
         private SolidColorPaint? cachedXStroke;
@@ -110,9 +110,9 @@ namespace userinterface.ViewModels.Profile
 
         private ICurvePreview YCurvePreview { get; set; } = null!;
 
-        private EditableSetting<double> YXRatio { get; set; } = null!;
+        private IEditableSettingSpecific<double> YXRatio { get; set; } = null!;
 
-        public void Initialize(BE.ProfileModel profileModel)
+        public void Initialize(BE.IProfileModel profileModel)
         {
             if (currentProfileModel == profileModel)
                 return;
@@ -299,7 +299,7 @@ namespace userinterface.ViewModels.Profile
             OnPropertyChanged(nameof(ChartOpacity));
         }
 
-        public Task SwitchToProfileAsync(BE.ProfileModel profileModel)
+        public Task SwitchToProfileAsync(BE.IProfileModel profileModel)
         {
             if (currentProfileModel == profileModel && IsInitialized)
                 return Task.CompletedTask;

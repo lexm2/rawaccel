@@ -9,7 +9,28 @@ using DATA = userspace_backend.Data;
 
 namespace userspace_backend.Model
 {
-    public class MappingsModel : EditableSettingsCollection<DATA.MappingSet>
+    public interface IMappingsModel : IEditableSettingsCollectionV2
+    {
+        ObservableCollection<MappingModel> Mappings { get; }
+
+        int ActiveMappingIndex { get; }
+
+        MappingModel GetMappingToSetActive();
+
+        MappingModel? GetActiveMapping();
+
+        bool SetActiveMapping(MappingModel mapping);
+
+        bool SetActiveMappingByIndex(int index);
+
+        bool TryGetMapping(string name, out MappingModel? mapping);
+
+        bool TryAddMapping(DATA.Mapping? mappingToAdd = null);
+
+        bool RemoveMapping(MappingModel mapping);
+    }
+
+    public class MappingsModel : EditableSettingsCollection<DATA.MappingSet>, IMappingsModel
     {
         private int activeMappingIndex;
 

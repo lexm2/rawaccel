@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using userinterface.Services;
+using IBackEnd = userspace_backend.IBackEnd;
 using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Device
@@ -13,7 +14,7 @@ namespace userinterface.ViewModels.Device
         private readonly IModalService modalService;
         private readonly LocalizationService localizationService;
 
-        public DevicesPageViewModel(userspace_backend.BackEnd backEnd, IModalService modalService, LocalizationService localizationService)
+        public DevicesPageViewModel(IBackEnd backEnd, IModalService modalService, LocalizationService localizationService)
         {
             devicesModel = backEnd?.Devices ?? throw new ArgumentNullException(nameof(backEnd));
             this.modalService = modalService;

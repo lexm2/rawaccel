@@ -5,7 +5,7 @@ using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions.Formula
 {
-    public interface ISynchronousAccelerationDefinitionModel : IEditableSettingsCollectionSpecific<SynchronousAccel>
+    public interface ISynchronousAccelerationDefinitionModel : IAccelDefinitionModelSpecific<SynchronousAccel>
     {
         IEditableSettingSpecific<double> SyncSpeed { get; }
 

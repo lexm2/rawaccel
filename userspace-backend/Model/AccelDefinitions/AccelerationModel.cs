@@ -9,6 +9,8 @@ namespace userspace_backend.Model.AccelDefinitions
 {
     public interface IAccelerationModel : IEditableSettingsSelector<AccelerationDefinitionType, Acceleration>
     {
+        IEditableSettingSpecific<AccelerationDefinitionType> DefinitionType { get; }
+
         IAnisotropyModel Anisotropy { get; }
 
         ICoalescionModel Coalescion { get; }
@@ -30,6 +32,8 @@ namespace userspace_backend.Model.AccelDefinitions
             Anisotropy = anisotropy;
             Coalescion = coalescion;
         }
+
+        public IEditableSettingSpecific<AccelerationDefinitionType> DefinitionType => Selection;
 
         public IAnisotropyModel Anisotropy { get; set; }
 
@@ -66,9 +70,22 @@ namespace userspace_backend.Model.AccelDefinitions
 
         protected override bool TryMapEditableSettingsCollectionsFromData(Acceleration data)
         {
-            return Anisotropy.TryMapFromData(data.Anisotropy)
-                & Coalescion.TryMapFromData(data.Coalescion)
-                & Selected.TryMapFromData(data);
+            bool result = true;
+
+            if (data?.Anisotropy != null)
+                result &= Anisotropy.TryMapFromData(data.Anisotropy);
+            else
+                result &= Anisotropy.TryMapFromData(new Anisotropy
+                {
+                    Domain = new Vector2(),
+                    Range = new Vector2(),
+                    LPNorm = 2.0,
+                    CombineXYComponents = false
+                });
+
+            result &= Coalescion.TryMapFromData(data?.Coalescion);
+            result &= Selected.TryMapFromData(data);
+            return result;
         }
     }
 }

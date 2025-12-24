@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using userinterface.Commands;
 using userspace_backend;
+using IBackEnd = userspace_backend.IBackEnd;
 using BE = userspace_backend.Model;
 
 namespace userinterface.ViewModels.Profile
@@ -16,18 +17,18 @@ namespace userinterface.ViewModels.Profile
     public partial class ProfileListViewModel : ViewModelBase
     {
         private const int MaxProfileAttempts = 10;
-        private readonly BE.ProfilesModel profilesModel;
+        private readonly BE.IProfilesModel profilesModel;
         private readonly SemaphoreSlim operationQueue = new(1, 1);
         private readonly ConcurrentQueue<Func<Task>> pendingOperations = new();
         private volatile bool isProcessingQueue = false;
         private Views.Profile.ProfileListView? profileListView;
 
         [ObservableProperty]
-        private BE.ProfileModel? selectedProfile;
+        private BE.IProfileModel? selectedProfile;
 
-        public event Action<BE.ProfileModel>? SelectedProfileChanged;
+        public event Action<BE.IProfileModel>? SelectedProfileChanged;
 
-        partial void OnSelectedProfileChanged(BE.ProfileModel? value)
+        partial void OnSelectedProfileChanged(BE.IProfileModel? value)
         {
             if (value != null) SelectedProfileChanged?.Invoke(value);
 
@@ -37,13 +38,13 @@ namespace userinterface.ViewModels.Profile
             }
         }
 
-        public ProfileListViewModel(BackEnd backEnd)
+        public ProfileListViewModel(IBackEnd backEnd)
         {
             profilesModel = backEnd?.Profiles ?? throw new System.ArgumentNullException(nameof(backEnd));
             AddProfileCommand = new RelayCommand(TryAddProfile);
         }
 
-        public ObservableCollection<BE.ProfileModel> Profiles => profilesModel.Profiles;
+        public ReadOnlyObservableCollection<BE.IProfileModel> Profiles => profilesModel.Profiles;
         public ICommand AddProfileCommand { get; }
 
         public void SetView(Views.Profile.ProfileListView view)
@@ -77,9 +78,7 @@ namespace userinterface.ViewModels.Profile
             int currentIndex = Profiles.IndexOf(newProfile);
             if (currentIndex >= 0 && currentIndex != insertPosition)
             {
-                Profiles.RemoveAt(currentIndex);
-                if (currentIndex < insertPosition) insertPosition--;
-                Profiles.Insert(insertPosition, newProfile);
+                // TODO: Implement profile reordering through profilesModel methods
             }
         }
 
@@ -107,13 +106,7 @@ namespace userinterface.ViewModels.Profile
             var profileName = GenerateProfileName();
             if (!profilesModel.TryAddNewDefaultProfile(profileName)) return false;
 
-            // Move the newly added profile to the specified position
-            var newProfile = profilesModel.Profiles[^1];
-            profilesModel.Profiles.RemoveAt(profilesModel.Profiles.Count - 1);
-
-            // Ensure position is within bounds
-            int clampedPosition = Math.Max(1, Math.Min(position, profilesModel.Profiles.Count));
-            profilesModel.Profiles.Insert(clampedPosition, newProfile);
+            // TODO: Implement profile reordering through profilesModel methods
 
             return true;
         }
@@ -206,7 +199,7 @@ namespace userinterface.ViewModels.Profile
         }
 
 
-        public bool RemoveProfile(BE.ProfileModel profile) => profile != null && profilesModel.RemoveProfile(profile);
+        public bool RemoveProfile(BE.IProfileModel profile) => profile != null && profilesModel.RemoveProfile(profile);
 
 
         public void Dispose()

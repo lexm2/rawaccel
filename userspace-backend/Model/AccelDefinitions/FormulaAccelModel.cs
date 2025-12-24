@@ -11,8 +11,13 @@ using static userspace_backend.Data.Profiles.Accel.FormulaAccel;
 
 namespace userspace_backend.Model.AccelDefinitions
 {
-    public interface IFormulaAccelModel: IEditableSettingsSelector<AccelerationFormulaType, FormulaAccel>
+    public interface IFormulaAccelModel:
+        IAccelDefinitionModelSpecific<FormulaAccel>,
+        IEditableSettingsSelector<AccelerationFormulaType, FormulaAccel>
     {
+        IEditableSettingSpecific<AccelerationFormulaType> FormulaType { get; }
+
+        IEditableSettingSpecific<bool> Gain { get; }
     }
 
     public class FormulaAccelModel : 
@@ -30,6 +35,8 @@ namespace userspace_backend.Model.AccelDefinitions
         {
             Gain = gain;
         }
+
+        public IEditableSettingSpecific<AccelerationFormulaType> FormulaType => Selection;
 
         public IEditableSettingSpecific<bool> Gain { get; set; }
 

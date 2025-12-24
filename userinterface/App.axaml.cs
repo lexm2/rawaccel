@@ -51,7 +51,8 @@ public partial class App : Application
             var devicesRW = sp.GetRequiredService<DevicesReaderWriter>();
             var mappingsRW = sp.GetRequiredService<MappingsReaderWriter>();
             var profileRW = sp.GetRequiredService<ProfileReaderWriter>();
-            return new BackEndLoader(settingsDirectory, devicesRW, mappingsRW, profileRW);
+            var settingsRW = sp.GetRequiredService<SettingsReaderWriter>();
+            return new BackEndLoader(settingsDirectory, devicesRW, mappingsRW, profileRW, settingsRW);
         });
 
         services.AddSingleton<INotificationService>(provider =>
@@ -115,7 +116,7 @@ public partial class App : Application
         // Main ViewModels
         services.AddSingleton<MainWindowViewModel>(provider =>
             new MainWindowViewModel(
-                provider.GetRequiredService<BackEnd>(),
+                provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IThemeService>(),
                 provider.GetRequiredService<ISettingsService>(),
                 provider.GetRequiredService<FrameTimerService>()));
@@ -124,12 +125,12 @@ public partial class App : Application
         // Device ViewModels
         services.AddTransient<ViewModels.Device.DevicesPageViewModel>(provider =>
             new ViewModels.Device.DevicesPageViewModel(
-                provider.GetRequiredService<BackEnd>(),
+                provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IModalService>(),
                 provider.GetRequiredService<LocalizationService>()));
         services.AddTransient<ViewModels.Device.DevicesListViewModel>(provider =>
             new ViewModels.Device.DevicesListViewModel(
-                provider.GetRequiredService<BackEnd>().Devices,
+                provider.GetRequiredService<IBackEnd>().Devices,
                 provider.GetRequiredService<IModalService>(),
                 provider.GetRequiredService<LocalizationService>()));
         services.AddTransient<ViewModels.Device.DeviceGroupsViewModel>();
@@ -178,7 +179,8 @@ public partial class App : Application
                 System.AppDomain.CurrentDomain.BaseDirectory,
                 new DevicesReaderWriter(),
                 new MappingsReaderWriter(),
-                new ProfileReaderWriter()),
+                new ProfileReaderWriter(),
+                new SettingsReaderWriter()),
             DevicesToLoad =
             [
                 new DATA.Device() { Name = "Superlight 2", DPI = 32000, HWID = @"HID\VID_046D&PID_C54D&MI_00", PollingRate = 1000, DeviceGroup = "Logitech Mice" },

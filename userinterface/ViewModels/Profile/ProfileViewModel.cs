@@ -15,7 +15,7 @@ namespace userinterface.ViewModels.Profile
             this.viewModelFactory = viewModelFactory;
         }
 
-        protected BE.ProfileModel ProfileModelBE { get; private set; } = null!;
+        protected BE.IProfileModel ProfileModelBE { get; private set; } = null!;
 
         public string CurrentName => ProfileModelBE?.Name.CurrentValidatedValue ?? string.Empty;
 
@@ -23,7 +23,7 @@ namespace userinterface.ViewModels.Profile
 
         public ProfileChartViewModel Chart { get; private set; } = null!;
 
-        public void Initialize(BE.ProfileModel profileModel)
+        public void Initialize(BE.IProfileModel profileModel)
         {
             var stopwatch = Stopwatch.StartNew();
             Debug.WriteLine($"ProfileViewModel.Initialize started for '{profileModel.Name.CurrentValidatedValue}'");

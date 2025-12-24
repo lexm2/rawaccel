@@ -17,6 +17,8 @@ namespace userspace_backend.Model.EditableSettings
         [ObservableProperty]
         public T modelValue;
 
+        public T CurrentValidatedValue => ModelValue;
+
         public EditableSetting(
             string displayName,
             T initialValue,
@@ -166,6 +168,8 @@ namespace userspace_backend.Model.EditableSettings
         /// </summary>
         [ObservableProperty]
         public T modelValue;
+
+        public T CurrentValidatedValue => ModelValue;
 
         public EditableSettingV2(
             string displayName,
