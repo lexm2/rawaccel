@@ -211,7 +211,7 @@ namespace userspace_backend_tests.ModelTests
             services.AddTransient<IEditableSettingsTestSelector, EditableSettingsTestSelector>();
             services.AddKeyedTransient<IEditableSettingSpecific<TestDataAbstract.TestDataType>>(
                 EditableSettingsTestSelector.SelectionName, (_, _) => 
-                    new EditableSettingV2<TestDataAbstract.TestDataType>(
+                    new EditableSetting<TestDataAbstract.TestDataType>(
                         selectionName,
                         selectionInitialValue,
                         TestDataTypeParser.Singleton,
@@ -222,7 +222,7 @@ namespace userspace_backend_tests.ModelTests
                 EditableSettingsSelectorHelper.GetSelectionKey(TestDataAbstract.TestDataType.A));
             services.AddKeyedTransient<IEditableSettingSpecific<int>>(
                 EditableSettingsTestA.PropertyAName, (_, _) => 
-                    new EditableSettingV2<int>(
+                    new EditableSetting<int>(
                         aName,
                         aInitialValue,
                         UserInputParsers.IntParser,
@@ -233,7 +233,7 @@ namespace userspace_backend_tests.ModelTests
                 EditableSettingsSelectorHelper.GetSelectionKey(TestDataAbstract.TestDataType.B));
             services.AddKeyedTransient<IEditableSettingSpecific<int>>(
                 EditableSettingsTestB.PropertyBName, (_, _) => 
-                    new EditableSettingV2<int>(
+                    new EditableSetting<int>(
                         bName,
                         bInitialValue,
                         UserInputParsers.IntParser,

@@ -9,12 +9,12 @@ namespace userspace_backend_tests.ModelTests
     {
         #region Init
 
-        public static EditableSettingV2<int> InitTestObject(
+        public static EditableSetting<int> InitTestObject(
             string testSettingName,
             int testSettingInitialValue,
             bool autoUpddateFromInterface = false)
         {
-            return new EditableSettingV2<int>(
+            return new EditableSetting<int>(
                 testSettingName,
                 testSettingInitialValue,
                 UserInputParsers.IntParser,
@@ -32,7 +32,7 @@ namespace userspace_backend_tests.ModelTests
             string testSettingName = "Test Setting";
             int testSettingInitialValue = 0;
 
-            EditableSettingV2<int> testObject = InitTestObject(testSettingName, testSettingInitialValue);
+            EditableSetting<int> testObject = InitTestObject(testSettingName, testSettingInitialValue);
 
             Assert.IsNotNull(testObject);
             Assert.AreEqual(testSettingInitialValue, testObject.ModelValue);
@@ -46,7 +46,7 @@ namespace userspace_backend_tests.ModelTests
 
             void TestObject_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
             {
-                if (string.Equals(e.PropertyName, nameof(EditableSettingV2<IComparable>.ModelValue)))
+                if (string.Equals(e.PropertyName, nameof(EditableSetting<IComparable>.ModelValue)))
                 {
                     propertyChangedHookCalls++;
                 }
@@ -56,7 +56,7 @@ namespace userspace_backend_tests.ModelTests
             int testSettingInitialValue = 0;
             int testSettingSecondValue = 500;
 
-            EditableSettingV2<int> testObject = InitTestObject(testSettingName, testSettingInitialValue);
+            EditableSetting<int> testObject = InitTestObject(testSettingName, testSettingInitialValue);
 
             testObject.PropertyChanged += TestObject_PropertyChanged;
             testObject.InterfaceValue = testSettingSecondValue.ToString();
@@ -74,7 +74,7 @@ namespace userspace_backend_tests.ModelTests
 
             void TestObject_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
             {
-                if (string.Equals(e.PropertyName, nameof(EditableSettingV2<IComparable>.ModelValue)))
+                if (string.Equals(e.PropertyName, nameof(EditableSetting<IComparable>.ModelValue)))
                 {
                     propertyChangedHookCalls++;
                 }
@@ -84,7 +84,7 @@ namespace userspace_backend_tests.ModelTests
             int testSettingInitialValue = 0;
             int testSettingSecondValue = 500;
 
-            EditableSettingV2<int> testObject = InitTestObject(testSettingName, testSettingInitialValue, autoUpddateFromInterface: true);
+            EditableSetting<int> testObject = InitTestObject(testSettingName, testSettingInitialValue, autoUpddateFromInterface: true);
 
             testObject.PropertyChanged += TestObject_PropertyChanged;
             testObject.InterfaceValue = testSettingSecondValue.ToString();
@@ -100,7 +100,7 @@ namespace userspace_backend_tests.ModelTests
 
             void TestObject_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
             {
-                if (string.Equals(e.PropertyName, nameof(EditableSettingV2<IComparable>.ModelValue)))
+                if (string.Equals(e.PropertyName, nameof(EditableSetting<IComparable>.ModelValue)))
                 {
                     propertyChangedHookCalls++;
                 }
@@ -110,7 +110,7 @@ namespace userspace_backend_tests.ModelTests
             int testSettingInitialValue = 0;
 
             // Test case: bad value, cannot parse
-            EditableSettingV2<int> testObject = InitTestObject(testSettingName, testSettingInitialValue);
+            EditableSetting<int> testObject = InitTestObject(testSettingName, testSettingInitialValue);
 
             testObject.PropertyChanged += TestObject_PropertyChanged;
             testObject.InterfaceValue = "ASDFJLKL";
@@ -122,7 +122,7 @@ namespace userspace_backend_tests.ModelTests
 
             // Test case: validator determines input is invalid
             testObject = 
-                new EditableSettingV2<int>(
+                new EditableSetting<int>(
                     testSettingName,
                     testSettingInitialValue,
                     UserInputParsers.IntParser,

@@ -63,42 +63,42 @@ namespace userspace_backend
             services.AddTransient<IHiddenModel, HiddenModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 HiddenModel.RotationDegreesDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                     displayName: "Rotation",
                     initialValue: 0,
                     parser: services.GetRequiredService<IUserInputParser<double>>(),
                     validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 HiddenModel.AngleSnappingDegreesDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Angle Snapping",
                         initialValue: 0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 HiddenModel.LeftRightRatioDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "L/R Ratio",
                         initialValue: 1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 HiddenModel.UpDownRatioDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "U/D Ratio",
                         initialValue: 1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 HiddenModel.SpeedCapDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Speed Cap",
                         initialValue: 0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 HiddenModel.OutputSmoothingHalfLifeDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Output Smoothing Half-Life",
                         initialValue: 0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -111,14 +111,14 @@ namespace userspace_backend
             services.AddTransient<ICoalescionModel, CoalescionModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 CoalescionModel.InputSmoothingHalfLifeDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Input Smoothing Half-Life",
                         initialValue: 0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 CoalescionModel.ScaleSmoothingHalfLifeDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Scale Smoothing Half-Life",
                         initialValue: 0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -131,42 +131,42 @@ namespace userspace_backend
             services.AddTransient<IAnisotropyModel, AnisotropyModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 AnisotropyModel.DomainXDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Domain X",
                         initialValue: 1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 AnisotropyModel.DomainYDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Domain Y",
                         initialValue: 1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 AnisotropyModel.RangeXDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Range X",
                         initialValue: 1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 AnisotropyModel.RangeYDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Range Y",
                         initialValue: 1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 AnisotropyModel.LPNormDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "LP Norm",
                         initialValue: 2,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<bool>>(
                 AnisotropyModel.CombineXYComponentsDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<bool>(
+                    new EditableSetting<bool>(
                         displayName: "Combine X and Y Components",
                         initialValue: false,
                         parser: services.GetRequiredService<IUserInputParser<bool>>(),
@@ -179,7 +179,7 @@ namespace userspace_backend
             services.AddTransient<IAccelerationModel, AccelerationModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<AccelerationDefinitionType>>(
                 AccelerationModel.SelectionDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<AccelerationDefinitionType>(
+                    new EditableSetting<AccelerationDefinitionType>(
                         displayName: "Definition Type",
                         initialValue: AccelerationDefinitionType.None,
                         parser: services.GetRequiredService<IUserInputParser<AccelerationDefinitionType>>(),
@@ -203,7 +203,7 @@ namespace userspace_backend
             services.AddTransient<IFormulaAccelModel, FormulaAccelModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<AccelerationFormulaType>>(
                 FormulaAccelModel.SelectionDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<AccelerationFormulaType>(
+                    new EditableSetting<AccelerationFormulaType>(
                         displayName: "Formula Type",
                         initialValue: AccelerationFormulaType.Synchronous,
                         parser: services.GetRequiredService<IUserInputParser<AccelerationFormulaType>>(),
@@ -211,7 +211,7 @@ namespace userspace_backend
                         autoUpdateFromInterface: true));
             services.AddKeyedTransient<IEditableSettingSpecific<bool>>(
                 FormulaAccelModel.GainDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<bool>(
+                    new EditableSetting<bool>(
                         displayName: "Apply to Gain",
                         initialValue: false,
                         parser: services.GetRequiredService<IUserInputParser<bool>>(),
@@ -244,14 +244,14 @@ namespace userspace_backend
             services.AddTransient<ILookupTableDefinitionModel, LookupTableDefinitionModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<LookupTableType>>(
                 LookupTableDefinitionModel.ApplyAsDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<LookupTableType>(
+                    new EditableSetting<LookupTableType>(
                         displayName: "Apply as",
                         initialValue: LookupTableType.Velocity,
                         parser: services.GetRequiredService<IUserInputParser<LookupTableType>>(),
                         validator: services.GetRequiredService<IModelValueValidator<LookupTableType>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<LookupTableData>>(
                 LookupTableDefinitionModel.DataDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<LookupTableData>(
+                    new EditableSetting<LookupTableData>(
                         displayName: "Data",
                         initialValue: new LookupTableData(),
                         parser: services.GetRequiredService<IUserInputParser<LookupTableData>>(),
@@ -270,28 +270,28 @@ namespace userspace_backend
             services.AddTransient<ISynchronousAccelerationDefinitionModel, SynchronousAccelerationDefinitionModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 SynchronousAccelerationDefinitionModel.SyncSpeedDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Sync Speed",
                         15,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 SynchronousAccelerationDefinitionModel.MotivityDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Motivity",
                         1.4,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 SynchronousAccelerationDefinitionModel.GammaDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Gamma",
                         1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 SynchronousAccelerationDefinitionModel.SmoothnessDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Smoothness",
                         0.5,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -304,21 +304,21 @@ namespace userspace_backend
             services.AddTransient<ILinearAccelerationDefinitionModel, LinearAccelerationDefinitionModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 LinearAccelerationDefinitionModel.AccelerationDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Acceleration",
                         0.01,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 LinearAccelerationDefinitionModel.OffsetDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Offset",
                         0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 LinearAccelerationDefinitionModel.CapDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Cap",
                         0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -331,28 +331,28 @@ namespace userspace_backend
             services.AddTransient<IClassicAccelerationDefinitionModel, ClassicAccelerationDefinitionModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 ClassicAccelerationDefinitionModel.AccelerationDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Acceleration",
                         0.01,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 ClassicAccelerationDefinitionModel.ExponentDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Exponent",
                         2,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 ClassicAccelerationDefinitionModel.OffsetDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Offset",
                         0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 ClassicAccelerationDefinitionModel.CapDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Cap",
                         0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -365,28 +365,28 @@ namespace userspace_backend
             services.AddTransient<IPowerAccelerationDefinitionModel, PowerAccelerationDefinitionModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 PowerAccelerationDefinitionModel.ScaleDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Scale",
                         1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 PowerAccelerationDefinitionModel.ExponentDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Exponent",
                         0.05,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 PowerAccelerationDefinitionModel.OutputOffsetDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Output Offset",
                         0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 PowerAccelerationDefinitionModel.CapDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Cap",
                         0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -399,21 +399,21 @@ namespace userspace_backend
             services.AddTransient<IJumpAccelerationDefinitionModel, JumpAccelerationDefinitionModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 JumpAccelerationDefinitionModel.SmoothDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Smooth",
                         0.5,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 JumpAccelerationDefinitionModel.InputDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Input",
                         15,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 JumpAccelerationDefinitionModel.OutputDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Output",
                         1.5,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -426,21 +426,21 @@ namespace userspace_backend
             services.AddTransient<INaturalAccelerationDefinitionModel, NaturalAccelerationDefinitionModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 NaturalAccelerationDefinitionModel.DecayRateDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Decay Rate",
                         0.1,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 NaturalAccelerationDefinitionModel.InputOffsetDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Input Offset",
                         0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
                         validator: services.GetRequiredService<IModelValueValidator<double>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 NaturalAccelerationDefinitionModel.LimitDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Limit",
                         1.5,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -453,21 +453,21 @@ namespace userspace_backend
             services.AddTransient<IProfileModel, ProfileModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<string>>(
                 ProfileModel.NameDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<string>(
+                    new EditableSetting<string>(
                         displayName: "Name",
                         "Empty",
                         parser: services.GetRequiredService<IUserInputParser<string>>(),
                         validator: services.GetRequiredKeyedService<IModelValueValidator<string>>(ProfileModel.NameDIKey)));
             services.AddKeyedTransient<IEditableSettingSpecific<int>>(
                 ProfileModel.OutputDPIDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<int>(
+                    new EditableSetting<int>(
                         displayName: "Output DPI",
                         1000,
                         parser: services.GetRequiredService<IUserInputParser<int>>(),
                         validator: services.GetRequiredService<IModelValueValidator<int>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<double>>(
                 ProfileModel.YXRatioDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<double>(
+                    new EditableSetting<double>(
                         displayName: "Y/X Ratio",
                         1.0,
                         parser: services.GetRequiredService<IUserInputParser<double>>(),
@@ -507,42 +507,42 @@ namespace userspace_backend
             services.AddTransient<IDeviceModel, DeviceModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<string>>(
                 DeviceModel.NameDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<string>(
+                    new EditableSetting<string>(
                         displayName: "Name",
                         initialValue: "name",
                         parser: services.GetRequiredService<IUserInputParser<string>>(),
                         validator: services.GetRequiredService<IModelValueValidator<string>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<string>>(
                 DeviceModel.HardwareIDDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<string>(
+                    new EditableSetting<string>(
                         displayName: "Hardware ID",
                         initialValue: "hwid",
                         parser: services.GetRequiredService<IUserInputParser<string>>(),
                         validator: services.GetRequiredService<IModelValueValidator<string>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<int>>(
                 DeviceModel.DPIDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<int>(
+                    new EditableSetting<int>(
                         displayName: "DPI",
                         initialValue: 1000,
                         parser: services.GetRequiredService<IUserInputParser<int>>(),
                         validator: services.GetRequiredService<IModelValueValidator<int>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<int>>(
                 DeviceModel.PollRateDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<int>(
+                    new EditableSetting<int>(
                         displayName: "Polling Rate",
                         initialValue: 1000,
                         parser: services.GetRequiredService<IUserInputParser<int>>(),
                         validator: services.GetRequiredService<IModelValueValidator<int>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<bool>>(
                 DeviceModel.IgnoreDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<bool>(
+                    new EditableSetting<bool>(
                         displayName: "Ignore",
                         initialValue: false,
                         parser: services.GetRequiredService<IUserInputParser<bool>>(),
                         validator: services.GetRequiredService<IModelValueValidator<bool>>()));
             services.AddKeyedTransient<IEditableSettingSpecific<string>>(
                 DeviceModel.DeviceGroupDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<string>(
+                    new EditableSetting<string>(
                         displayName: "Device Group",
                         initialValue: "default",
                         parser: services.GetRequiredService<IUserInputParser<string>>(),
@@ -570,7 +570,7 @@ namespace userspace_backend
             services.AddTransient<IMappingModel, MappingModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<string>>(
                 MappingModel.NameDIKey, (IServiceProvider services, object? key) =>
-                    new EditableSettingV2<string>(
+                    new EditableSetting<string>(
                         displayName: "Name",
                         initialValue: "name",
                         parser: services.GetRequiredService<IUserInputParser<string>>(),

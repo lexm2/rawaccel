@@ -121,7 +121,7 @@ namespace userspace_backend_tests.ModelTests
             services.AddTransient<IEditableSettingsTestCollection, EditableSettingsTestCollection>();
             services.AddKeyedTransient<IEditableSettingSpecific<int>>(
                 EditableSettingsTestCollection.ProperySettingName, (_, _) =>
-                    new EditableSettingV2<int>(
+                    new EditableSetting<int>(
                         propertyName,
                         propertyValue,
                         UserInputParsers.IntParser,
@@ -129,7 +129,7 @@ namespace userspace_backend_tests.ModelTests
                         autoUpdateFromInterface: false));
             services.AddKeyedTransient<IEditableSettingSpecific<string>>(
                 EditableSettingsTestCollection.NameSettingName, (_, _) =>
-                    new EditableSettingV2<string>(
+                    new EditableSetting<string>(
                         nameName,
                         nameValue,
                         UserInputParsers.StringParser,
