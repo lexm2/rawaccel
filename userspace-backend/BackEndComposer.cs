@@ -1,7 +1,9 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Runtime.InteropServices;
 using DATA = userspace_backend.Data;
 using userspace_backend.Display;
+using userspace_backend.Driver;
 using userspace_backend.IO;
 using userspace_backend.Model;
 using userspace_backend.Model.AccelDefinitions;
@@ -19,7 +21,9 @@ namespace userspace_backend
     {
         public static IServiceProvider Compose(IServiceCollection services)
         {
-            services.AddSingleton<ISystemDevicesRetriever, SystemDevicesRetriever>();
+            // Register platform-specific services
+            RegisterPlatformServices(services);
+
             services.AddSingleton<ISystemDevicesProvider, SystemDevicesProvider>();
 
             #region Parsers
@@ -591,6 +595,21 @@ namespace userspace_backend
             #endregion BackEnd
 
             return services.BuildServiceProvider();
+        }
+
+        private static void RegisterPlatformServices(IServiceCollection services)
+        {
+#if WINDOWS
+            // Windows: Use real driver implementations
+            services.AddSingleton<ISystemDevicesRetriever, Driver.Windows.WindowsSystemDevicesRetriever>();
+            services.AddSingleton<IDriverService, Driver.Windows.WindowsDriverService>();
+            services.AddSingleton<IAccelerationCalculatorFactory, Driver.Windows.WindowsAccelerationCalculatorFactory>();
+#else
+            // Non-Windows: Use stub implementations
+            services.AddSingleton<ISystemDevicesRetriever, Driver.Stub.StubSystemDevicesRetriever>();
+            services.AddSingleton<IDriverService, Driver.Stub.StubDriverService>();
+            services.AddSingleton<IAccelerationCalculatorFactory, Driver.Stub.StubAccelerationCalculatorFactory>();
+#endif
         }
     }
 }

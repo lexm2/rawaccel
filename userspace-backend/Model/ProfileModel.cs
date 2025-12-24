@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
-using userspace_backend.Common;
 using userspace_backend.Display;
 using userspace_backend.Model.AccelDefinitions;
 using userspace_backend.Model.EditableSettings;
@@ -29,7 +28,6 @@ namespace userspace_backend.Model
 
         string CurrentNameForDisplay { get; }
 
-        Profile CurrentValidatedDriverProfile { get; }
     }
 
     public class ProfileModel : NamedEditableSettingsCollection<DATA.Profile>, IProfileModel
@@ -64,7 +62,7 @@ namespace userspace_backend.Model
             Acceleration.AnySettingChanged += AnyCurveSettingCollectionChangedEventHandler;
             Hidden.AnySettingChanged += AnyCurveSettingCollectionChangedEventHandler;
 
-            RecalculateDriverDataAndCurvePreview();
+            RecalculateCurvePreview();
         }
 
         public string CurrentNameForDisplay => Name.ModelValue;
@@ -76,8 +74,6 @@ namespace userspace_backend.Model
         public IAccelerationModel Acceleration { get; set; }
 
         public IHiddenModel Hidden { get; set; }
-
-        public Profile CurrentValidatedDriverProfile { get; protected set; }
 
         public ICurvePreview XCurvePreview { get; protected set; }
 
@@ -102,37 +98,27 @@ namespace userspace_backend.Model
 
         protected void AnyNonPreviewPropertyChangedEventHandler(object? send, PropertyChangedEventArgs e)
         {
-            if (string.Equals(e.PropertyName, nameof(IEditableSettingSpecific<IComparable>.ModelValue)))
-            {
-                RecalculateDriverData();
-            }
+            // Name and OutputDPI changes don't affect curve preview
         }
 
         protected void AnyCurvePreviewPropertyChangedEventHandler(object? send, PropertyChangedEventArgs e)
         {
             if (string.Equals(e.PropertyName, nameof(IEditableSettingSpecific<IComparable>.ModelValue)))
             {
-                RecalculateDriverDataAndCurvePreview();
+                RecalculateCurvePreview();
             }
         }
 
         protected void AnyCurveSettingCollectionChangedEventHandler(object? sender, EventArgs e)
         {
             // All settings collections currently require curve preview to be re-generated
-            RecalculateDriverDataAndCurvePreview();
+            RecalculateCurvePreview();
         }
 
-        protected void RecalculateDriverData()
+        protected void RecalculateCurvePreview()
         {
-            CurrentValidatedDriverProfile = DriverHelpers.MapProfileModelToDriver(this);
-        }
-
-        protected void RecalculateDriverDataAndCurvePreview()
-        {
-            RecalculateDriverData();
-
-            // Generate X curve points (original behavior)
-            XCurvePreview.GeneratePoints(CurrentValidatedDriverProfile);
+            // Generate X curve points using this profile model
+            XCurvePreview.GeneratePoints(this);
 
             // Generate Y curve points by multiplying X curve outputs by YX ratio
             GenerateYCurvePoints();
@@ -140,7 +126,7 @@ namespace userspace_backend.Model
 
         private void GenerateYCurvePoints()
         {
-            var yPoints = CreateYCurvePointsFromX(XCurvePreview.Points, YXRatio.CurrentValidatedValue);
+            var yPoints = CreateYCurvePointsFromX(XCurvePreview.Points, YXRatio.ModelValue);
             YCurvePreview.SetPoints(yPoints);
         }
 

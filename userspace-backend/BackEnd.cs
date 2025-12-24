@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using userspace_backend.Data.Profiles;
+using userspace_backend.Driver;
 using userspace_backend.IO;
 using userspace_backend.Model;
 using DATA = userspace_backend.Data;
@@ -31,12 +32,14 @@ namespace userspace_backend
             IProfilesModel profilesModel,
             DevicesModel devicesModel,
             MappingsModel mappingsModel,
+            IDriverService driverService,
             IServiceProvider serviceProvider)
         {
             BackEndLoader = backEndLoader;
             Devices = devicesModel;
             Mappings = mappingsModel;
             Profiles = profilesModel;
+            DriverService = driverService;
             ServiceProvider = serviceProvider;
         }
 
@@ -49,6 +52,8 @@ namespace userspace_backend
         public DATA.Settings Settings { get; set; }
 
         protected IBackEndLoader BackEndLoader { get; set; }
+
+        protected IDriverService DriverService { get; set; }
 
         protected IServiceProvider ServiceProvider { get; set; }
 
@@ -161,7 +166,7 @@ namespace userspace_backend
         {
             try
             {
-                // WriteToDriver();
+                WriteToDriver();
             }
             catch (Exception)
             {
@@ -183,66 +188,11 @@ namespace userspace_backend
 
         protected void WriteToDriver()
         {
-            MappingModel mappingToApply = Mappings.GetMappingToSetActive();
-            DriverConfig config = MapToDriverConfig(mappingToApply);
-            try
+            MappingModel? mappingToApply = Mappings.GetMappingToSetActive();
+            if (mappingToApply != null && DriverService.IsAvailable)
             {
-                config.Activate();
+                DriverService.Activate(mappingToApply, Devices.Elements);
             }
-            catch (Exception)
-            {
-                // Log this once logging is added
-            }
-        }
-
-        protected DriverConfig MapToDriverConfig(MappingModel mappingModel)
-        {
-            IEnumerable<DeviceSettings> configDevices = MapToDriverDevices(mappingModel);
-            IEnumerable<Profile> configProfiles = MapToDriverProfiles(mappingModel);
-
-            DriverConfig config = DriverConfig.GetDefault();
-            config.profiles = configProfiles.ToList();
-            config.devices = configDevices.ToList();
-            config.accels = configProfiles.Select(p => new ManagedAccel(p)).ToList();
-            return config;
-        }
-
-        protected IEnumerable<DeviceSettings> MapToDriverDevices(MappingModel mapping)
-        {
-            return mapping.IndividualMappings.SelectMany(
-                dg => MapToDriverDevices(dg.DeviceGroup, dg.Profile.Name.ModelValue));
-        }
-
-        protected IEnumerable<Profile> MapToDriverProfiles(MappingModel mapping)
-        {
-            IEnumerable<IProfileModel> ProfilesToMap = mapping.IndividualMappings.Select(m => m.Profile).Distinct();
-            return ProfilesToMap.Select(p => p.CurrentValidatedDriverProfile);
-        }
-
-        protected IEnumerable<DeviceSettings> MapToDriverDevices(string dg, string profileName)
-        {
-            IEnumerable<IDeviceModel> deviceModels = Devices.Elements.Where(d => d.DeviceGroup.ModelValue.Equals(dg));
-            return deviceModels.Select(dm => MapToDriverDevice(dm, profileName));
-        }
-
-        protected DeviceSettings MapToDriverDevice(IDeviceModel deviceModel, string profileName)
-        {
-            return new DeviceSettings()
-            {
-                id = deviceModel.HardwareID.ModelValue,
-                name = deviceModel.Name.ModelValue,
-                profile = profileName,
-                config = new DeviceConfig()
-                {
-                    disable = deviceModel.Ignore.ModelValue,
-                    dpi = deviceModel.DPI.ModelValue,
-                    pollingRate = deviceModel.PollRate.ModelValue,
-                    pollTimeLock = false,
-                    setExtraInfo = false,
-                    maximumTime = 200,
-                    minimumTime = 0.1,
-                }
-            };
         }
     }
 }

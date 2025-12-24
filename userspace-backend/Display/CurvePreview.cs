@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using userspace_backend.Display.Calculations;
+using userspace_backend.Driver;
+using userspace_backend.Model;
 
 namespace userspace_backend.Display
 {
@@ -13,29 +15,32 @@ namespace userspace_backend.Display
     {
         ObservableCollection<CurvePoint> Points { get; }
 
-        void GeneratePoints(Profile profile);
+        void GeneratePoints(IProfileModel profile);
 
         void SetPoints(IEnumerable<CurvePoint> points);
     }
 
     public class CurvePreview : ICurvePreview
     {
-        public CurvePreview()
+        private readonly IAccelerationCalculatorFactory _calculatorFactory;
+
+        public CurvePreview(IAccelerationCalculatorFactory calculatorFactory)
         {
+            _calculatorFactory = calculatorFactory;
             Points = new ObservableCollection<CurvePoint>();
             InitPoints();
         }
 
         public ObservableCollection<CurvePoint> Points { get; }
 
-        public void GeneratePoints(Profile profile)
+        public void GeneratePoints(IProfileModel profile)
         {
-            ManagedAccel accel = new ManagedAccel(profile).CreateStatelessCopy();
+            IAccelerationCalculator accel = _calculatorFactory.Create(profile).CreateStatelessCopy();
 
             foreach (CurvePoint point in Points)
             {
                 var output = accel.Accelerate(point.MouseSpeed, 0, 1, 1);
-                var outputSpeed = Math.Sqrt(Math.Pow(output.Item1, 2) + Math.Pow(output.Item2, 2));
+                var outputSpeed = Math.Sqrt(Math.Pow(output.x, 2) + Math.Pow(output.y, 2));
                 point.Output = outputSpeed / point.MouseSpeed;
             }
         }
