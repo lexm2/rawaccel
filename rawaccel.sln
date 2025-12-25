@@ -16,8 +16,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wrapper", "wrapper\wrapper.
 		{0695A19E-8B14-4DE7-AADF-97E5912B197C} = {0695A19E-8B14-4DE7-AADF-97E5912B197C}
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "grapher", "grapher\grapher.csproj", "{EF67F71F-ABF5-4760-B50D-D1B9836DF01C}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "writer", "writer\writer.csproj", "{28ACF254-E4EF-4A0E-9761-0FE22048D6FD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "wrapper-deps", "wrapper-deps\wrapper-deps.csproj", "{0695A19E-8B14-4DE7-AADF-97E5912B197C}"
