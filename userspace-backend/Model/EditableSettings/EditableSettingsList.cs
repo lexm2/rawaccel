@@ -20,6 +20,8 @@ namespace userspace_backend.Model.EditableSettings
         public bool TryGetElement(string name, out T? element);
 
         public bool TryRemoveElement(T element);
+
+        public bool TryMoveElement(int fromIndex, int toIndex);
     }
 
     public abstract class EditableSettingsList<T, U>
@@ -112,6 +114,19 @@ namespace userspace_backend.Model.EditableSettings
         public bool TryRemoveElement(T element)
         {
             return ElementsInternal.Remove(element);
+        }
+
+        public bool TryMoveElement(int fromIndex, int toIndex)
+        {
+            if (fromIndex < 0 || fromIndex >= ElementsInternal.Count)
+                return false;
+            if (toIndex < 0 || toIndex >= ElementsInternal.Count)
+                return false;
+            if (fromIndex == toIndex)
+                return true;
+
+            ElementsInternal.Move(fromIndex, toIndex);
+            return true;
         }
 
         protected bool ContainsElementWithName(string name) => TryGetElement(name, out T? _);

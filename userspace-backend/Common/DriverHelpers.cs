@@ -12,11 +12,13 @@ namespace userspace_backend.Common
     {
         public static Profile MapProfileModelToDriver(ProfileModel model)
         {
+            AccelArgs accelArgs = model.Acceleration.MapToDriver();
             return new Profile()
             {
                 outputDPI = model.OutputDPI.ModelValue,
                 yxOutputDPIRatio = model.YXRatio.ModelValue,
-                argsX = model.Acceleration.MapToDriver(),
+                argsX = accelArgs,
+                argsY = accelArgs,
                 domainXY = new Vec2<double>
                 {
                     x = model.Acceleration.Anisotropy.DomainX.ModelValue,

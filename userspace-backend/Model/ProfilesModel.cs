@@ -36,6 +36,8 @@ namespace userspace_backend.Model
         bool TryAddNewDefaultProfile(string name);
 
         bool RemoveProfile(IProfileModel profile);
+
+        bool MoveProfile(int fromIndex, int toIndex);
     }
 
     public class ProfilesModel : EditableSettingsList<IProfileModel, DATA.Profile>, IProfilesModel
@@ -49,7 +51,8 @@ namespace userspace_backend.Model
 
         public ReadOnlyObservableCollection<IProfileModel> Profiles => Elements;
 
-        public IProfileModel? DefaultProfile => Elements.FirstOrDefault(p => p.Name.ModelValue == "default");
+        public IProfileModel? DefaultProfile => Elements.FirstOrDefault(p =>
+            string.Equals(p.Name.ModelValue, "Default", StringComparison.OrdinalIgnoreCase));
 
         public bool TryGetProfile(string name, out IProfileModel? profile) => TryGetElement(name, out profile);
 
@@ -66,6 +69,8 @@ namespace userspace_backend.Model
         }
 
         public bool RemoveProfile(IProfileModel profile) => TryRemoveElement(profile);
+
+        public bool MoveProfile(int fromIndex, int toIndex) => TryMoveElement(fromIndex, toIndex);
 
         protected override string DefaultNameTemplate => "Profile";
 

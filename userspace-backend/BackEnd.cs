@@ -14,7 +14,7 @@ namespace userspace_backend
     {
         void Load();
 
-        void Apply();
+        bool Apply();
 
         DevicesModel Devices { get; }
 
@@ -162,7 +162,7 @@ namespace userspace_backend
             }
         }
 
-        public void Apply()
+        public bool Apply()
         {
             try
             {
@@ -170,10 +170,11 @@ namespace userspace_backend
             }
             catch (Exception)
             {
-                return;
+                return false;
             }
 
             WriteSettingsToDisk();
+            return true;
         }
 
         protected void WriteSettingsToDisk()

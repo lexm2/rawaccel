@@ -200,6 +200,9 @@
   <data name="ProfileClassicLinearEquivalent" xml:space="preserve">
     <value>Classic with a power of 2 is equal to linear</value>
   </data>
+  <data name="Notifications.ApplyFailed" xml:space="preserve">
+    <value>Failed to apply settings to driver</value>
+  </data>
 
   <!-- Modal Dialog Resources -->
   <data name="ModalOK" xml:space="preserve">

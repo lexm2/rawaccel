@@ -142,8 +142,7 @@ namespace userinterface.ViewModels.Mapping
         {
             if (e.AddedItems.Count > 0 && e.AddedItems[0] is string deviceGroup)
             {
-                // TODO: re-add default profile
-                // MappingBE.TryAddMapping(deviceGroup, BE.ProfilesModel.DefaultProfile.CurrentNameForDisplay);
+                // Uses "Default" profile which is created by BackEnd.EnsureDefaultProfileExists()
                 MappingBE.TryAddMapping(deviceGroup, "Default");
             }
         }

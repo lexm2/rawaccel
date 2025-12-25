@@ -41,11 +41,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IBackEnd backEnd;
     private readonly IThemeService themeService;
     private readonly ISettingsService settingsService;
+    private readonly INotificationService notificationService;
 
     public MainWindowViewModel(
         IBackEnd backEnd,
         IThemeService themeService,
         ISettingsService settingsService,
+        INotificationService notificationService,
         DevicesPageViewModel devicesPage,
         ProfilesPageViewModel profilesPage,
         MappingsPageViewModel mappingsPage,
@@ -56,6 +58,7 @@ public partial class MainWindowViewModel : ViewModelBase
         this.backEnd = backEnd ?? throw new ArgumentNullException(nameof(backEnd));
         this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
         this.settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        this.notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         this.devicesPage = devicesPage ?? throw new ArgumentNullException(nameof(devicesPage));
         this.profilesPage = profilesPage ?? throw new ArgumentNullException(nameof(profilesPage));
         this.mappingsPage = mappingsPage ?? throw new ArgumentNullException(nameof(mappingsPage));
@@ -192,7 +195,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public void Apply()
     {
-        BackEnd.Apply();
+        bool success = BackEnd.Apply();
+        if (!success)
+        {
+            notificationService.ShowErrorToast("Notifications.ApplyFailed");
+        }
     }
 
     private void ToggleTheme()

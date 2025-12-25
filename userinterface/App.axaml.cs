@@ -86,7 +86,6 @@ public partial class App : Application
                 DataContext = Services.GetRequiredService<MainWindowViewModel>(),
             };
 
-            // Set up the toast control (was already created in MainWindow.axaml)
             var toastView = mainWindow.FindControl<Views.Controls.ToastView>("ToastView");
             if (toastView != null)
             {
@@ -174,6 +173,7 @@ public partial class App : Application
                 provider.GetRequiredService<IBackEnd>(),
                 provider.GetRequiredService<IThemeService>(),
                 provider.GetRequiredService<ISettingsService>(),
+                provider.GetRequiredService<INotificationService>(),
                 provider.GetRequiredService<ViewModels.Device.DevicesPageViewModel>(),
                 provider.GetRequiredService<ViewModels.Profile.ProfilesPageViewModel>(),
                 provider.GetRequiredService<ViewModels.Mapping.MappingsPageViewModel>(),

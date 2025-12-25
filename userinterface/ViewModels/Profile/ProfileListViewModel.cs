@@ -78,7 +78,7 @@ namespace userinterface.ViewModels.Profile
             int currentIndex = Profiles.IndexOf(newProfile);
             if (currentIndex >= 0 && currentIndex != insertPosition)
             {
-                // TODO: Implement profile reordering through profilesModel methods
+                profilesModel.MoveProfile(currentIndex, insertPosition);
             }
         }
 
@@ -106,7 +106,12 @@ namespace userinterface.ViewModels.Profile
             var profileName = GenerateProfileName();
             if (!profilesModel.TryAddNewDefaultProfile(profileName)) return false;
 
-            // TODO: Implement profile reordering through profilesModel methods
+            // Move the new profile (added at end) to the desired position
+            int currentIndex = Profiles.Count - 1;
+            if (currentIndex >= 0 && position >= 0 && position < Profiles.Count)
+            {
+                profilesModel.MoveProfile(currentIndex, position);
+            }
 
             return true;
         }
@@ -165,6 +170,7 @@ namespace userinterface.ViewModels.Profile
 
         public bool RemoveProfile(BE.IProfileModel profile) => profile != null && profilesModel.RemoveProfile(profile);
 
+        public bool MoveProfile(int fromIndex, int toIndex) => profilesModel.MoveProfile(fromIndex, toIndex);
 
         public void Dispose()
         {

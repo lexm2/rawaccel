@@ -200,6 +200,9 @@
   <data name="ProfileClassicLinearEquivalent" xml:space="preserve">
     <value>クラシック（指数2）はリニアと同等です</value>
   </data>
+  <data name="Notifications.ApplyFailed" xml:space="preserve">
+    <value>ドライバーへの設定の適用に失敗しました</value>
+  </data>
 
   <!-- Modal Dialog Resources -->
   <data name="ModalOK" xml:space="preserve">

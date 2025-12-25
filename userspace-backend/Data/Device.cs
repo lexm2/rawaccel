@@ -32,7 +32,7 @@ namespace userspace_backend.Data
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Name, HWID, DPI, PollingRate, DeviceGroup);
+            return HashCode.Combine(Name, HWID, DPI, PollingRate, Ignore, DeviceGroup);
         }
     }
 }
