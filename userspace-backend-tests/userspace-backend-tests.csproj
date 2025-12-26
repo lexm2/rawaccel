@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\userspace-backend\userspace-backend.csproj" />
+    <ProjectReference Include="..\driver-debug\driver-debug.csproj" />
   </ItemGroup>
 
   <ItemGroup>

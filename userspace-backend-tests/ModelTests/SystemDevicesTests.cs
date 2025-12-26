@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using userspace_backend.Driver.Debug;
 using userspace_backend.Model;
 
 namespace userspace_backend_tests.ModelTests
@@ -58,18 +59,18 @@ namespace userspace_backend_tests.ModelTests
             CollectionAssert.AreEquivalent(testSystemDevices, testObject.SystemDevices);
         }
 
-        // This test may need to be excluded if built from deviceless server.
+        // This test uses the debug retriever which returns mock devices.
         [TestMethod]
         public void SystemDevicesRetriever_RetrievesDevices()
         {
             var services = new ServiceCollection();
-            services.AddSingleton<SystemDevicesRetriever>();
+            services.AddSingleton<DebugSystemDevicesRetriever>();
             var serviceProvider = services.BuildServiceProvider();
 
-            SystemDevicesRetriever testObject = serviceProvider.GetRequiredService<SystemDevicesRetriever>();
+            DebugSystemDevicesRetriever testObject = serviceProvider.GetRequiredService<DebugSystemDevicesRetriever>();
             Assert.IsNotNull(testObject);
 
-            // These devices will be different per user, but should not be null as long as the user has something giving mouse input.
+            // Debug retriever returns mock devices.
             IList<ISystemDevice> retrievedDevices = testObject.GetSystemDevices();
             Assert.IsNotNull(retrievedDevices);
             Assert.IsTrue(retrievedDevices.Count > 0);
