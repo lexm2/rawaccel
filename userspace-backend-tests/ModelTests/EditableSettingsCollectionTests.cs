@@ -182,12 +182,12 @@ namespace userspace_backend_tests.ModelTests
             Assert.IsNotNull(testObject);
             Assert.IsNotNull(testObject.PropertySetting);
             Assert.AreEqual(testSettingInitialValue, testObject.PropertySetting.ModelValue);
-            Assert.AreEqual(testSettingName, testObject.PropertySetting.DisplayName);
+            Assert.AreEqual(testSettingName, testObject.PropertySetting.SettingLabel);
 
             Assert.IsNotNull(testObject.SubCollection);
             Assert.IsNotNull(testObject.SubCollection.SubPropertySetting);
             Assert.AreEqual(testSubSettingInitialValue, testObject.SubCollection.SubPropertySetting.ModelValue);
-            Assert.AreEqual(testSubSettingName, testObject.SubCollection.SubPropertySetting.DisplayName);
+            Assert.AreEqual(testSubSettingName, testObject.SubCollection.SubPropertySetting.SettingLabel);
         }
 
         [TestMethod]

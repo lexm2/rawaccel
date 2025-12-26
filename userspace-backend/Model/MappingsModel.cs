@@ -181,7 +181,7 @@ namespace userspace_backend.Model
 
             // Create Name setting for the mapping
             var nameSetting = new EditableSetting<string>(
-                displayName: "Name",
+                settingLabel: "Name",
                 initialValue: mappingToAdd.Name,
                 parser: ServiceProvider.GetRequiredService<IUserInputParser<string>>(),
                 validator: NameValidator);

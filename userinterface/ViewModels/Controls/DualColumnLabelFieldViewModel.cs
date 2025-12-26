@@ -126,10 +126,10 @@ public partial class FieldItemViewModel : ViewModelBase
         // If we have an EditableSetting with a localization key, use it
         if (setting != null && !string.IsNullOrEmpty(setting.LocalizationKey))
         {
-            return localizationService?.GetText(setting.LocalizationKey) ?? setting.DisplayText;
+            return localizationService?.GetText(setting.LocalizationKey) ?? setting.SettingLabel;
         }
 
-        // Otherwise, use the display name directly (for user input settings)
-        return setting?.DisplayText ?? string.Empty;
+        // Otherwise, use the setting label directly (for user input settings)
+        return setting?.SettingLabel ?? string.Empty;
     }
 }

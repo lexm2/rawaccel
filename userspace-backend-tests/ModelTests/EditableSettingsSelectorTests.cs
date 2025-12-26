@@ -270,7 +270,7 @@ namespace userspace_backend_tests.ModelTests
             Assert.IsNotNull(testObjectAbstractA);
             IEditableSettingsTestA testObjectA = testObjectAbstractA as IEditableSettingsTestA;
             Assert.IsNotNull(testObjectA);
-            Assert.AreEqual(aName, testObjectA.PropertyA.DisplayName);
+            Assert.AreEqual(aName, testObjectA.PropertyA.SettingLabel);
             Assert.AreEqual(aInitialValue, testObjectA.PropertyA.ModelValue);
 
             IEditableSettingsCollectionSpecific<TestDataAbstract> testObjectAbstractB =
@@ -278,7 +278,7 @@ namespace userspace_backend_tests.ModelTests
             Assert.IsNotNull(testObjectAbstractB);
             IEditableSettingsTestB testObjectB = testObjectAbstractB as IEditableSettingsTestB;
             Assert.IsNotNull(testObjectB);
-            Assert.AreEqual(bName, testObjectB.PropertyB.DisplayName);
+            Assert.AreEqual(bName, testObjectB.PropertyB.SettingLabel);
             Assert.AreEqual(bInitialValue, testObjectB.PropertyB.ModelValue);
         }
 

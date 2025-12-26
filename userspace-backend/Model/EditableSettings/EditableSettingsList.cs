@@ -163,6 +163,7 @@ namespace userspace_backend.Model.EditableSettings
                 if (!TryGetElement(elementName, out T? element))
                 {
                     element = GenerateDefaultElement(elementName);
+                    AddElement(element);
                 }
 
                 result &= element!.TryMapFromData(dataElement);

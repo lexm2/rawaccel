@@ -20,14 +20,14 @@ namespace userspace_backend.Model.EditableSettings
         public T CurrentValidatedValue => ModelValue;
 
         public EditableSetting(
-            string displayName,
+            string settingLabel,
             T initialValue,
             IUserInputParser<T> parser,
             IModelValueValidator<T> validator,
             bool autoUpdateFromInterface = false,
             string localizationKey = null)
         {
-            DisplayName = displayName;
+            SettingLabel = settingLabel;
             LocalizationKey = localizationKey;
             LastWrittenValue = initialValue;
             Parser = parser;
@@ -38,18 +38,11 @@ namespace userspace_backend.Model.EditableSettings
         }
 
         /// <summary>
-        /// Display name for this setting in UI
+        /// Label text for this setting in UI
         /// </summary>
-        public string DisplayName { get; }
+        public string SettingLabel { get; }
 
         public string LocalizationKey { get; set; }
-
-        public string DisplayText =>
-            !string.IsNullOrEmpty(LocalizationKey)
-                ? LocalizationKey
-                : DisplayName ?? string.Empty;
-
-        public string EditedValueForDiplay => InterfaceValue;
 
         public T LastWrittenValue { get; protected set; }
 
@@ -146,6 +139,7 @@ namespace userspace_backend.Model.EditableSettings
             }
 
             UpdateModeValue(data);
+            SetInterfaceToModel();  // Sync InterfaceValue with updated ModelValue
             return true;
         }
     }

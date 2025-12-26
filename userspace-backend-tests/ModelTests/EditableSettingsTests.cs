@@ -36,7 +36,7 @@ namespace userspace_backend_tests.ModelTests
 
             Assert.IsNotNull(testObject);
             Assert.AreEqual(testSettingInitialValue, testObject.ModelValue);
-            Assert.AreEqual(testSettingName, testObject.DisplayName);
+            Assert.AreEqual(testSettingName, testObject.SettingLabel);
         }
 
         [TestMethod]
