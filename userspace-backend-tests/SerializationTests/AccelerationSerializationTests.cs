@@ -154,7 +154,23 @@ namespace userspace_backend_tests.SerializationTests
                     15.17478447,
                     140,
                     354.7026875
-                  ]
+                  ],
+                  "Anisotropy": {
+                    "Domain": {
+                      "X": 0,
+                      "Y": 0
+                    },
+                    "Range": {
+                      "X": 0,
+                      "Y": 0
+                    },
+                    "LPNorm": 2,
+                    "CombineXYComponents": false
+                  },
+                  "Coalescion": {
+                    "InputSmoothingHalfLife": 0,
+                    "ScaleSmoothingHalfLife": 0
+                  }
                 }
                 """;
 

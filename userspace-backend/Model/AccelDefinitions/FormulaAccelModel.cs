@@ -50,7 +50,8 @@ namespace userspace_backend.Model.AccelDefinitions
 
         protected override bool TryMapEditableSettingsFromData(FormulaAccel data)
         {
-            return Gain.TryUpdateModelDirectly(data.Gain);
+            return Selection.TryUpdateModelDirectly(data.FormulaType)
+                & Gain.TryUpdateModelDirectly(data.Gain);
         }
     }
 }
