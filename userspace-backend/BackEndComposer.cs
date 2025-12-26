@@ -19,10 +19,10 @@ namespace userspace_backend
 {
     public static class BackEndComposer
     {
-        public static IServiceProvider Compose(IServiceCollection services)
+        public static IServiceProvider Compose(IServiceCollection services, Action<IServiceCollection>? registerPlatformServices = null)
         {
-            // Register platform-specific services
-            RegisterPlatformServices(services);
+            // Register platform-specific services (provided by driver project)
+            registerPlatformServices?.Invoke(services);
 
             services.AddSingleton<ISystemDevicesProvider, SystemDevicesProvider>();
 
@@ -598,19 +598,5 @@ namespace userspace_backend
             return services.BuildServiceProvider();
         }
 
-        private static void RegisterPlatformServices(IServiceCollection services)
-        {
-#if WINDOWS
-            // Windows: Use real driver implementations
-            services.AddSingleton<ISystemDevicesRetriever, Driver.Windows.WindowsSystemDevicesRetriever>();
-            services.AddSingleton<IDriverService, Driver.Windows.WindowsDriverService>();
-            services.AddSingleton<IAccelerationCalculatorFactory, Driver.Windows.WindowsAccelerationCalculatorFactory>();
-#else
-            // Non-Windows: Use stub implementations
-            services.AddSingleton<ISystemDevicesRetriever, Driver.Stub.StubSystemDevicesRetriever>();
-            services.AddSingleton<IDriverService, Driver.Stub.StubDriverService>();
-            services.AddSingleton<IAccelerationCalculatorFactory, Driver.Stub.StubAccelerationCalculatorFactory>();
-#endif
-        }
     }
 }

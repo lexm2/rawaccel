@@ -18,6 +18,11 @@ using userinterface.ViewModels.Settings;
 using userinterface.Views;
 using userspace_backend;
 using userspace_backend.IO;
+#if WINDOWS
+using userspace_backend.Driver.Windows;
+#else
+using userspace_backend.Driver.Debug;
+#endif
 using DATA = userspace_backend.Data;
 
 namespace userinterface;
@@ -68,7 +73,11 @@ public partial class App : Application
 
         RegisterViewModels(services);
 
-        Services = BackEndComposer.Compose(services);
+#if WINDOWS
+        Services = BackEndComposer.Compose(services, s => s.AddWindowsDriver());
+#else
+        Services = BackEndComposer.Compose(services, s => s.AddDebugDriver());
+#endif
 
         IBackEnd backEnd = Services.GetRequiredService<IBackEnd>();
         backEnd.Load();
