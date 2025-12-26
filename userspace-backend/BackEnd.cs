@@ -79,6 +79,16 @@ namespace userspace_backend
         protected void LoadDevicesFromData(IEnumerable<DATA.Device> devicesData)
         {
             Devices.TryMapFromData(devicesData);
+
+            // Populate DeviceGroups from loaded devices before mappings are loaded
+            foreach (var device in Devices.Elements)
+            {
+                string deviceGroup = device.DeviceGroup.ModelValue;
+                if (!string.IsNullOrEmpty(deviceGroup))
+                {
+                    Devices.DeviceGroups.AddOrGetDeviceGroup(deviceGroup);
+                }
+            }
         }
 
         protected void LoadProfilesFromData(IEnumerable<DATA.Profile> profileData)
