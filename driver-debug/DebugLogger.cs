@@ -16,6 +16,7 @@ namespace userspace_backend.Driver.Debug
         {
             WriteIndented = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            IncludeFields = true,
             Converters = { new JsonStringEnumConverter() }
         };
 
