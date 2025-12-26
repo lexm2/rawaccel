@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using userspace_backend;
+using userspace_backend.Data.Profiles;
+using userspace_backend.Data.Profiles.Accel;
+using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Model;
 using DATA = userspace_backend.Data;
 
@@ -27,15 +30,104 @@ namespace userspace_backend.Driver.Debug
         public IEnumerable<DATA.Profile> LoadProfiles()
         {
             DebugLogger.LogHeader("LOAD PROFILES");
-            DebugLogger.Log("Returning empty profiles - backend will create defaults");
-            return [];  // Empty - let BackEnd.EnsureDefaultProfileExists() create defaults
+            var profiles = new[]
+            {
+                new DATA.Profile
+                {
+                    Name = "Default",
+                    OutputDPI = 1600,
+                    YXRatio = 1.0,
+                    Acceleration = new NoAcceleration(),
+                    Hidden = new Hidden
+                    {
+                        LeftRightRatio = 1.0,
+                        UpDownRatio = 1.0,
+                        RotationDegrees = 0.0,
+                        AngleSnappingDegrees = 0.0,
+                        SpeedCap = 0.0,
+                        OutputSmoothingHalfLife = 0.0
+                    }
+                },
+                new DATA.Profile
+                {
+                    Name = "Classic Accel",
+                    OutputDPI = 1600,
+                    YXRatio = 1.0,
+                    Acceleration = new ClassicAccel
+                    {
+                        Gain = false,
+                        Acceleration = 0.05,
+                        Exponent = 2.0,
+                        Offset = 0.0,
+                        Cap = 0.0
+                    },
+                    Hidden = new Hidden
+                    {
+                        LeftRightRatio = 1.0,
+                        UpDownRatio = 1.0,
+                        RotationDegrees = 0.0,
+                        AngleSnappingDegrees = 0.0,
+                        SpeedCap = 0.0,
+                        OutputSmoothingHalfLife = 0.0
+                    }
+                },
+                new DATA.Profile
+                {
+                    Name = "Natural Accel",
+                    OutputDPI = 1600,
+                    YXRatio = 1.0,
+                    Acceleration = new NaturalAccel
+                    {
+                        Gain = false,
+                        DecayRate = 0.5,
+                        InputOffset = 0.0,
+                        Limit = 3.0
+                    },
+                    Hidden = new Hidden
+                    {
+                        LeftRightRatio = 1.0,
+                        UpDownRatio = 1.0,
+                        RotationDegrees = 0.0,
+                        AngleSnappingDegrees = 0.0,
+                        SpeedCap = 0.0,
+                        OutputSmoothingHalfLife = 0.0
+                    }
+                }
+            };
+            DebugLogger.LogCollection("Profiles", profiles);
+            return profiles;
         }
 
         public DATA.MappingSet LoadMappings()
         {
             DebugLogger.LogHeader("LOAD MAPPINGS");
-            DebugLogger.Log("Returning empty mappings - backend will create defaults");
-            return new DATA.MappingSet { Mappings = [] };  // Empty - let BackEnd.EnsureDefaultMappingExists() create defaults
+            var mappingSet = new DATA.MappingSet
+            {
+                ActiveMappingIndex = 0,
+                Mappings =
+                [
+                    new DATA.Mapping
+                    {
+                        Name = "Default Mapping",
+                        GroupsToProfiles = new DATA.Mapping.GroupsToProfilesMapping
+                        {
+                            { "Logitech Mice", "Classic Accel" },
+                            { "Testing", "Default" }
+                        }
+                    },
+                    new DATA.Mapping
+                    {
+                        Name = "All Natural",
+                        GroupsToProfiles = new DATA.Mapping.GroupsToProfilesMapping
+                        {
+                            { "Logitech Mice", "Natural Accel" },
+                            { "Testing", "Natural Accel" }
+                        }
+                    }
+                ]
+            };
+            DebugLogger.LogJson("Mappings", mappingSet);
+            return mappingSet;
         }
 
         public DATA.Settings? LoadSettings()
