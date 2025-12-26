@@ -5,16 +5,26 @@ namespace userspace_backend.Driver.Debug
 {
     /// <summary>
     /// Debug system devices retriever for non-Windows platforms.
-    /// Logs when device enumeration is requested.
-    /// Returns an empty list since device enumeration requires Windows APIs.
+    /// Returns mock devices that match the test data in DebugBackEndLoader.
     /// </summary>
     public class DebugSystemDevicesRetriever : ISystemDevicesRetriever
     {
         public IList<ISystemDevice> GetSystemDevices()
         {
             DebugLogger.LogHeader("GET SYSTEM DEVICES");
-            DebugLogger.Log("Device enumeration requested - returning empty list (no platform-specific implementation)");
-            return new List<ISystemDevice>();
+            var devices = new List<ISystemDevice>
+            {
+                new DebugSystemDevice("Superlight 2", @"HID\VID_046D&PID_C54D&MI_00"),
+                new DebugSystemDevice("Outset AX", @"HID\VID_3057&PID_0001"),
+                new DebugSystemDevice("Razer Viper 8K", @"HID\VID_31E3&PID_1310"),
+            };
+            DebugLogger.LogCollection("System Devices", devices);
+            return devices;
         }
     }
+
+    /// <summary>
+    /// Simple record implementing ISystemDevice for debug/mock purposes.
+    /// </summary>
+    internal record DebugSystemDevice(string Name, string HWID) : ISystemDevice;
 }

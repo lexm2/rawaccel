@@ -11,9 +11,11 @@ namespace userspace_backend.Driver.Debug
     {
         /// <summary>
         /// Registers debug driver implementations that log all data to console/debug output.
+        /// Also registers a debug backend loader that provides mock data instead of reading from files.
         /// </summary>
         public static void AddDebugDriver(this IServiceCollection services)
         {
+            services.AddSingleton<IBackEndLoader, DebugBackEndLoader>();
             services.AddSingleton<ISystemDevicesRetriever, DebugSystemDevicesRetriever>();
             services.AddSingleton<IDriverService, DebugDriverService>();
             services.AddSingleton<IAccelerationCalculatorFactory, DebugAccelerationCalculatorFactory>();

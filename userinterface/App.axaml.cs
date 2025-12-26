@@ -23,7 +23,6 @@ using userspace_backend.Driver.Windows;
 #else
 using userspace_backend.Driver.Debug;
 #endif
-using DATA = userspace_backend.Data;
 
 namespace userinterface;
 
@@ -50,6 +49,8 @@ public partial class App : Application
 #endif
         });
 
+#if WINDOWS
+        // Windows: Use BackEndLoader to read from JSON files
         string settingsDirectory = System.AppDomain.CurrentDomain.BaseDirectory;
         services.AddSingleton<IBackEndLoader>(sp =>
         {
@@ -59,6 +60,8 @@ public partial class App : Application
             var settingsRW = sp.GetRequiredService<SettingsReaderWriter>();
             return new BackEndLoader(settingsDirectory, devicesRW, mappingsRW, profileRW, settingsRW);
         });
+#endif
+        // Non-Windows: IBackEndLoader is registered by AddDebugDriver()
 
         services.AddSingleton<INotificationService>(provider =>
             new NotificationService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>()));
@@ -189,85 +192,6 @@ public partial class App : Application
                 provider.GetRequiredService<SettingsPageViewModel>(),
                 provider.GetRequiredService<ViewModels.Profile.ProfileListViewModel>(),
                 provider.GetRequiredService<ViewModels.Controls.ToastViewModel>()));
-    }
-
-    protected static Bootstrapper BootstrapBackEnd()
-    {
-        return new Bootstrapper()
-        {
-            BackEndLoader = new BackEndLoader(
-                System.AppDomain.CurrentDomain.BaseDirectory,
-                new DevicesReaderWriter(),
-                new MappingsReaderWriter(),
-                new ProfileReaderWriter(),
-                new SettingsReaderWriter()),
-            DevicesToLoad =
-            [
-                new DATA.Device() { Name = "Superlight 2", DPI = 32000, HWID = @"HID\VID_046D&PID_C54D&MI_00", PollingRate = 1000, DeviceGroup = "Logitech Mice" },
-                new DATA.Device() { Name = "Outset AX", DPI = 1200, HWID = @"HID\VID_3057&PID_0001", PollingRate = 1000, DeviceGroup = "Testing" },
-                new DATA.Device() { Name = "Razer Viper 8K", DPI = 1200, HWID = @"HID\VID_31E3&PID_1310", PollingRate = 1000, DeviceGroup = "Testing" },
-            ],
-            ProfilesToLoad =
-            [
-                new DATA.Profile()
-                {
-                    Name = "Favorite", OutputDPI = 1600,
-                    YXRatio = 1.333,
-                    Acceleration = new DATA.Profiles.Accel.Formula.SynchronousAccel()
-                    {
-                        SyncSpeed = 25.85,
-                        Motivity = 1.1333,
-                        Gamma = 0.063,
-                        Smoothness = 0.5,
-                        Anisotropy = new DATA.Profiles.Anisotropy()
-                        {
-                            CombineXYComponents = false,
-                            Domain = new DATA.Profiles.Vector2() { X = 1, Y = 4 },
-                            Range = new DATA.Profiles.Vector2() { X = 1, Y = 1 },
-                            LPNorm = 2,
-                        },
-                        Coalescion = new DATA.Profiles.Coalescion()
-                        {
-                            InputSmoothingHalfLife = 10,
-                            ScaleSmoothingHalfLife = 0,
-                        },
-                    },
-                    Hidden = new DATA.Profiles.Hidden() { RotationDegrees = 8, },
-                },
-                new DATA.Profile() { Name = "Test", OutputDPI = 1200, YXRatio = 1.0 },
-                new DATA.Profile() { Name = "SpecificGame", OutputDPI = 3200, YXRatio = 1.333 },
-            ],
-            MappingsToLoad = new DATA.MappingSet()
-            {
-                Mappings =
-                [
-                    new DATA.Mapping() {
-                        Name = "Usual",
-                        GroupsToProfiles = new DATA.Mapping.GroupsToProfilesMapping()
-                        {
-                            { "Logitech Mice", "Favorite" },
-                            { "Testing", "Default" },
-                            { "Default", "Default" },
-                        },
-                    },
-                    new DATA.Mapping() {
-                        Name = "ForSpecificGame",
-                        GroupsToProfiles = new DATA.Mapping.GroupsToProfilesMapping()
-                        {
-                            { "Logitech Mice", "SpecificGame" },
-                            { "Testing", "SpecificGame" },
-                        },
-                    },
-                ],
-            },
-            SettingsToLoad = new DATA.Settings()
-            {
-                ShowToastNotifications = true,
-                ShowConfirmModals = true,
-                Theme = "Dark",
-                Language = "ja-JP"
-            },
-        };
     }
 
     private async Task ShowAlphaBuildWarningAsync()

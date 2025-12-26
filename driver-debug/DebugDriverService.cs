@@ -11,7 +11,7 @@ namespace userspace_backend.Driver.Debug
     /// </summary>
     public class DebugDriverService : IDriverService
     {
-        public bool IsAvailable => false;
+        public bool IsAvailable => true;
 
         public void Activate(MappingModel mapping, IEnumerable<IDeviceModel> devices)
         {
