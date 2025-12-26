@@ -19,11 +19,12 @@ namespace userspace_backend.Model.AccelDefinitions
 
         public NoAcceleration NoAcceleration { get; protected set; }
 
-        public DriverAccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver(bool gain)
         {
             return new DriverAccelArgs()
             {
                 Mode = AccelMode.NoAccel,
+                Gain = gain,
             };
         }
 

@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.Common;
+using userspace_backend.Common.AccelFormulas;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Driver.Types;
@@ -18,12 +20,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
         public const string InputDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Input)}";
         public const string OutputDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Output)}";
 
+        private readonly ILutComputer _lutComputer;
+
         public JumpAccelerationDefinitionModel(
+            ILutComputer lutComputer,
             [FromKeyedServices(SmoothDIKey)]IEditableSettingSpecific<double> smooth,
             [FromKeyedServices(InputDIKey)]IEditableSettingSpecific<double> input,
             [FromKeyedServices(OutputDIKey)]IEditableSettingSpecific<double> output)
             : base([smooth, input, output], [])
         {
+            _lutComputer = lutComputer;
             Smooth = smooth;
             Input = input;
             Output = output;
@@ -35,13 +41,22 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Output { get; set; }
 
-        public DriverAccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver(bool gain)
         {
+            var formula = new JumpFormula(
+                Input.ModelValue,
+                Output.ModelValue,
+                Smooth.ModelValue,
+                gain);
+
+            var lut = _lutComputer.ComputeLut(formula);
+
             return new DriverAccelArgs
             {
-                Mode = AccelMode.Jump,
-                Smooth = Smooth.ModelValue,
-                Cap = new Vec2<double>(Input.ModelValue, Output.ModelValue),
+                Mode = AccelMode.Lut,
+                Gain = gain,
+                LutData = lut.Data,
+                LutLength = lut.Length
             };
         }
 

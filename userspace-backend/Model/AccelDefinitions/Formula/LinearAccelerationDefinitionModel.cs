@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.Common;
+using userspace_backend.Common.AccelFormulas;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Driver.Types;
@@ -18,12 +20,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
         public const string OffsetDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(Offset)}";
         public const string CapDIKey = $"{nameof(LinearAccelerationDefinitionModel)}.{nameof(CapDIKey)}";
 
+        private readonly ILutComputer _lutComputer;
+
         public LinearAccelerationDefinitionModel(
+            ILutComputer lutComputer,
             [FromKeyedServices(AccelerationDIKey)]IEditableSettingSpecific<double> acceleration,
             [FromKeyedServices(OffsetDIKey)]IEditableSettingSpecific<double> offset,
             [FromKeyedServices(CapDIKey)]IEditableSettingSpecific<double> cap)
             : base([acceleration, offset, cap], [])
         {
+            _lutComputer = lutComputer;
             Acceleration = acceleration;
             Offset = offset;
             Cap = cap;
@@ -35,16 +41,22 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Cap { get; set; }
 
-        public DriverAccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver(bool gain)
         {
+            var formula = new LinearFormula(
+                Acceleration.ModelValue,
+                Offset.ModelValue,
+                Cap.ModelValue,
+                gain);
+
+            var lut = _lutComputer.ComputeLut(formula);
+
             return new DriverAccelArgs
             {
-                Mode = AccelMode.Classic,
-                Acceleration = Acceleration.ModelValue,
-                ExponentClassic = 2,
-                InputOffset = Offset.ModelValue,
-                Cap = new Vec2<double>(0, Cap.ModelValue),
-                CapMode = CapMode.Output,
+                Mode = AccelMode.Lut,
+                Gain = gain,
+                LutData = lut.Data,
+                LutLength = lut.Length
             };
         }
 

@@ -35,7 +35,7 @@ namespace userspace_backend.Model.AccelDefinitions
 
         public IEditableSettingSpecific<LookupTableData> Data { get; set; }
 
-        public DriverAccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver(bool gain)
         {
             // data in driver profile must be predefined length for marshalling purposes
             var accelArgsData = new float[DriverAccelArgs.MaxLutPoints * 2];
@@ -44,6 +44,7 @@ namespace userspace_backend.Model.AccelDefinitions
             return new DriverAccelArgs
             {
                 Mode = AccelMode.Lut,
+                Gain = gain,
                 LutData = accelArgsData,
                 LutLength = Data.ModelValue.Data.Length,
             };

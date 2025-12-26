@@ -6,7 +6,7 @@ namespace userspace_backend.Model.AccelDefinitions
 {
     public interface IAccelDefinitionModel : IEditableSettingsCollectionV2
     {
-        DriverAccelArgs MapToDriver();
+        DriverAccelArgs MapToDriver(bool gain);
     }
 
     public interface IAccelDefinitionModelSpecific<T> : IAccelDefinitionModel, IEditableSettingsCollectionSpecific<T> where T : Acceleration

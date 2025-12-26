@@ -16,7 +16,9 @@ namespace userspace_backend.Model.AccelDefinitions
 
         ICoalescionModel Coalescion { get; }
 
-        DriverAccelArgs MapToDriver();
+        FormulaAccelModel? FormulaAccel { get; }
+
+        DriverAccelArgs MapToDriver(bool gain);
     }
 
     public class AccelerationModel : EditableSettingsSelector<AccelerationDefinitionType, Acceleration>, IAccelerationModel
@@ -62,7 +64,7 @@ namespace userspace_backend.Model.AccelDefinitions
             return acceleration;
         }
 
-        public DriverAccelArgs MapToDriver() => ((IAccelDefinitionModel)Selected)?.MapToDriver() ?? new DriverAccelArgs();
+        public DriverAccelArgs MapToDriver(bool gain) => ((IAccelDefinitionModel)Selected)?.MapToDriver(gain) ?? new DriverAccelArgs();
 
         protected override bool TryMapEditableSettingsFromData(Acceleration data)
         {

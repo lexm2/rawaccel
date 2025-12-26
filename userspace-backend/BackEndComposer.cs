@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Runtime.InteropServices;
 using DATA = userspace_backend.Data;
+using userspace_backend.Common;
 using userspace_backend.Display;
 using userspace_backend.Driver;
 using userspace_backend.IO;
@@ -25,6 +26,7 @@ namespace userspace_backend
             registerPlatformServices?.Invoke(services);
 
             services.AddSingleton<ISystemDevicesProvider, SystemDevicesProvider>();
+            services.AddSingleton<ILutComputer, LutComputer>();
 
             #region Parsers
 

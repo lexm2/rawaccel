@@ -41,7 +41,7 @@ namespace userspace_backend.Model.AccelDefinitions
 
         public IEditableSettingSpecific<bool> Gain { get; set; }
 
-        public DriverAccelArgs MapToDriver() => ((IAccelDefinitionModel)Selected)?.MapToDriver() ?? new DriverAccelArgs();
+        public DriverAccelArgs MapToDriver(bool gain) => ((IAccelDefinitionModel)Selected)?.MapToDriver(gain) ?? new DriverAccelArgs();
 
         protected override bool TryMapEditableSettingsCollectionsFromData(FormulaAccel data)
         {

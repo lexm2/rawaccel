@@ -17,7 +17,9 @@ namespace userspace_backend.Driver
         /// </summary>
         public static DriverProfile MapProfile(ProfileModel model)
         {
-            DriverAccelArgs accelArgs = model.Acceleration.MapToDriver();
+            // Get gain value from FormulaAccel if available, otherwise default to false
+            bool gain = model.Acceleration.FormulaAccel?.Gain.ModelValue ?? false;
+            DriverAccelArgs accelArgs = model.Acceleration.MapToDriver(gain);
 
             return new DriverProfile
             {

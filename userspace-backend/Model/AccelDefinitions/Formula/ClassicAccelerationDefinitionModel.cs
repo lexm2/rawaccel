@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.Common;
+using userspace_backend.Common.AccelFormulas;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Driver.Types;
@@ -20,13 +22,17 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
         public const string OffsetDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(Offset)}";
         public const string CapDIKey = $"{nameof(ClassicAccelerationDefinitionModel)}.{nameof(CapDIKey)}";
 
+        private readonly ILutComputer _lutComputer;
+
         public ClassicAccelerationDefinitionModel(
+            ILutComputer lutComputer,
             [FromKeyedServices(AccelerationDIKey)]IEditableSettingSpecific<double> acceleration,
             [FromKeyedServices(ExponentDIKey)]IEditableSettingSpecific<double> exponent,
             [FromKeyedServices(OffsetDIKey)]IEditableSettingSpecific<double> offset,
             [FromKeyedServices(CapDIKey)]IEditableSettingSpecific<double> cap)
             : base([acceleration, exponent, offset, cap], [])
         {
+            _lutComputer = lutComputer;
             Acceleration = acceleration;
             Exponent = exponent;
             Offset = offset;
@@ -41,16 +47,23 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Cap { get; set; }
 
-        public DriverAccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver(bool gain)
         {
+            var formula = new ClassicFormula(
+                Acceleration.ModelValue,
+                Exponent.ModelValue,
+                Offset.ModelValue,
+                Cap.ModelValue,
+                gain);
+
+            var lut = _lutComputer.ComputeLut(formula);
+
             return new DriverAccelArgs
             {
-                Mode = AccelMode.Classic,
-                Acceleration = Acceleration.ModelValue,
-                ExponentClassic = Exponent.ModelValue,
-                InputOffset = Offset.ModelValue,
-                Cap = new Vec2<double>(0, Cap.ModelValue),
-                CapMode = CapMode.Output
+                Mode = AccelMode.Lut,
+                Gain = gain,
+                LutData = lut.Data,
+                LutLength = lut.Length
             };
         }
 

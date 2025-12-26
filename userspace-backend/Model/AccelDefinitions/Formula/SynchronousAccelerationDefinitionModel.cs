@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.Common;
+using userspace_backend.Common.AccelFormulas;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Driver.Types;
@@ -26,13 +28,17 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
         public const string GammaDIKey = $"{nameof(SynchronousAccelerationDefinitionModel)}.{nameof(Gamma)}";
         public const string SmoothnessDIKey = $"{nameof(SynchronousAccelerationDefinitionModel)}.{nameof(Smoothness)}";
 
+        private readonly ILutComputer _lutComputer;
+
         public SynchronousAccelerationDefinitionModel(
+            ILutComputer lutComputer,
             [FromKeyedServices(SyncSpeedDIKey)]IEditableSettingSpecific<double> syncSpeed,
             [FromKeyedServices(MotivityDIKey)]IEditableSettingSpecific<double> motivity,
             [FromKeyedServices(GammaDIKey)]IEditableSettingSpecific<double> gamma,
             [FromKeyedServices(SmoothnessDIKey)]IEditableSettingSpecific<double> smoothness)
             : base([syncSpeed, motivity, gamma, smoothness], [])
         {
+            _lutComputer = lutComputer;
             SyncSpeed = syncSpeed;
             Motivity = motivity;
             Gamma = gamma;
@@ -47,15 +53,23 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Smoothness { get; set; }
 
-        public DriverAccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver(bool gain)
         {
+            var formula = new SynchronousFormula(
+                SyncSpeed.ModelValue,
+                Motivity.ModelValue,
+                Gamma.ModelValue,
+                Smoothness.ModelValue,
+                gain);
+
+            var lut = _lutComputer.ComputeLut(formula);
+
             return new DriverAccelArgs
             {
-                Mode = AccelMode.Synchronous,
-                SyncSpeed = SyncSpeed.ModelValue,
-                Motivity = Motivity.ModelValue,
-                Gamma = Gamma.ModelValue,
-                Smooth = Smoothness.ModelValue,
+                Mode = AccelMode.Lut,
+                Gain = gain,
+                LutData = lut.Data,
+                LutLength = lut.Length
             };
         }
 

@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.Common;
+using userspace_backend.Common.AccelFormulas;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Driver.Types;
@@ -18,12 +20,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
         public const string InputOffsetDIKey = $"{nameof(NaturalAccelerationDefinitionModel)}.{nameof(InputOffset)}";
         public const string LimitDIKey = $"{nameof(NaturalAccelerationDefinitionModel)}.{nameof(Limit)}";
 
+        private readonly ILutComputer _lutComputer;
+
         public NaturalAccelerationDefinitionModel(
+            ILutComputer lutComputer,
             [FromKeyedServices(DecayRateDIKey)]IEditableSettingSpecific<double> decayRate,
             [FromKeyedServices(InputOffsetDIKey)]IEditableSettingSpecific<double> inputOffset,
             [FromKeyedServices(LimitDIKey)]IEditableSettingSpecific<double> limit)
             : base([decayRate, inputOffset, limit], [])
         {
+            _lutComputer = lutComputer;
             DecayRate = decayRate;
             InputOffset = inputOffset;
             Limit = limit;
@@ -35,14 +41,22 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Limit { get; set; }
 
-        public DriverAccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver(bool gain)
         {
+            var formula = new NaturalFormula(
+                DecayRate.ModelValue,
+                InputOffset.ModelValue,
+                Limit.ModelValue,
+                gain);
+
+            var lut = _lutComputer.ComputeLut(formula);
+
             return new DriverAccelArgs
             {
-                Mode = AccelMode.Natural,
-                DecayRate = DecayRate.ModelValue,
-                InputOffset = InputOffset.ModelValue,
-                Limit = Limit.ModelValue,
+                Mode = AccelMode.Lut,
+                Gain = gain,
+                LutData = lut.Data,
+                LutLength = lut.Length
             };
         }
 
