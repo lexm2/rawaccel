@@ -89,7 +89,7 @@ namespace userspace_backend.Common
             double curvaturePerPoint = totalCurvature / (MaxPoints - 1);
             double targetCurvature = curvaturePerPoint;
 
-            for (int i = 0; i < SampleCount && points.Count < MaxPoints - 1; i++)
+            for (int i = 1; i < SampleCount && points.Count < MaxPoints - 1; i++)
             {
                 if (cumulative[i] >= targetCurvature)
                 {
