@@ -2,6 +2,7 @@
 using userspace_backend.Data.Profiles;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
+using userspace_backend.Driver.Types;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions.Formula
@@ -40,16 +41,16 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Cap { get; set; }
 
-        public AccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver()
         {
-            return new AccelArgs
+            return new DriverAccelArgs
             {
-                mode = AccelMode.power,
-                scale = Scale.ModelValue,
-                exponentPower = Exponent.ModelValue,
-                outputOffset = OutputOffset.ModelValue,
-                cap = new Vec2<double> { x = 0, y = Cap.ModelValue },
-                capMode = CapMode.output,
+                Mode = AccelMode.Power,
+                Scale = Scale.ModelValue,
+                ExponentPower = Exponent.ModelValue,
+                OutputOffset = OutputOffset.ModelValue,
+                Cap = new Vec2<double>(0, Cap.ModelValue),
+                CapMode = CapMode.Output,
             };
         }
 

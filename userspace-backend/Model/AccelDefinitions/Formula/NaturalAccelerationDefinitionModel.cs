@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
+using userspace_backend.Driver.Types;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions.Formula
@@ -34,14 +35,14 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Limit { get; set; }
 
-        public AccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver()
         {
-            return new AccelArgs
+            return new DriverAccelArgs
             {
-                mode = AccelMode.natural,
-                decayRate = DecayRate.ModelValue,
-                inputOffset = InputOffset.ModelValue,
-                limit = Limit.ModelValue,
+                Mode = AccelMode.Natural,
+                DecayRate = DecayRate.ModelValue,
+                InputOffset = InputOffset.ModelValue,
+                Limit = Limit.ModelValue,
             };
         }
 

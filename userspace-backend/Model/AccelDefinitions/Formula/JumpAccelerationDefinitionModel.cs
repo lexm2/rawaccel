@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
+using userspace_backend.Driver.Types;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions.Formula
@@ -34,13 +35,13 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Output { get; set; }
 
-        public AccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver()
         {
-            return new AccelArgs
+            return new DriverAccelArgs
             {
-                mode = AccelMode.jump,
-                smooth = Smooth.ModelValue,
-                cap = new Vec2<double> { x = Input.ModelValue, y = Output.ModelValue },
+                Mode = AccelMode.Jump,
+                Smooth = Smooth.ModelValue,
+                Cap = new Vec2<double>(Input.ModelValue, Output.ModelValue),
             };
         }
 

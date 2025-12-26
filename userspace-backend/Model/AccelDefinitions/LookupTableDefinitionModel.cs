@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using userspace_backend.Data.Profiles;
 using userspace_backend.Data.Profiles.Accel;
+using userspace_backend.Driver.Types;
 using userspace_backend.Model.EditableSettings;
 using static userspace_backend.Data.Profiles.Accel.LookupTableAccel;
 
@@ -34,17 +35,17 @@ namespace userspace_backend.Model.AccelDefinitions
 
         public IEditableSettingSpecific<LookupTableData> Data { get; set; }
 
-        public AccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver()
         {
             // data in driver profile must be predefined length for marshalling purposes
-            var accelArgsData = new float[AccelArgs.MaxLutPoints*2];
+            var accelArgsData = new float[DriverAccelArgs.MaxLutPoints * 2];
             Data.ModelValue.Data.Select(Convert.ToSingle).ToArray().CopyTo(accelArgsData, 0);
 
-            return new AccelArgs
+            return new DriverAccelArgs
             {
-                mode = AccelMode.lut,
-                data = accelArgsData,
-                length = Data.ModelValue.Data.Length,
+                Mode = AccelMode.Lut,
+                LutData = accelArgsData,
+                LutLength = Data.ModelValue.Data.Length,
             };
         }
 

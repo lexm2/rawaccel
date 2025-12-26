@@ -1,5 +1,6 @@
 ﻿using userspace_backend.Data.Profiles;
 using userspace_backend.Data.Profiles.Accel;
+using userspace_backend.Driver.Types;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions
@@ -18,11 +19,11 @@ namespace userspace_backend.Model.AccelDefinitions
 
         public NoAcceleration NoAcceleration { get; protected set; }
 
-        public AccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver()
         {
-            return new AccelArgs()
+            return new DriverAccelArgs()
             {
-                mode = AccelMode.noaccel,
+                Mode = AccelMode.NoAccel,
             };
         }
 

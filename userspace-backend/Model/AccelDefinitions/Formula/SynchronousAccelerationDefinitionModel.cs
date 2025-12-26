@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
+using userspace_backend.Driver.Types;
 using userspace_backend.Model.EditableSettings;
 
 namespace userspace_backend.Model.AccelDefinitions.Formula
@@ -46,15 +47,15 @@ namespace userspace_backend.Model.AccelDefinitions.Formula
 
         public IEditableSettingSpecific<double> Smoothness { get; set; }
 
-        public AccelArgs MapToDriver()
+        public DriverAccelArgs MapToDriver()
         {
-            return new AccelArgs
+            return new DriverAccelArgs
             {
-                mode = AccelMode.synchronous,
-                syncSpeed = SyncSpeed.ModelValue,
-                motivity = Motivity.ModelValue,
-                gamma = Gamma.ModelValue,
-                smooth = Smoothness.ModelValue,
+                Mode = AccelMode.Synchronous,
+                SyncSpeed = SyncSpeed.ModelValue,
+                Motivity = Motivity.ModelValue,
+                Gamma = Gamma.ModelValue,
+                Smooth = Smoothness.ModelValue,
             };
         }
 

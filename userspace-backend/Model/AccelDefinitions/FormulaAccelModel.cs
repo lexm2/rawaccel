@@ -5,6 +5,7 @@ using System.ComponentModel;
 using userspace_backend.Data.Profiles;
 using userspace_backend.Data.Profiles.Accel;
 using userspace_backend.Data.Profiles.Accel.Formula;
+using userspace_backend.Driver.Types;
 using userspace_backend.Model.AccelDefinitions.Formula;
 using userspace_backend.Model.EditableSettings;
 using static userspace_backend.Data.Profiles.Accel.FormulaAccel;
@@ -40,7 +41,7 @@ namespace userspace_backend.Model.AccelDefinitions
 
         public IEditableSettingSpecific<bool> Gain { get; set; }
 
-        public AccelArgs MapToDriver() => ((IAccelDefinitionModel)Selected)?.MapToDriver() ?? new AccelArgs();
+        public DriverAccelArgs MapToDriver() => ((IAccelDefinitionModel)Selected)?.MapToDriver() ?? new DriverAccelArgs();
 
         protected override bool TryMapEditableSettingsCollectionsFromData(FormulaAccel data)
         {
