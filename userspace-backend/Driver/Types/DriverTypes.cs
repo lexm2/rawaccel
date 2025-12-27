@@ -45,7 +45,7 @@ namespace userspace_backend.Driver.Types
     public struct DriverAccelArgs
     {
         public const int MaxLutPoints = 128;
-        public const int LutRawDataCapacity = 513;
+        public const int LutRawDataCapacity = 514;
 
         public AccelMode Mode;
         public bool Gain;
