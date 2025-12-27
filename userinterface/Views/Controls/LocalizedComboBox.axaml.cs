@@ -87,6 +87,9 @@ namespace userinterface.Views.Controls
             var keys = LocalizationKeys?.ToList() ?? new List<string>();
             var values = EnumValues?.ToList() ?? new List<string>();
 
+            // Preserve the currently selected enum value before clearing
+            var previouslySelectedEnumValue = SelectedEnumValue;
+
             localizedItems.Clear();
 
             if (keys.Count == 0 || values.Count == 0 || keys.Count != values.Count)
@@ -102,7 +105,18 @@ namespace userinterface.Views.Controls
                 });
             }
 
-            // Auto-select first item if nothing is selected
+            // Restore the previously selected value if it exists in the new items
+            if (!string.IsNullOrEmpty(previouslySelectedEnumValue))
+            {
+                var matchingItem = localizedItems.FirstOrDefault(item => item.EnumValue == previouslySelectedEnumValue);
+                if (matchingItem != null)
+                {
+                    SelectedItem = matchingItem;
+                    return;
+                }
+            }
+
+            // Auto-select first item only if nothing was previously selected
             if (localizedItems.Count > 0 && SelectedItem == null)
             {
                 SelectedItem = localizedItems[0];
