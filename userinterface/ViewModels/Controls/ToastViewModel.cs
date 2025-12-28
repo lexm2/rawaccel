@@ -1,4 +1,4 @@
-﻿using Avalonia.Threading;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Threading;
@@ -7,12 +7,16 @@ using System.Windows.Input;
 using userinterface.Commands;
 using userinterface.Models;
 using userinterface.Services;
+using userinterface.Services.Events;
 
 namespace userinterface.ViewModels.Controls
 {
     public partial class ToastViewModel : ViewModelBase, IDisposable
     {
-        private readonly INotificationService notificationService;
+        private readonly IEventBus eventBus;
+        private readonly LocalizationService localizationService;
+        private readonly IDisposable toastRequestedSubscription;
+        private readonly IDisposable toastDismissedSubscription;
 
         [ObservableProperty]
         private bool isVisible;
@@ -28,23 +32,32 @@ namespace userinterface.ViewModels.Controls
 
         private CancellationTokenSource? animationCancellation;
 
-        public ToastViewModel(INotificationService notificationService)
+        public ToastViewModel(IEventBus eventBus, LocalizationService localizationService)
         {
-            this.notificationService = notificationService;
-            this.notificationService.ToastRequested += OnToastRequested;
-            this.notificationService.ToastDismissed += OnToastDismissed;
+            this.eventBus = eventBus;
+            this.localizationService = localizationService;
+
+            toastRequestedSubscription = eventBus.Subscribe<ToastRequestedEvent>(OnToastRequested);
+            toastDismissedSubscription = eventBus.Subscribe<ToastDismissedEvent>(OnToastDismissed);
+
             CloseCommand = new RelayCommand(Close);
         }
 
         public ICommand CloseCommand { get; }
 
-        private async void OnToastRequested(object? sender, ToastNotificationEventArgs e)
+        private async void OnToastRequested(ToastRequestedEvent e)
         {
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 animationCancellation?.Cancel();
 
-                Message = e.Message;
+                var localizedMessage = localizationService.GetText(e.MessageKey);
+                if (e.FormatArgs.Length > 0)
+                {
+                    localizedMessage = string.Format(localizedMessage, e.FormatArgs);
+                }
+
+                Message = localizedMessage;
                 Type = e.Type;
                 IsVisible = true;
                 Progress = 100;
@@ -53,7 +66,7 @@ namespace userinterface.ViewModels.Controls
             });
         }
 
-        private void OnToastDismissed(object? sender, EventArgs e)
+        private void OnToastDismissed(ToastDismissedEvent e)
         {
             animationCancellation?.Cancel();
             Dispatcher.UIThread.Post(() =>
@@ -87,7 +100,7 @@ namespace userinterface.ViewModels.Controls
                                 Progress = 0;
                                 if (IsVisible)
                                 {
-                                    notificationService.HideToast();
+                                    eventBus.Publish(new ToastDismissedEvent());
                                 }
                             });
                         }
@@ -107,7 +120,7 @@ namespace userinterface.ViewModels.Controls
 
         private void Close()
         {
-            notificationService.HideToast();
+            eventBus.Publish(new ToastDismissedEvent());
         }
 
         public void Dispose()
@@ -115,11 +128,8 @@ namespace userinterface.ViewModels.Controls
             animationCancellation?.Cancel();
             animationCancellation?.Dispose();
 
-            if (notificationService != null)
-            {
-                notificationService.ToastRequested -= OnToastRequested;
-                notificationService.ToastDismissed -= OnToastDismissed;
-            }
+            toastRequestedSubscription.Dispose();
+            toastDismissedSubscription.Dispose();
         }
     }
 }
