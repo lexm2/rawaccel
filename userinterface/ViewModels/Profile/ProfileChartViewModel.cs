@@ -66,9 +66,13 @@ namespace userinterface.ViewModels.Profile
         private readonly LocalizationService localizationService;
         private readonly PreviewChartRenderer previewRenderer;
         private BE.IProfileModel currentProfileModel = null!;
-        
+
         // Sync object for thread safety - single allocation
         private readonly object syncObject = new object();
+
+        // Cached series instances for animation continuity
+        private LineSeries<CurvePoint>? cachedXSeries;
+        private LineSeries<CurvePoint>? cachedYSeries;
 
         public ProfileChartViewModel(IThemeService themeService, LocalizationService localizationService, PreviewChartRenderer previewRenderer)
         {
@@ -240,8 +244,7 @@ namespace userinterface.ViewModels.Profile
             // Load full resolution data for interactive use
             await Task.Run(() =>
             {
-                Series.Clear();
-                CreateFullResolutionSeries();
+                SwitchToFullResolution();
             });
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -251,30 +254,21 @@ namespace userinterface.ViewModels.Profile
             });
         }
 
-        private void CreateFullResolutionSeries()
+        private void SwitchToFullResolution()
         {
-            // Use full resolution data for interactive chart
             var xPoints = XCurvePreview?.Points?.ToArray() ?? Array.Empty<CurvePoint>();
             var yPoints = YCurvePreview?.Points?.ToArray() ?? Array.Empty<CurvePoint>();
-
-            // Create fresh stroke objects (fixes invisible lines issue)
-            var xStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
-            var yStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
-
-            // Optimize array allocation based on YX ratio
             var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
-            var seriesArray = hasYCurve ? new ISeries[2] : new ISeries[1];
 
-            seriesArray[0] = CreateOptimizedLineSeries(xPoints, xStroke, "X Curve Profile", "X Output");
-
-            if (hasYCurve)
+            // Switch to full resolution by updating existing series
+            if (cachedXSeries != null)
             {
-                seriesArray[1] = CreateOptimizedLineSeries(yPoints, yStroke, "Y Curve Profile", "Y Output");
+                cachedXSeries.Values = xPoints;  // Full resolution
             }
 
-            foreach (var series in seriesArray)
+            if (hasYCurve && cachedYSeries != null)
             {
-                Series.Add(series);
+                cachedYSeries.Values = yPoints;  // Full resolution
             }
         }
 
@@ -399,6 +393,10 @@ namespace userinterface.ViewModels.Profile
             if (YCurvePreview != null)
                 YCurvePreview.Points.CollectionChanged -= OnCurvePointsChanged;
 
+            // Clear cached series references
+            cachedXSeries = null;
+            cachedYSeries = null;
+
             // Clear preview renderer cache for memory cleanup
             previewRenderer.ClearCache();
         }
@@ -406,34 +404,6 @@ namespace userinterface.ViewModels.Profile
         // ================================================================================================
         // CHART DATA MANAGEMENT
         // ================================================================================================
-
-        private ISeries[] CreateSeriesData()
-        {
-            // Pre-calculate and cache data points
-            var xPoints = XCurvePreview?.Points?.ToArray() ?? Array.Empty<CurvePoint>();
-            var yPoints = YCurvePreview?.Points?.ToArray() ?? Array.Empty<CurvePoint>();
-
-            // Reduce points for better performance
-            var reducedXPoints = ReducePointsForPreview(xPoints, 64);
-            var reducedYPoints = ReducePointsForPreview(yPoints, 64);
-
-            // Create fresh stroke objects (fixes invisible lines issue)
-            var xStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
-            var yStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
-
-            // Optimize array allocation based on YX ratio
-            var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
-            var seriesArray = hasYCurve ? new ISeries[2] : new ISeries[1];
-
-            seriesArray[0] = CreateOptimizedLineSeries(reducedXPoints, xStroke, "X Curve Profile", "X Output");
-
-            if (hasYCurve)
-            {
-                seriesArray[1] = CreateOptimizedLineSeries(reducedYPoints, yStroke, "Y Curve Profile", "Y Output");
-            }
-
-            return seriesArray;
-        }
 
         private CurvePoint[] ReducePointsForPreview(CurvePoint[] points, int targetCount = 64)
         {
@@ -477,12 +447,49 @@ namespace userinterface.ViewModels.Profile
 
         private void CreateSeries()
         {
-            var series = CreateSeriesData();
+            // Get fresh data
+            var xPoints = XCurvePreview?.Points?.ToArray() ?? Array.Empty<CurvePoint>();
+            var yPoints = YCurvePreview?.Points?.ToArray() ?? Array.Empty<CurvePoint>();
+            var reducedXPoints = ReducePointsForPreview(xPoints, 64);
+            var reducedYPoints = ReducePointsForPreview(yPoints, 64);
 
-            Series.Clear();
-            foreach (var s in series)
+            var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
+
+            // Create X series if needed, otherwise update
+            if (cachedXSeries == null)
             {
-                Series.Add(s);
+                var xStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
+                cachedXSeries = CreateOptimizedLineSeries(reducedXPoints, xStroke, "X Curve Profile", "X Output");
+                Series.Add(cachedXSeries);
+            }
+            else
+            {
+                // Update existing series data (triggers animation!)
+                cachedXSeries.Values = reducedXPoints;
+            }
+
+            // Handle Y series based on Y/X ratio
+            if (hasYCurve)
+            {
+                if (cachedYSeries == null)
+                {
+                    var yStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
+                    cachedYSeries = CreateOptimizedLineSeries(reducedYPoints, yStroke, "Y Curve Profile", "Y Output");
+                    Series.Add(cachedYSeries);
+                }
+                else
+                {
+                    cachedYSeries.Values = reducedYPoints;
+                }
+            }
+            else
+            {
+                // Remove Y series if Y/X ratio is 1.0
+                if (cachedYSeries != null)
+                {
+                    Series.Remove(cachedYSeries);
+                    cachedYSeries = null;
+                }
             }
         }
 
