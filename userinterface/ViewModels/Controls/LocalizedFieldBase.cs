@@ -58,6 +58,9 @@ public class LocalizedFieldBase : ViewModelBase, ILocalizedField, IRecipient<Lan
             if (SetProperty(ref _valueText, value))
             {
                 WeakReferenceMessenger.Default.Send(new FieldValueChangedEvent(this, oldValue, value));
+
+                // Auto-apply changes to backend to trigger graph updates
+                TryApply();
             }
         }
     }
