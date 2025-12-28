@@ -1,11 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Layout;
-using Microsoft.Extensions.DependencyInjection;
-using System;
 using System.Linq;
-using userinterface.Services;
-using userinterface.ViewModels.Controls;
 using userinterface.ViewModels.Settings;
 using userinterface.Views.Controls;
 
@@ -31,85 +27,141 @@ public partial class GeneralSettingsView : UserControl
     {
         SettingsStackPanel.Children.Clear();
 
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
-        var settingsFieldViewModel = new DualColumnLabelFieldViewModel(localizationService);
-        var settingsField = new DualColumnLabelFieldView(settingsFieldViewModel);
+        // Language row
+        SettingsStackPanel.Children.Add(CreateLanguageRow(generalSettingsViewModel));
+
+        // Theme row
+        SettingsStackPanel.Children.Add(CreateThemeRow(generalSettingsViewModel));
+
+        // Toast notifications row
+        SettingsStackPanel.Children.Add(CreateCheckboxRow("SettingsShowToastNotifications", generalSettingsViewModel.NotificationSettings, "ShowToastNotifications"));
+
+        // Confirm modals row
+        SettingsStackPanel.Children.Add(CreateCheckboxRow("SettingsShowConfirmModals", generalSettingsViewModel.NotificationSettings, "ShowConfirmModals"));
+    }
+
+    private static Grid CreateLanguageRow(GeneralSettingsViewModel viewModel)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 16,
+            Margin = new Avalonia.Thickness(0, 0, 0, 12)
+        };
+
+        var label = new TextBlock
+        {
+            Text = "Language",
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Avalonia.Media.Brushes.Gray
+        };
+        Grid.SetColumn(label, 0);
 
         var languageComboBox = new ComboBox
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center,
-            DataContext = generalSettingsViewModel
+            DataContext = viewModel
         };
-
         languageComboBox.Bind(ComboBox.ItemsSourceProperty, new Binding("AvailableLanguages"));
         languageComboBox.Bind(ComboBox.SelectedItemProperty, new Binding("SelectedLanguage"));
         languageComboBox.DisplayMemberBinding = new Binding("DisplayName");
+        Grid.SetColumn(languageComboBox, 1);
 
-        settingsFieldViewModel.AddField("SettingsLanguage", languageComboBox);
+        grid.Children.Add(label);
+        grid.Children.Add(languageComboBox);
+
+        return grid;
+    }
+
+    private Grid CreateThemeRow(GeneralSettingsViewModel viewModel)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 16,
+            Margin = new Avalonia.Thickness(0, 0, 0, 12)
+        };
+
+        var label = new TextBlock
+        {
+            Text = "Theme",
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Avalonia.Media.Brushes.Gray
+        };
+        Grid.SetColumn(label, 0);
 
         var themeComboBox = new LocalizedComboBox
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center,
-            DataContext = generalSettingsViewModel
+            DataContext = viewModel
         };
-
         themeComboBox.Bind(LocalizedComboBox.LocalizationKeysProperty, new Binding("ThemeLocalizationKeys"));
         themeComboBox.Bind(LocalizedComboBox.EnumValuesProperty, new Binding("ThemeEnumValues"));
-        
-        // Handle selection changes
+
         themeComboBox.SelectionChanged += (sender, e) =>
         {
             if (themeComboBox.SelectedEnumValue != null)
             {
-                generalSettingsViewModel.SelectedThemeValue = themeComboBox.SelectedEnumValue;
+                viewModel.SelectedThemeValue = themeComboBox.SelectedEnumValue;
             }
         };
 
-        // Set initial selection after the LocalizedComboBox is loaded
         themeComboBox.Loaded += (sender, e) =>
         {
-            UpdateThemeSelection(themeComboBox, generalSettingsViewModel);
+            UpdateThemeSelection(themeComboBox, viewModel);
         };
 
-        // Listen for property changes to update the combo box selection
-        generalSettingsViewModel.PropertyChanged += (sender, e) =>
+        viewModel.PropertyChanged += (sender, e) =>
         {
             if (e.PropertyName == nameof(GeneralSettingsViewModel.SelectedThemeValue))
             {
-                UpdateThemeSelection(themeComboBox, generalSettingsViewModel);
+                UpdateThemeSelection(themeComboBox, viewModel);
             }
         };
 
-        settingsFieldViewModel.AddField("SettingsTheme", themeComboBox);
+        Grid.SetColumn(themeComboBox, 1);
 
-        var toastCheckBox = new CheckBox
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-            DataContext = generalSettingsViewModel.NotificationSettings
-        };
+        grid.Children.Add(label);
+        grid.Children.Add(themeComboBox);
 
-        toastCheckBox.Bind(CheckBox.IsCheckedProperty, new Binding("ShowToastNotifications"));
-
-        settingsFieldViewModel.AddField("SettingsShowToastNotifications", toastCheckBox);
-
-        var confirmModalsCheckBox = new CheckBox
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-            DataContext = generalSettingsViewModel.NotificationSettings
-        };
-
-        confirmModalsCheckBox.Bind(CheckBox.IsCheckedProperty, new Binding("ShowConfirmModals"));
-
-        settingsFieldViewModel.AddField("SettingsShowConfirmModals", confirmModalsCheckBox);
-
-        SettingsStackPanel.Children.Add(settingsField);
+        return grid;
     }
 
-    private void UpdateThemeSelection(LocalizedComboBox themeComboBox, GeneralSettingsViewModel viewModel)
+    private static Grid CreateCheckboxRow(string labelKey, object dataContext, string bindingPath)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 16,
+            Margin = new Avalonia.Thickness(0, 0, 0, 12)
+        };
+
+        var label = new TextBlock
+        {
+            Text = labelKey, // TODO: Localize
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Avalonia.Media.Brushes.Gray
+        };
+        Grid.SetColumn(label, 0);
+
+        var checkBox = new CheckBox
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            DataContext = dataContext
+        };
+        checkBox.Bind(CheckBox.IsCheckedProperty, new Binding(bindingPath));
+        Grid.SetColumn(checkBox, 1);
+
+        grid.Children.Add(label);
+        grid.Children.Add(checkBox);
+
+        return grid;
+    }
+
+    private static void UpdateThemeSelection(LocalizedComboBox themeComboBox, GeneralSettingsViewModel viewModel)
     {
         if (!string.IsNullOrEmpty(viewModel.SelectedThemeValue) && themeComboBox.localizedItems?.Any() == true)
         {

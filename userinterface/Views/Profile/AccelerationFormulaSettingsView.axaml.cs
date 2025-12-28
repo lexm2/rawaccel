@@ -1,11 +1,7 @@
 using Avalonia.Controls;
-using Avalonia.Controls.Templates;
-using Avalonia.Data;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Microsoft.Extensions.DependencyInjection;
 using System;
-using userinterface.Services;
 using userinterface.ViewModels.Controls;
 using userinterface.ViewModels.Profile;
 using userinterface.Views.Controls;
@@ -16,10 +12,9 @@ namespace userinterface.Views.Profile;
 public partial class AccelerationFormulaSettingsView : UserControl
 {
     private const BEData.AccelerationFormulaType DefaultFormulaType = BEData.AccelerationFormulaType.Synchronous;
-    private const int FirstFieldIndex = 1; // Skip Formula Type field when removing
 
-    private DualColumnLabelFieldView? FormulaField;
-    private DualColumnLabelFieldViewModel? FormulaFieldViewModel;
+    private Grid? FormulaTypeGrid;
+    private StackPanel? FieldsContainer;
     private LocalizedComboBox? FormulaTypeCombo;
 
     public AccelerationFormulaSettingsView()
@@ -30,7 +25,7 @@ public partial class AccelerationFormulaSettingsView : UserControl
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        if (FormulaField == null)
+        if (FormulaTypeGrid == null)
         {
             SetupControls();
         }
@@ -50,10 +45,12 @@ public partial class AccelerationFormulaSettingsView : UserControl
             return;
         }
 
-        CreateFormulaFieldViewModel();
+        CreateFormulaTypeGrid();
+        CreateFieldsContainer();
+        AddControlsToStackPanel();
+
         var currentFormulaType = GetCurrentFormulaType(viewModel.FormulaAccelBE.Selection.InterfaceValue);
-        AddFormulaSpecificFields(currentFormulaType, viewModel);
-        AddControlToStackPanel();
+        UpdateFormulaFields(currentFormulaType, viewModel);
     }
 
     private void CreateFormulaTypeComboBox()
@@ -79,40 +76,62 @@ public partial class AccelerationFormulaSettingsView : UserControl
         FormulaTypeCombo.RefreshItems();
     }
 
-    private void CreateFormulaFieldViewModel()
+    private void CreateFormulaTypeGrid()
     {
         if (FormulaTypeCombo == null)
-        {
             return;
-        }
 
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
-        FormulaFieldViewModel = new DualColumnLabelFieldViewModel(localizationService);
-        FormulaFieldViewModel.AddField("AccelFormulaType", FormulaTypeCombo);
-        FormulaField = new DualColumnLabelFieldView(FormulaFieldViewModel);
+        FormulaTypeGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto"),
+            ColumnSpacing = 16
+        };
+
+        var label = new TextBlock
+        {
+            Text = "Formula",
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Avalonia.Media.Brushes.Gray
+        };
+        Grid.SetColumn(label, 0);
+        Grid.SetRow(label, 0);
+
+        Grid.SetColumn(FormulaTypeCombo, 1);
+        Grid.SetRow(FormulaTypeCombo, 0);
+
+        FormulaTypeGrid.Children.Add(label);
+        FormulaTypeGrid.Children.Add(FormulaTypeCombo);
     }
 
-    private void AddControlToStackPanel()
+    private void CreateFieldsContainer()
     {
-        if (FormulaField == null)
+        FieldsContainer = new StackPanel
         {
-            return;
-        }
+            Spacing = 12,
+            Margin = new Avalonia.Thickness(0, 12, 0, 0)
+        };
+    }
 
-        var AcceStackPanel = this.FindControl<StackPanel>("AccelStackPanel");
-        AcceStackPanel?.Children.Add(FormulaField);
+    private void AddControlsToStackPanel()
+    {
+        var accelStackPanel = this.FindControl<StackPanel>("AccelStackPanel");
+        if (accelStackPanel == null || FormulaTypeGrid == null || FieldsContainer == null)
+            return;
+
+        accelStackPanel.Children.Add(FormulaTypeGrid);
+        accelStackPanel.Children.Add(FieldsContainer);
     }
 
     private void OnFormulaTypeSelectionChanged()
     {
-        if (DataContext is not AccelerationFormulaSettingsViewModel viewModel || FormulaFieldViewModel == null)
+        if (DataContext is not AccelerationFormulaSettingsViewModel viewModel)
         {
             return;
         }
 
-        RemoveFormulaSpecificFields();
         var currentFormulaType = GetCurrentFormulaType(viewModel.FormulaAccelBE.Selection.InterfaceValue);
-        AddFormulaSpecificFields(currentFormulaType, viewModel);
+        UpdateFormulaFields(currentFormulaType, viewModel);
     }
 
     private static BEData.AccelerationFormulaType GetCurrentFormulaType(string formulaTypeName)
@@ -124,22 +143,12 @@ public partial class AccelerationFormulaSettingsView : UserControl
         return DefaultFormulaType;
     }
 
-    private void RemoveFormulaSpecificFields()
+    private void UpdateFormulaFields(BEData.AccelerationFormulaType formulaType, AccelerationFormulaSettingsViewModel formulaSettings)
     {
-        if (FormulaFieldViewModel == null)
+        if (FieldsContainer == null)
             return;
 
-        // Remove all fields except the first one (Formula Type)
-        while (FormulaFieldViewModel.Fields.Count > FirstFieldIndex)
-        {
-            FormulaFieldViewModel.RemoveField(FormulaFieldViewModel.Fields.Count - 1);
-        }
-    }
-
-    private void AddFormulaSpecificFields(BEData.AccelerationFormulaType formulaType, AccelerationFormulaSettingsViewModel formulaSettings)
-    {
-        if (FormulaFieldViewModel == null)
-            return;
+        FieldsContainer.Children.Clear();
 
         switch (formulaType)
         {
@@ -171,63 +180,75 @@ public partial class AccelerationFormulaSettingsView : UserControl
 
     private void AddSynchronousFields(AccelerationFormulaSettingsViewModel formulaSettings)
     {
-        FormulaFieldViewModel!.AddField("AccelSynchronousSyncSpeed", CreateInputControl(formulaSettings.SynchronousSettings.SyncSpeed));
-        FormulaFieldViewModel.AddField("AccelSynchronousMotivity", CreateInputControl(formulaSettings.SynchronousSettings.Motivity));
-        FormulaFieldViewModel.AddField("AccelSynchronousGamma", CreateInputControl(formulaSettings.SynchronousSettings.Gamma));
-        FormulaFieldViewModel.AddField("AccelSynchronousSmoothness", CreateInputControl(formulaSettings.SynchronousSettings.Smoothness));
+        FieldsContainer!.Children.Add(CreateFieldRow(formulaSettings.SynchronousSettings.SyncSpeed));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.SynchronousSettings.Motivity));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.SynchronousSettings.Gamma));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.SynchronousSettings.Smoothness));
     }
 
     private void AddLinearFields(AccelerationFormulaSettingsViewModel formulaSettings)
     {
-        FormulaFieldViewModel!.AddField("AccelLinearAcceleration", CreateInputControl(formulaSettings.LinearSettings.Acceleration));
-        FormulaFieldViewModel.AddField("AccelLinearOffset", CreateInputControl(formulaSettings.LinearSettings.Offset));
-        FormulaFieldViewModel.AddField("AccelLinearCap", CreateInputControl(formulaSettings.LinearSettings.Cap));
+        FieldsContainer!.Children.Add(CreateFieldRow(formulaSettings.LinearSettings.Acceleration));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.LinearSettings.Offset));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.LinearSettings.Cap));
     }
 
     private void AddClassicFields(AccelerationFormulaSettingsViewModel formulaSettings)
     {
-        FormulaFieldViewModel!.AddField("AccelClassicAcceleration", CreateInputControl(formulaSettings.ClassicSettings.Acceleration));
-        FormulaFieldViewModel.AddField("AccelClassicExponent", CreateInputControl(formulaSettings.ClassicSettings.Exponent));
-        FormulaFieldViewModel.AddField("AccelClassicOffset", CreateInputControl(formulaSettings.ClassicSettings.Offset));
-        FormulaFieldViewModel.AddField("AccelClassicCap", CreateInputControl(formulaSettings.ClassicSettings.Cap));
+        FieldsContainer!.Children.Add(CreateFieldRow(formulaSettings.ClassicSettings.Acceleration));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.ClassicSettings.Exponent));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.ClassicSettings.Offset));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.ClassicSettings.Cap));
     }
 
     private void AddPowerFields(AccelerationFormulaSettingsViewModel formulaSettings)
     {
-        FormulaFieldViewModel!.AddField("AccelPowerScale", CreateInputControl(formulaSettings.PowerSettings.Scale));
-        FormulaFieldViewModel.AddField("AccelPowerExponent", CreateInputControl(formulaSettings.PowerSettings.Exponent));
-        FormulaFieldViewModel.AddField("AccelPowerOutputOffset", CreateInputControl(formulaSettings.PowerSettings.OutputOffset));
-        FormulaFieldViewModel.AddField("AccelPowerCap", CreateInputControl(formulaSettings.PowerSettings.Cap));
+        FieldsContainer!.Children.Add(CreateFieldRow(formulaSettings.PowerSettings.Scale));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.PowerSettings.Exponent));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.PowerSettings.OutputOffset));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.PowerSettings.Cap));
     }
 
     private void AddNaturalFields(AccelerationFormulaSettingsViewModel formulaSettings)
     {
-        FormulaFieldViewModel!.AddField("AccelNaturalDecayRate", CreateInputControl(formulaSettings.NaturalSettings.DecayRate));
-        FormulaFieldViewModel.AddField("AccelNaturalInputOffset", CreateInputControl(formulaSettings.NaturalSettings.InputOffset));
-        FormulaFieldViewModel.AddField("AccelNaturalLimit", CreateInputControl(formulaSettings.NaturalSettings.Limit));
+        FieldsContainer!.Children.Add(CreateFieldRow(formulaSettings.NaturalSettings.DecayRate));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.NaturalSettings.InputOffset));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.NaturalSettings.Limit));
     }
 
     private void AddJumpFields(AccelerationFormulaSettingsViewModel formulaSettings)
     {
-        FormulaFieldViewModel!.AddField("AccelJumpSmooth", CreateInputControl(formulaSettings.JumpSettings.Smooth));
-        FormulaFieldViewModel.AddField("AccelJumpInput", CreateInputControl(formulaSettings.JumpSettings.Input));
-        FormulaFieldViewModel.AddField("AccelJumpOutput", CreateInputControl(formulaSettings.JumpSettings.Output));
+        FieldsContainer!.Children.Add(CreateFieldRow(formulaSettings.JumpSettings.Smooth));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.JumpSettings.Input));
+        FieldsContainer.Children.Add(CreateFieldRow(formulaSettings.JumpSettings.Output));
     }
 
-    private static Control CreateInputControl(object bindingSource)
+    private static Grid CreateFieldRow(LocalizedFieldBase field)
     {
-        if (bindingSource is not EditableFieldViewModel editableField)
-            return new TextBox();
-
-        editableField.UpdateMode = UpdateMode.OnChange;
-
-        var editableFieldView = new EditableFieldView
+        var grid = new Grid
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Center,
-            DataContext = editableField
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 16
         };
 
-        return editableFieldView;
+        var label = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Avalonia.Media.Brushes.Gray
+        };
+        label.Bind(TextBlock.TextProperty, new Avalonia.Data.Binding("Label") { Source = field });
+        Grid.SetColumn(label, 0);
+
+        var content = new ContentControl
+        {
+            Content = field,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        Grid.SetColumn(content, 1);
+
+        grid.Children.Add(label);
+        grid.Children.Add(content);
+
+        return grid;
     }
 }

@@ -2,11 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Microsoft.Extensions.DependencyInjection;
-using System;
 using System.Linq;
-using userinterface.Services;
-using userinterface.ViewModels.Controls;
 using userinterface.ViewModels.Profile;
 using userinterface.Views.Controls;
 
@@ -17,12 +13,9 @@ public partial class AccelerationProfileSettingsView : UserControl
     private const int NoneAccelerationIndex = 0;
     private const int FormulaAccelerationIndex = 1;
     private const int LUTAccelerationIndex = 2;
-    private const int AccelerationFieldInsertIndex = 0;
-    private const int FormulaViewInsertIndex = 1;
-    private const int LUTViewInsertIndex = 2;
     private const double ViewContainerTopMargin = 8.0;
 
-    private DualColumnLabelFieldView? AccelerationField;
+    private Grid? AccelerationTypeGrid;
     private ContentControl? FormulaViewContainer;
     private ContentControl? LUTViewContainer;
     private LocalizedComboBox? AccelerationComboBox;
@@ -37,7 +30,7 @@ public partial class AccelerationProfileSettingsView : UserControl
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        if (AccelerationField == null)
+        if (AccelerationTypeGrid == null)
         {
             SetupControls();
         }
@@ -49,7 +42,7 @@ public partial class AccelerationProfileSettingsView : UserControl
             return;
 
         CreateAccelerationComboBox(viewModel);
-        CreateAccelerationField();
+        CreateAccelerationTypeGrid();
         CreateViewContainers();
         AddControlsToMainPanel(viewModel);
         UpdateViewBasedOnSelection();
@@ -65,7 +58,6 @@ public partial class AccelerationProfileSettingsView : UserControl
             EnumValues = AccelerationProfileSettingsViewModel.DefinitionTypesLocal
         };
 
-        // Set up custom binding to sync enum values
         AccelerationComboBox.SelectionChanged += (s, e) =>
         {
             if (AccelerationComboBox.SelectedEnumValue != null)
@@ -76,7 +68,6 @@ public partial class AccelerationProfileSettingsView : UserControl
             }
         };
 
-        // Set initial selection based on backend value
         var currentValue = viewModel.AccelerationBE.DefinitionType.InterfaceValue;
         if (!string.IsNullOrEmpty(currentValue))
         {
@@ -90,15 +81,32 @@ public partial class AccelerationProfileSettingsView : UserControl
         AccelerationComboBox.RefreshItems();
     }
 
-    private void CreateAccelerationField()
+    private void CreateAccelerationTypeGrid()
     {
         if (AccelerationComboBox == null)
             return;
 
-        var localizationService = App.Services?.GetRequiredService<LocalizationService>() ?? throw new InvalidOperationException("LocalizationService not available");
-        var fieldViewModel = new DualColumnLabelFieldViewModel(localizationService);
-        fieldViewModel.AddField("AccelDefinitionType", AccelerationComboBox);
-        AccelerationField = new DualColumnLabelFieldView(fieldViewModel);
+        AccelerationTypeGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto"),
+            ColumnSpacing = 16
+        };
+
+        var label = new TextBlock
+        {
+            Text = "Type",
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Avalonia.Media.Brushes.Gray
+        };
+        Grid.SetColumn(label, 0);
+        Grid.SetRow(label, 0);
+
+        Grid.SetColumn(AccelerationComboBox, 1);
+        Grid.SetRow(AccelerationComboBox, 0);
+
+        AccelerationTypeGrid.Children.Add(label);
+        AccelerationTypeGrid.Children.Add(AccelerationComboBox);
     }
 
     private void CreateViewContainers()
@@ -123,13 +131,13 @@ public partial class AccelerationProfileSettingsView : UserControl
     private void AddControlsToMainPanel(AccelerationProfileSettingsViewModel viewModel)
     {
         var mainStackPanel = this.FindControl<StackPanel>("MainStackPanel");
-        if (mainStackPanel == null || AccelerationField == null ||
+        if (mainStackPanel == null || AccelerationTypeGrid == null ||
             FormulaViewContainer == null || LUTViewContainer == null)
             return;
 
-        mainStackPanel.Children.Insert(AccelerationFieldInsertIndex, AccelerationField);
-        mainStackPanel.Children.Insert(FormulaViewInsertIndex, FormulaViewContainer);
-        mainStackPanel.Children.Insert(LUTViewInsertIndex, LUTViewContainer);
+        mainStackPanel.Children.Insert(0, AccelerationTypeGrid);
+        mainStackPanel.Children.Insert(1, FormulaViewContainer);
+        mainStackPanel.Children.Insert(2, LUTViewContainer);
 
         AnisotropyView = new AnisotropyProfileSettingsView
         {
@@ -148,7 +156,6 @@ public partial class AccelerationProfileSettingsView : UserControl
         mainStackPanel.Children.Add(AnisotropyView);
         mainStackPanel.Children.Add(CoalescionView);
     }
-
 
     private void UpdateViewBasedOnSelection()
     {
