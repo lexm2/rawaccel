@@ -9,7 +9,7 @@ public record FieldValueChangedEvent(
     ILocalizedField Field,
     string OldValue,
     string NewValue
-) : EventBase;
+);
 
 /// <summary>
 /// Published when TryApply() is called on a field.
@@ -18,7 +18,7 @@ public record FieldAppliedEvent(
     ILocalizedField Field,
     bool Success,
     string Value
-) : EventBase;
+);
 
 /// <summary>
 /// Published when Reset() is called on a field.
@@ -26,4 +26,4 @@ public record FieldAppliedEvent(
 public record FieldResetEvent(
     ILocalizedField Field,
     string Value
-) : EventBase;
+);

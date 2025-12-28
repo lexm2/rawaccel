@@ -11,9 +11,9 @@ public record ToastRequestedEvent(
     ToastType Type,
     TimeSpan Duration,
     object[] FormatArgs
-) : EventBase;
+);
 
 /// <summary>
 /// Published when the current toast should be dismissed.
 /// </summary>
-public record ToastDismissedEvent() : EventBase;
+public record ToastDismissedEvent();
