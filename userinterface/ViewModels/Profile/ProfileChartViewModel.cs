@@ -67,10 +67,6 @@ namespace userinterface.ViewModels.Profile
         private readonly PreviewChartRenderer previewRenderer;
         private BE.IProfileModel currentProfileModel = null!;
         
-        // Cached paint objects to avoid recreation
-        private SolidColorPaint? cachedXStroke;
-        private SolidColorPaint? cachedYStroke;
-        
         // Sync object for thread safety - single allocation
         private readonly object syncObject = new object();
 
@@ -261,21 +257,19 @@ namespace userinterface.ViewModels.Profile
             var xPoints = XCurvePreview?.Points?.ToArray() ?? Array.Empty<CurvePoint>();
             var yPoints = YCurvePreview?.Points?.ToArray() ?? Array.Empty<CurvePoint>();
 
-            // Initialize cached stroke objects
-            if (cachedXStroke == null)
-                cachedXStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
-            if (cachedYStroke == null)
-                cachedYStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
-            
+            // Create fresh stroke objects (fixes invisible lines issue)
+            var xStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
+            var yStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
+
             // Optimize array allocation based on YX ratio
             var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
             var seriesArray = hasYCurve ? new ISeries[2] : new ISeries[1];
-            
-            seriesArray[0] = CreateOptimizedLineSeries(xPoints, cachedXStroke, "X Curve Profile", "X Output");
-            
+
+            seriesArray[0] = CreateOptimizedLineSeries(xPoints, xStroke, "X Curve Profile", "X Output");
+
             if (hasYCurve)
             {
-                seriesArray[1] = CreateOptimizedLineSeries(yPoints, cachedYStroke, "Y Curve Profile", "Y Output");
+                seriesArray[1] = CreateOptimizedLineSeries(yPoints, yStroke, "Y Curve Profile", "Y Output");
             }
 
             foreach (var series in seriesArray)
@@ -405,18 +399,6 @@ namespace userinterface.ViewModels.Profile
             if (YCurvePreview != null)
                 YCurvePreview.Points.CollectionChanged -= OnCurvePointsChanged;
 
-            // Dispose cached paint objects
-            if (cachedXStroke != null)
-            {
-                cachedXStroke.Dispose();
-                cachedXStroke = null;
-            }
-            if (cachedYStroke != null)
-            {
-                cachedYStroke.Dispose();
-                cachedYStroke = null;
-            }
-            
             // Clear preview renderer cache for memory cleanup
             previewRenderer.ClearCache();
         }
@@ -435,21 +417,19 @@ namespace userinterface.ViewModels.Profile
             var reducedXPoints = ReducePointsForPreview(xPoints, 64);
             var reducedYPoints = ReducePointsForPreview(yPoints, 64);
 
-            // Initialize cached stroke objects
-            if (cachedXStroke == null)
-                cachedXStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
-            if (cachedYStroke == null)
-                cachedYStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
-            
+            // Create fresh stroke objects (fixes invisible lines issue)
+            var xStroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = MainStrokeThickness };
+            var yStroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = MainStrokeThickness };
+
             // Optimize array allocation based on YX ratio
             var hasYCurve = YXRatio.CurrentValidatedValue != 1.0;
             var seriesArray = hasYCurve ? new ISeries[2] : new ISeries[1];
-            
-            seriesArray[0] = CreateOptimizedLineSeries(reducedXPoints, cachedXStroke, "X Curve Profile", "X Output");
-            
+
+            seriesArray[0] = CreateOptimizedLineSeries(reducedXPoints, xStroke, "X Curve Profile", "X Output");
+
             if (hasYCurve)
             {
-                seriesArray[1] = CreateOptimizedLineSeries(reducedYPoints, cachedYStroke, "Y Curve Profile", "Y Output");
+                seriesArray[1] = CreateOptimizedLineSeries(reducedYPoints, yStroke, "Y Curve Profile", "Y Output");
             }
 
             return seriesArray;
