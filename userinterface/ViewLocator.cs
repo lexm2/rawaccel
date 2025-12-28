@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using System;
 using userinterface.ViewModels;
+using userinterface.ViewModels.Controls;
 
 namespace userinterface;
 
@@ -27,6 +28,6 @@ public class ViewLocator : IDataTemplate
 
     public bool Match(object? data)
     {
-        return data is ViewModelBase;
+        return data is ViewModelBase and not LocalizedFieldBase;
     }
 }
