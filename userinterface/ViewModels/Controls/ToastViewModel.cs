@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,12 +12,9 @@ using userinterface.Services.Events;
 
 namespace userinterface.ViewModels.Controls
 {
-    public partial class ToastViewModel : ViewModelBase, IDisposable
+    public partial class ToastViewModel : ViewModelBase, IRecipient<ToastRequestedEvent>, IRecipient<ToastDismissedEvent>, IDisposable
     {
-        private readonly IEventBus eventBus;
         private readonly LocalizationService localizationService;
-        private readonly IDisposable toastRequestedSubscription;
-        private readonly IDisposable toastDismissedSubscription;
 
         [ObservableProperty]
         private bool isVisible;
@@ -32,20 +30,19 @@ namespace userinterface.ViewModels.Controls
 
         private CancellationTokenSource? animationCancellation;
 
-        public ToastViewModel(IEventBus eventBus, LocalizationService localizationService)
+        public ToastViewModel(LocalizationService localizationService)
         {
-            this.eventBus = eventBus;
             this.localizationService = localizationService;
 
-            toastRequestedSubscription = eventBus.Subscribe<ToastRequestedEvent>(OnToastRequested);
-            toastDismissedSubscription = eventBus.Subscribe<ToastDismissedEvent>(OnToastDismissed);
+            WeakReferenceMessenger.Default.Register<ToastRequestedEvent>(this);
+            WeakReferenceMessenger.Default.Register<ToastDismissedEvent>(this);
 
             CloseCommand = new RelayCommand(Close);
         }
 
         public ICommand CloseCommand { get; }
 
-        private async void OnToastRequested(ToastRequestedEvent e)
+        public async void Receive(ToastRequestedEvent e)
         {
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
@@ -66,7 +63,7 @@ namespace userinterface.ViewModels.Controls
             });
         }
 
-        private void OnToastDismissed(ToastDismissedEvent e)
+        public void Receive(ToastDismissedEvent e)
         {
             animationCancellation?.Cancel();
             Dispatcher.UIThread.Post(() =>
@@ -100,7 +97,7 @@ namespace userinterface.ViewModels.Controls
                                 Progress = 0;
                                 if (IsVisible)
                                 {
-                                    eventBus.Publish(new ToastDismissedEvent());
+                                    WeakReferenceMessenger.Default.Send(new ToastDismissedEvent());
                                 }
                             });
                         }
@@ -120,16 +117,13 @@ namespace userinterface.ViewModels.Controls
 
         private void Close()
         {
-            eventBus.Publish(new ToastDismissedEvent());
+            WeakReferenceMessenger.Default.Send(new ToastDismissedEvent());
         }
 
         public void Dispose()
         {
             animationCancellation?.Cancel();
             animationCancellation?.Dispose();
-
-            toastRequestedSubscription.Dispose();
-            toastDismissedSubscription.Dispose();
         }
     }
 }
