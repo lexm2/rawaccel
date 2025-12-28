@@ -1,5 +1,5 @@
-using System;
-using System.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Extensions.DependencyInjection;
 using userinterface.Services;
 using userinterface.Services.Events;
 using userspace_backend.Model.EditableSettings;
@@ -8,48 +8,37 @@ namespace userinterface.ViewModels.Controls;
 
 /// <summary>
 /// Base implementation of ILocalizedField with auto-localization support.
-/// Each use site decides its own layout and input type.
-/// Publishes events through the event bus when values change.
+/// Uses App.Services to access services - no constructor injection needed.
+/// Subscribes to LanguageChangedEvent via WeakReferenceMessenger for auto-updates.
 /// </summary>
-public class LocalizedFieldBase : ViewModelBase, ILocalizedField, IDisposable
+public class LocalizedFieldBase : ViewModelBase, ILocalizedField, IRecipient<LanguageChangedEvent>
 {
-    private readonly LocalizationService _localization;
-    private readonly IEventBus? _eventBus;
     private readonly IEditableSetting? _setting;
     private readonly string? _localizationKey;
     private string _valueText = "";
-    private bool _disposed;
 
     /// <summary>
     /// Creates a field bound to a backend setting.
     /// </summary>
-    public LocalizedFieldBase(
-        IEditableSetting setting,
-        LocalizationService localization,
-        IEventBus? eventBus = null)
+    public LocalizedFieldBase(IEditableSetting setting)
     {
         _setting = setting;
-        _localization = localization;
-        _eventBus = eventBus;
         _localizationKey = setting.LocalizationKey;
         _valueText = setting.InterfaceValue;
 
-        _localization.PropertyChanged += OnLanguageChanged;
+        // Register for language changes via WeakReferenceMessenger
+        WeakReferenceMessenger.Default.Register(this);
     }
 
     /// <summary>
     /// Creates a display-only field with a localization key (no backend setting).
     /// </summary>
-    public LocalizedFieldBase(
-        string localizationKey,
-        LocalizationService localization,
-        IEventBus? eventBus = null)
+    public LocalizedFieldBase(string localizationKey)
     {
         _localizationKey = localizationKey;
-        _localization = localization;
-        _eventBus = eventBus;
 
-        _localization.PropertyChanged += OnLanguageChanged;
+        // Register for language changes via WeakReferenceMessenger
+        WeakReferenceMessenger.Default.Register(this);
     }
 
     /// <summary>
@@ -68,7 +57,7 @@ public class LocalizedFieldBase : ViewModelBase, ILocalizedField, IDisposable
             var oldValue = _valueText;
             if (SetProperty(ref _valueText, value))
             {
-                _eventBus?.Publish(new FieldValueChangedEvent(this, oldValue, value));
+                WeakReferenceMessenger.Default.Send(new FieldValueChangedEvent(this, oldValue, value));
             }
         }
     }
@@ -79,8 +68,11 @@ public class LocalizedFieldBase : ViewModelBase, ILocalizedField, IDisposable
     public virtual bool TryApply()
     {
         if (_setting == null) return true;
-        var success = _setting.TryUpdateFromInterface(ValueText);
-        _eventBus?.Publish(new FieldAppliedEvent(this, success, ValueText));
+        _setting.InterfaceValue = ValueText;
+        var success = _setting.TryUpdateFromInterface();
+
+        WeakReferenceMessenger.Default.Send(new FieldAppliedEvent(this, success, ValueText));
+
         return success;
     }
 
@@ -92,30 +84,27 @@ public class LocalizedFieldBase : ViewModelBase, ILocalizedField, IDisposable
         if (_setting != null)
         {
             ValueText = _setting.InterfaceValue;
-            _eventBus?.Publish(new FieldResetEvent(this, ValueText));
+
+            WeakReferenceMessenger.Default.Send(new FieldResetEvent(this, ValueText));
         }
     }
 
     private string GetLocalizedLabel()
     {
-        if (_localizationKey != null)
+        var localization = App.Services?.GetService<LocalizationService>();
+        if (_localizationKey != null && localization != null)
         {
-            var text = _localization.GetText(_localizationKey);
+            var text = localization.GetText(_localizationKey);
             if (text != null) return text;
         }
         return _setting?.SettingLabel ?? _localizationKey ?? "";
     }
 
-    private void OnLanguageChanged(object? sender, PropertyChangedEventArgs e)
+    /// <summary>
+    /// Handle language changed message.
+    /// </summary>
+    public void Receive(LanguageChangedEvent message)
     {
-        if (e.PropertyName == LocalizationService.LanguageChangedPropertyName)
-            OnPropertyChanged(nameof(Label));
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _localization.PropertyChanged -= OnLanguageChanged;
-        _disposed = true;
+        OnPropertyChanged(nameof(Label));
     }
 }
