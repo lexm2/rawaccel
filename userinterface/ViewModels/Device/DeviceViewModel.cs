@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,23 +13,20 @@ namespace userinterface.ViewModels.Device
     {
         private readonly IModalService modalService;
 
-        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.DevicesModel devicesBE, IModalService modalService, LocalizationService localizationService, bool isDefault = false)
+        public DeviceViewModel(BE.IDeviceModel deviceBE, BE.DevicesModel devicesBE, IModalService modalService, bool isDefault = false)
         {
             DeviceBE = deviceBE;
             DevicesBE = devicesBE;
             IsDefaultDevice = isDefault;
             this.modalService = modalService;
 
-            NameField = new NamedEditableFieldViewModel(DeviceBE.Name, localizationService);
+            NameField = new LocalizedFieldBase(DeviceBE.Name);
+            HWIDField = new LocalizedFieldBase(DeviceBE.HardwareID);
+            DPIField = new LocalizedFieldBase(DeviceBE.DPI);
+            PollRateField = new LocalizedFieldBase(DeviceBE.PollRate);
 
-            HWIDField = new NamedEditableFieldViewModel(DeviceBE.HardwareID, localizationService);
-
-            DPIField = new NamedEditableFieldViewModel(DeviceBE.DPI, localizationService);
-
-            PollRateField = new NamedEditableFieldViewModel(DeviceBE.PollRate, localizationService);
-
-            IgnoreBool = new EditableBoolViewModel(DeviceBE.Ignore, localizationService);
-            IgnoreBool.PropertyChanged += OnIgnoreBoolChanged;
+            IgnoreField = new LocalizedFieldBase(DeviceBE.Ignore);
+            IgnoreField.PropertyChanged += OnIgnoreFieldChanged;
 
             DeviceGroup = new DeviceGroupSelectorViewModel(DeviceBE, DevicesBE.DeviceGroups);
 
@@ -42,27 +39,29 @@ namespace userinterface.ViewModels.Device
 
         public bool IsDefaultDevice { get; }
 
-        public NamedEditableFieldViewModel NameField { get; set; }
+        public LocalizedFieldBase NameField { get; set; }
 
-        public NamedEditableFieldViewModel HWIDField { get; set; }
+        public LocalizedFieldBase HWIDField { get; set; }
 
-        public NamedEditableFieldViewModel DPIField { get; set; }
+        public LocalizedFieldBase DPIField { get; set; }
 
-        public NamedEditableFieldViewModel PollRateField { get; set; }
+        public LocalizedFieldBase PollRateField { get; set; }
 
-        public EditableBoolViewModel IgnoreBool { get; set; }
+        public LocalizedFieldBase IgnoreField { get; set; }
 
         public DeviceGroupSelectorViewModel DeviceGroup { get; set; }
 
         public ICommand DeleteCommand { get; }
 
-        public bool IsExpanderEnabled => !IgnoreBool.Value;
+        public bool IsExpanderEnabled => !IsIgnored;
+
+        private bool IsIgnored => bool.TryParse(IgnoreField.ValueText, out var result) && result;
 
         private bool isDeleting = false;
 
-        private void OnIgnoreBoolChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void OnIgnoreFieldChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(EditableBoolViewModel.Value))
+            if (e.PropertyName == nameof(LocalizedFieldBase.ValueText))
             {
                 OnPropertyChanged(nameof(IsExpanderEnabled));
             }

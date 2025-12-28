@@ -10,13 +10,11 @@ namespace userinterface.ViewModels.Device
     public partial class DevicesListViewModel : ViewModelBase
     {
         private readonly IModalService modalService;
-        private readonly LocalizationService localizationService;
 
-        public DevicesListViewModel(BE.DevicesModel devicesBE, IModalService modalService, LocalizationService localizationService)
+        public DevicesListViewModel(BE.DevicesModel devicesBE, IModalService modalService)
         {
             DevicesBE = devicesBE;
             this.modalService = modalService;
-            this.localizationService = localizationService;
             DeviceViews = [];
             UpdateDeviceViews();
             ((INotifyCollectionChanged)DevicesBE.Elements).CollectionChanged += DevicesCollectionChanged;
@@ -44,7 +42,7 @@ namespace userinterface.ViewModels.Device
                         {
                             int index = e.NewStartingIndex;
                             bool isDefault = index == 0;
-                            var deviceViewModel = new DeviceViewModel(device, DevicesBE, modalService, localizationService, isDefault);
+                            var deviceViewModel = new DeviceViewModel(device, DevicesBE, modalService, isDefault);
                             DeviceViews.Insert(index, deviceViewModel);
                         }
                     }
@@ -76,7 +74,7 @@ namespace userinterface.ViewModels.Device
             {
                 var device = DevicesBE.Elements[i];
                 bool isDefault = i == 0;
-                DeviceViews.Add(new DeviceViewModel(device, DevicesBE, modalService, localizationService, isDefault));
+                DeviceViews.Add(new DeviceViewModel(device, DevicesBE, modalService, isDefault));
             }
         }
 
