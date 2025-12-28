@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using userspace_backend.Model;
 
-namespace userspace_backend.Driver.Debug
+namespace userspace_backend.Platform.Linux
 {
     /// <summary>
     /// Debug system devices retriever for non-Windows platforms.

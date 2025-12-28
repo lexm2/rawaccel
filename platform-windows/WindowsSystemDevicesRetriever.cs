@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using userspace_backend.Model;
 
-namespace userspace_backend.Driver.Windows
+namespace userspace_backend.Platform.Windows
 {
     /// <summary>
     /// Windows implementation that retrieves devices from the system using the native wrapper.

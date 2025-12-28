@@ -18,11 +18,10 @@ using userinterface.ViewModels.Controls;
 using userinterface.ViewModels.Settings;
 using userinterface.Views;
 using userspace_backend;
-using userspace_backend.IO;
 #if WINDOWS
-using userspace_backend.Driver.Windows;
+using userspace_backend.Platform.Windows;
 #else
-using userspace_backend.Driver.Debug;
+using userspace_backend.Platform.Linux;
 #endif
 
 namespace userinterface;
@@ -49,20 +48,6 @@ public partial class App : Application
             builder.SetMinimumLevel(LogLevel.Warning);
 #endif
         });
-
-#if WINDOWS
-        // Windows: Use BackEndLoader to read from JSON files
-        string settingsDirectory = System.AppDomain.CurrentDomain.BaseDirectory;
-        services.AddSingleton<IBackEndLoader>(sp =>
-        {
-            var devicesRW = sp.GetRequiredService<DevicesReaderWriter>();
-            var mappingsRW = sp.GetRequiredService<MappingsReaderWriter>();
-            var profileRW = sp.GetRequiredService<ProfileReaderWriter>();
-            var settingsRW = sp.GetRequiredService<SettingsReaderWriter>();
-            return new BackEndLoader(settingsDirectory, devicesRW, mappingsRW, profileRW, settingsRW);
-        });
-#endif
-        // Non-Windows: IBackEndLoader is registered by AddDebugDriver()
 
         services.AddSingleton<INotificationService>(provider =>
             new NotificationService(

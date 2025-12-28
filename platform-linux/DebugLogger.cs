@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace userspace_backend.Driver.Debug
+namespace userspace_backend.Platform.Linux
 {
     /// <summary>
     /// Helper class for consistent debug logging with JSON serialization.

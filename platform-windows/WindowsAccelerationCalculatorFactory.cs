@@ -1,7 +1,7 @@
 using userspace_backend.Driver.Types;
 using userspace_backend.Model;
 
-namespace userspace_backend.Driver.Windows
+namespace userspace_backend.Platform.Windows
 {
     /// <summary>
     /// Windows implementation that creates ManagedAccel-backed calculators.

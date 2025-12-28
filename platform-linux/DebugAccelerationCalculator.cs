@@ -1,4 +1,6 @@
-namespace userspace_backend.Driver.Debug
+using userspace_backend.Driver;
+
+namespace userspace_backend.Platform.Linux
 {
     /// <summary>
     /// Debug acceleration calculator for non-Windows platforms.

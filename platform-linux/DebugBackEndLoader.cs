@@ -6,7 +6,7 @@ using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Model;
 using DATA = userspace_backend.Data;
 
-namespace userspace_backend.Driver.Debug
+namespace userspace_backend.Platform.Linux
 {
     /// <summary>
     /// Debug backend loader that provides mock data for testing on non-Windows platforms.

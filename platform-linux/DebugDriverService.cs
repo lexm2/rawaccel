@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
+using userspace_backend.Driver;
 using userspace_backend.Driver.Types;
 using userspace_backend.Model;
 
-namespace userspace_backend.Driver.Debug
+namespace userspace_backend.Platform.Linux
 {
     /// <summary>
     /// Debug driver service that logs all data sent to it as JSON.

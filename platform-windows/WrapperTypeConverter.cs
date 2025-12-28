@@ -1,6 +1,6 @@
 using userspace_backend.Driver.Types;
 
-namespace userspace_backend.Driver.Windows
+namespace userspace_backend.Platform.Windows
 {
     /// <summary>
     /// Converts shared driver types to wrapper types for native interop.

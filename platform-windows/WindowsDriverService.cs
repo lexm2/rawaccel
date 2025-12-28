@@ -4,7 +4,7 @@ using System.Linq;
 using userspace_backend.Driver.Types;
 using userspace_backend.Model;
 
-namespace userspace_backend.Driver.Windows
+namespace userspace_backend.Platform.Windows
 {
     /// <summary>
     /// Windows implementation that communicates with the kernel driver.

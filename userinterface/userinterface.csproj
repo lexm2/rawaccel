@@ -51,11 +51,11 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
-    <ProjectReference Include="..\driver-windows\driver-windows.csproj" />
+    <ProjectReference Include="..\platform-windows\platform-windows.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
-    <ProjectReference Include="..\driver-debug\driver-debug.csproj" />
+    <ProjectReference Include="..\platform-linux\platform-linux.csproj" />
   </ItemGroup>
 
   <ItemGroup>

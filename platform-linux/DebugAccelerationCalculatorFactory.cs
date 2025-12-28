@@ -1,7 +1,8 @@
+using userspace_backend.Driver;
 using userspace_backend.Driver.Types;
 using userspace_backend.Model;
 
-namespace userspace_backend.Driver.Debug
+namespace userspace_backend.Platform.Linux
 {
     /// <summary>
     /// Debug factory that logs profile data when creating calculators.

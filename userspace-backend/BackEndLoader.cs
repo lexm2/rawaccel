@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using DATA = userspace_backend.Data;
 using userspace_backend.IO;
+using userspace_backend.IO.PathProviders;
 using userspace_backend.Model;
 
 namespace userspace_backend
@@ -31,20 +32,20 @@ namespace userspace_backend
     public class BackEndLoader : IBackEndLoader
     {
         public BackEndLoader(
-            string settingsDirectory,
+            ISettingsPathProvider pathProvider,
             DevicesReaderWriter devicesReaderWriter,
             MappingsReaderWriter mappingsReaderWriter,
             ProfileReaderWriter profileReaderWriter,
             SettingsReaderWriter settingsReaderWriter)
         {
-            SettingsDirectory = settingsDirectory;
+            PathProvider = pathProvider;
             DevicesReaderWriter = devicesReaderWriter;
             MappingsReaderWriter = mappingsReaderWriter;
             ProfileReaderWriter = profileReaderWriter;
             SettingsReaderWriter = settingsReaderWriter;
         }
 
-        public string SettingsDirectory { get; private set; }
+        protected ISettingsPathProvider PathProvider { get; }
         protected DevicesReaderWriter DevicesReaderWriter { get; }
         protected MappingsReaderWriter MappingsReaderWriter { get; }
         protected ProfileReaderWriter ProfileReaderWriter { get; }
@@ -52,7 +53,7 @@ namespace userspace_backend
 
         public IEnumerable<DATA.Device> LoadDevices()
         {
-            string devicesFile = GetDevicesFile(SettingsDirectory);
+            string devicesFile = PathProvider.GetDevicesFilePath();
             if (!File.Exists(devicesFile))
             {
                 return [];
@@ -64,7 +65,7 @@ namespace userspace_backend
 
         public DATA.MappingSet LoadMappings()
         {
-            string mappingsFile = GetMappingsFile(SettingsDirectory);
+            string mappingsFile = PathProvider.GetMappingsFilePath();
             if (!File.Exists(mappingsFile))
             {
                 return new DATA.MappingSet { Mappings = [] };
@@ -76,7 +77,7 @@ namespace userspace_backend
 
         public IEnumerable<DATA.Profile> LoadProfiles()
         {
-            string profilesDirectory = GetProfilesDirectory(SettingsDirectory);
+            string profilesDirectory = PathProvider.GetProfilesDirectoryPath();
             if (!Directory.Exists(profilesDirectory))
             {
                 return [];
@@ -96,8 +97,8 @@ namespace userspace_backend
 
         public DATA.Settings? LoadSettings()
         {
-            string settingsFile = GetSettingsFile(SettingsDirectory);
-            
+            string settingsFile = PathProvider.GetSettingsFilePath();
+
             if (!File.Exists(settingsFile))
             {
                 return null;
@@ -115,7 +116,7 @@ namespace userspace_backend
 
         public void WriteSettings(DATA.Settings settings)
         {
-            string settingsFile = GetSettingsFile(SettingsDirectory);
+            string settingsFile = PathProvider.GetSettingsFilePath();
             SettingsReaderWriter.Write(settingsFile, settings);
         }
 
@@ -133,7 +134,7 @@ namespace userspace_backend
         {
             IEnumerable<DATA.Device> devicesData = devices.Select(d => d.MapToData());
             string devicesFileText = DevicesReaderWriter.Serialize(devicesData);
-            string devicesFilePath = GetDevicesFile(SettingsDirectory);
+            string devicesFilePath = PathProvider.GetDevicesFilePath();
             File.WriteAllText(devicesFilePath, devicesFileText);
         }
 
@@ -141,32 +142,22 @@ namespace userspace_backend
         {
             DATA.MappingSet mappingsData = mappings.MapToData();
             string mappingsFileText = MappingsReaderWriter.Serialize(mappingsData);
-            string mappingsFilePath = GetMappingsFile(SettingsDirectory);
+            string mappingsFilePath = PathProvider.GetMappingsFilePath();
             File.WriteAllText(mappingsFilePath, mappingsFileText);
         }
         
         protected void WriteProfiles(IEnumerable<IProfileModel> profiles)
         {
-            string profilesDirectory = GetProfilesDirectory(SettingsDirectory);
+            string profilesDirectory = PathProvider.GetProfilesDirectoryPath();
             Directory.CreateDirectory(profilesDirectory);
 
             foreach (var profile in profiles)
             {
                 DATA.Profile profileData = profile.MapToData();
                 string profileFileText = ProfileReaderWriter.Serialize(profileData);
-                string profileFilePath = GetProfileFile(profilesDirectory, profileData.Name);
+                string profileFilePath = PathProvider.GetProfileFilePath(profileData.Name);
                 File.WriteAllText(profileFilePath, profileFileText);
             }
         }
-
-        protected static string GetDevicesFile(string settingsDirectory) => Path.Combine(settingsDirectory, "devices.json");
-
-        protected static string GetMappingsFile(string settingsDirectory) => Path.Combine(settingsDirectory, "mappings.json");
-
-        protected static string GetProfilesDirectory(string settingsDirectory) => Path.Combine(settingsDirectory, "profiles");
-
-        protected static string GetProfileFile(string profileDirectory, string profileName) => Path.Combine(profileDirectory, $"{profileName}.json");
-
-        protected static string GetSettingsFile(string settingsDirectory) => Path.Combine(settingsDirectory, "settings.json");
     }
 }

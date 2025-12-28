@@ -1,6 +1,6 @@
 using System;
 
-namespace userspace_backend.Driver.Windows
+namespace userspace_backend.Platform.Windows
 {
     /// <summary>
     /// Windows implementation that wraps ManagedAccel from the native wrapper.
