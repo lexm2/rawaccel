@@ -123,6 +123,10 @@ namespace userinterface.ViewModels.Profile
             YXRatio = profileModel.YXRatio;
 
             YXRatio.PropertyChanged += OnYXRatioChanged;
+
+            // Subscribe to curve preview changes
+            XCurvePreview.Points.CollectionChanged += OnCurvePointsChanged;
+            YCurvePreview.Points.CollectionChanged += OnCurvePointsChanged;
         }
 
 
@@ -304,12 +308,26 @@ namespace userinterface.ViewModels.Profile
             if (currentProfileModel == profileModel && IsInitialized)
                 return Task.CompletedTask;
 
+            // Unsubscribe from old curve preview events
+            if (XCurvePreview != null)
+            {
+                XCurvePreview.Points.CollectionChanged -= OnCurvePointsChanged;
+            }
+            if (YCurvePreview != null)
+            {
+                YCurvePreview.Points.CollectionChanged -= OnCurvePointsChanged;
+            }
+
             currentProfileModel = profileModel;
             XCurvePreview = profileModel.XCurvePreview;
             YCurvePreview = profileModel.YCurvePreview;
             YXRatio = profileModel.YXRatio;
 
             YXRatio.PropertyChanged += OnYXRatioChanged;
+
+            // Subscribe to new curve preview events
+            XCurvePreview.Points.CollectionChanged += OnCurvePointsChanged;
+            YCurvePreview.Points.CollectionChanged += OnCurvePointsChanged;
 
             // Update chart data synchronously for instant response
             CreateSeries();
@@ -380,7 +398,13 @@ namespace userinterface.ViewModels.Profile
             localizationService.PropertyChanged -= OnLocalizationChanged;
             if (YXRatio != null)
                 YXRatio.PropertyChanged -= OnYXRatioChanged;
-            
+
+            // Unsubscribe from curve preview events
+            if (XCurvePreview != null)
+                XCurvePreview.Points.CollectionChanged -= OnCurvePointsChanged;
+            if (YCurvePreview != null)
+                YCurvePreview.Points.CollectionChanged -= OnCurvePointsChanged;
+
             // Dispose cached paint objects
             if (cachedXStroke != null)
             {
@@ -474,6 +498,7 @@ namespace userinterface.ViewModels.Profile
         private void CreateSeries()
         {
             var series = CreateSeriesData();
+
             Series.Clear();
             foreach (var s in series)
             {
@@ -492,6 +517,17 @@ namespace userinterface.ViewModels.Profile
                 CreateSeries();
                 OnPropertyChanged(nameof(Series));
             }
+        }
+
+        private void OnCurvePointsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            // Post to UI thread with Background priority to naturally debounce rapid updates
+            // SetPoints() fires Clear + N Add events; this batches them into one update
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                CreateSeries();
+                OnPropertyChanged(nameof(Series));
+            }, Avalonia.Threading.DispatcherPriority.Background);
         }
 
         // ================================================================================================

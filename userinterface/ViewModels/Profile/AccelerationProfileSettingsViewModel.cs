@@ -24,14 +24,14 @@ namespace userinterface.ViewModels.Profile
         [ObservableProperty]
         public bool areAccelSettingsVisible;
 
-        public AccelerationProfileSettingsViewModel(BE.IAccelerationModel accelerationBE, INotificationService notificationService, LocalizationService localizationService)
+        public AccelerationProfileSettingsViewModel(BE.IAccelerationModel accelerationBE, INotificationService notificationService)
         {
             AccelerationBE = accelerationBE;
             AccelerationFormulaSettings = new AccelerationFormulaSettingsViewModel(
                 accelerationBE.GetSelectable(BEData.AccelerationDefinitionType.Formula) as BE.IFormulaAccelModel, notificationService);
             AccelerationLUTSettings = new AccelerationLUTSettingsViewModel(
                 accelerationBE.GetSelectable(BEData.AccelerationDefinitionType.LookupTable) as BE.ILookupTableDefinitionModel);
-            AnisotropySettings = new AnisotropyProfileSettingsViewModel(accelerationBE.Anisotropy, localizationService);
+            AnisotropySettings = new AnisotropyProfileSettingsViewModel(accelerationBE.Anisotropy);
             CoalescionSettings = new CoalescionProfileSettingsViewModel(accelerationBE.Coalescion);
             // TODO: editable settings composition
             AccelerationBE.Selection.AutoUpdateFromInterface = true;

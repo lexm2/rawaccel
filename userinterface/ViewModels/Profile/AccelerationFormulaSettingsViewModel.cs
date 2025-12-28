@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using userinterface.Services;
@@ -68,7 +68,7 @@ namespace userinterface.ViewModels.Profile
 
         private void OnClassicExponentChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(EditableFieldViewModel.ValueText) &&
+            if (e.PropertyName == nameof(LocalizedFieldBase.ValueText) &&
                 FormulaAccelBE.FormulaType.InterfaceValue == BEData.AccelerationFormulaType.Classic.ToString())
             {
                 if (double.TryParse(ClassicSettings.Exponent.ValueText, out double exponentValue) &&
@@ -84,104 +84,104 @@ namespace userinterface.ViewModels.Profile
     {
         public SynchronousSettings(BE.Formula.ISynchronousAccelerationDefinitionModel synchronousAccelModelBE)
         {
-            SyncSpeed = new EditableFieldViewModel(synchronousAccelModelBE.SyncSpeed);
-            Motivity = new EditableFieldViewModel(synchronousAccelModelBE.Motivity);
-            Gamma = new EditableFieldViewModel(synchronousAccelModelBE.Gamma);
-            Smoothness = new EditableFieldViewModel(synchronousAccelModelBE.Smoothness);
+            SyncSpeed = new LocalizedFieldBase(synchronousAccelModelBE.SyncSpeed);
+            Motivity = new LocalizedFieldBase(synchronousAccelModelBE.Motivity);
+            Gamma = new LocalizedFieldBase(synchronousAccelModelBE.Gamma);
+            Smoothness = new LocalizedFieldBase(synchronousAccelModelBE.Smoothness);
         }
 
-        public EditableFieldViewModel SyncSpeed { get; set; }
+        public LocalizedFieldBase SyncSpeed { get; set; }
 
-        public EditableFieldViewModel Motivity { get; set; }
+        public LocalizedFieldBase Motivity { get; set; }
 
-        public EditableFieldViewModel Gamma { get; set; }
+        public LocalizedFieldBase Gamma { get; set; }
 
-        public EditableFieldViewModel Smoothness { get; set; }
+        public LocalizedFieldBase Smoothness { get; set; }
     }
 
     public class LinearSettings
     {
         public LinearSettings(BE.Formula.LinearAccelerationDefinitionModel linearAccelModelBE)
         {
-            Acceleration = new EditableFieldViewModel(linearAccelModelBE.Acceleration);
-            Offset = new EditableFieldViewModel(linearAccelModelBE.Offset);
-            Cap = new EditableFieldViewModel(linearAccelModelBE.Cap);
+            Acceleration = new LocalizedFieldBase(linearAccelModelBE.Acceleration);
+            Offset = new LocalizedFieldBase(linearAccelModelBE.Offset);
+            Cap = new LocalizedFieldBase(linearAccelModelBE.Cap);
         }
 
-        public EditableFieldViewModel Acceleration { get; set; }
+        public LocalizedFieldBase Acceleration { get; set; }
 
-        public EditableFieldViewModel Offset { get; set; }
+        public LocalizedFieldBase Offset { get; set; }
 
-        public EditableFieldViewModel Cap { get; set; }
+        public LocalizedFieldBase Cap { get; set; }
     }
 
     public class ClassicSettings
     {
         public ClassicSettings(BE.Formula.ClassicAccelerationDefinitionModel classicAccelModelBE)
         {
-            Acceleration = new EditableFieldViewModel(classicAccelModelBE.Acceleration);
-            Exponent = new EditableFieldViewModel(classicAccelModelBE.Exponent);
-            Offset = new EditableFieldViewModel(classicAccelModelBE.Offset);
-            Cap = new EditableFieldViewModel(classicAccelModelBE.Cap);
+            Acceleration = new LocalizedFieldBase(classicAccelModelBE.Acceleration);
+            Exponent = new LocalizedFieldBase(classicAccelModelBE.Exponent);
+            Offset = new LocalizedFieldBase(classicAccelModelBE.Offset);
+            Cap = new LocalizedFieldBase(classicAccelModelBE.Cap);
         }
 
-        public EditableFieldViewModel Acceleration { get; set; }
+        public LocalizedFieldBase Acceleration { get; set; }
 
-        public EditableFieldViewModel Exponent { get; set; }
+        public LocalizedFieldBase Exponent { get; set; }
 
-        public EditableFieldViewModel Offset { get; set; }
+        public LocalizedFieldBase Offset { get; set; }
 
-        public EditableFieldViewModel Cap { get; set; }
+        public LocalizedFieldBase Cap { get; set; }
     }
 
     public class PowerSettings
     {
         public PowerSettings(BE.Formula.PowerAccelerationDefinitionModel powerAccelModelBE)
         {
-            Scale = new EditableFieldViewModel(powerAccelModelBE.Scale);
-            Exponent = new EditableFieldViewModel(powerAccelModelBE.Exponent);
-            OutputOffset = new EditableFieldViewModel(powerAccelModelBE.OutputOffset);
-            Cap = new EditableFieldViewModel(powerAccelModelBE.Cap);
+            Scale = new LocalizedFieldBase(powerAccelModelBE.Scale);
+            Exponent = new LocalizedFieldBase(powerAccelModelBE.Exponent);
+            OutputOffset = new LocalizedFieldBase(powerAccelModelBE.OutputOffset);
+            Cap = new LocalizedFieldBase(powerAccelModelBE.Cap);
         }
 
-        public EditableFieldViewModel Scale { get; set; }
+        public LocalizedFieldBase Scale { get; set; }
 
-        public EditableFieldViewModel Exponent { get; set; }
+        public LocalizedFieldBase Exponent { get; set; }
 
-        public EditableFieldViewModel OutputOffset { get; set; }
+        public LocalizedFieldBase OutputOffset { get; set; }
 
-        public EditableFieldViewModel Cap { get; set; }
+        public LocalizedFieldBase Cap { get; set; }
     }
 
     public class NaturalSettings
     {
         public NaturalSettings(BE.Formula.NaturalAccelerationDefinitionModel naturalAccelModelBE)
         {
-            DecayRate = new EditableFieldViewModel(naturalAccelModelBE.DecayRate);
-            InputOffset = new EditableFieldViewModel(naturalAccelModelBE.InputOffset);
-            Limit = new EditableFieldViewModel(naturalAccelModelBE.Limit);
+            DecayRate = new LocalizedFieldBase(naturalAccelModelBE.DecayRate);
+            InputOffset = new LocalizedFieldBase(naturalAccelModelBE.InputOffset);
+            Limit = new LocalizedFieldBase(naturalAccelModelBE.Limit);
         }
 
-        public EditableFieldViewModel DecayRate { get; set; }
+        public LocalizedFieldBase DecayRate { get; set; }
 
-        public EditableFieldViewModel InputOffset { get; set; }
+        public LocalizedFieldBase InputOffset { get; set; }
 
-        public EditableFieldViewModel Limit { get; set; }
+        public LocalizedFieldBase Limit { get; set; }
     }
 
     public class JumpSettings
     {
         public JumpSettings(BE.Formula.JumpAccelerationDefinitionModel jumpAccelModelBE)
         {
-            Smooth = new EditableFieldViewModel(jumpAccelModelBE.Smooth);
-            Input = new EditableFieldViewModel(jumpAccelModelBE.Input);
-            Output = new EditableFieldViewModel(jumpAccelModelBE.Output);
+            Smooth = new LocalizedFieldBase(jumpAccelModelBE.Smooth);
+            Input = new LocalizedFieldBase(jumpAccelModelBE.Input);
+            Output = new LocalizedFieldBase(jumpAccelModelBE.Output);
         }
 
-        public EditableFieldViewModel Smooth { get; set; }
+        public LocalizedFieldBase Smooth { get; set; }
 
-        public EditableFieldViewModel Input { get; set; }
+        public LocalizedFieldBase Input { get; set; }
 
-        public EditableFieldViewModel Output { get; set; }
+        public LocalizedFieldBase Output { get; set; }
     }
 }

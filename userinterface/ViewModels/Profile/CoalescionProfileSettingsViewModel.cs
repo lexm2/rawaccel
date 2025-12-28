@@ -1,4 +1,4 @@
-﻿using userinterface.ViewModels.Controls;
+using userinterface.ViewModels.Controls;
 using BE = userspace_backend.Model.ProfileComponents;
 
 namespace userinterface.ViewModels.Profile
@@ -8,14 +8,14 @@ namespace userinterface.ViewModels.Profile
         public CoalescionProfileSettingsViewModel(BE.ICoalescionModel coalescionBE)
         {
             CoalescionBE = coalescionBE;
-            InputSmoothingHalfLife = new EditableFieldViewModel(coalescionBE.InputSmoothingHalfLife);
-            ScaleSmoothingHalfLife = new EditableFieldViewModel(coalescionBE.ScaleSmoothingHalfLife);
+            InputSmoothingHalfLife = new LocalizedFieldBase(coalescionBE.InputSmoothingHalfLife);
+            ScaleSmoothingHalfLife = new LocalizedFieldBase(coalescionBE.ScaleSmoothingHalfLife);
         }
 
         protected BE.ICoalescionModel CoalescionBE { get; }
 
-        public EditableFieldViewModel InputSmoothingHalfLife { get; set; }
+        public LocalizedFieldBase InputSmoothingHalfLife { get; set; }
 
-        public EditableFieldViewModel ScaleSmoothingHalfLife { get; set; }
+        public LocalizedFieldBase ScaleSmoothingHalfLife { get; set; }
     }
 }

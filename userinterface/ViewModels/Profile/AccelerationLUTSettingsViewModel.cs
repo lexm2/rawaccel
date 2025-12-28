@@ -1,4 +1,4 @@
-﻿using userinterface.ViewModels.Controls;
+using userinterface.ViewModels.Controls;
 using BE = userspace_backend.Model.AccelDefinitions;
 
 namespace userinterface.ViewModels.Profile
@@ -8,11 +8,11 @@ namespace userinterface.ViewModels.Profile
         public AccelerationLUTSettingsViewModel(BE.ILookupTableDefinitionModel lutAccelBE)
         {
             LUTAccelBE = lutAccelBE;
-            LUTPoints = new EditableFieldViewModel(lutAccelBE.Data);
+            LUTPoints = new LocalizedFieldBase(lutAccelBE.Data);
         }
 
         public BE.ILookupTableDefinitionModel LUTAccelBE { get; }
 
-        public EditableFieldViewModel LUTPoints { get; set; }
+        public LocalizedFieldBase LUTPoints { get; set; }
     }
 }

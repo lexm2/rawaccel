@@ -1,4 +1,3 @@
-﻿using userinterface.Services;
 using userinterface.ViewModels.Controls;
 using BE = userspace_backend.Model.ProfileComponents;
 
@@ -6,26 +5,26 @@ namespace userinterface.ViewModels.Profile
 {
     public partial class AnisotropyProfileSettingsViewModel : ViewModelBase
     {
-        public AnisotropyProfileSettingsViewModel(BE.IAnisotropyModel anisotropyBE, LocalizationService localizationService)
+        public AnisotropyProfileSettingsViewModel(BE.IAnisotropyModel anisotropyBE)
         {
             AnisotropyBE = anisotropyBE;
-            DomainX = new EditableFieldViewModel(AnisotropyBE.DomainX);
-            DomainY = new EditableFieldViewModel(AnisotropyBE.DomainY);
-            RangeX = new EditableFieldViewModel(AnisotropyBE.RangeX);
-            RangeY = new EditableFieldViewModel(AnisotropyBE.RangeY);
-            LPNorm = new NamedEditableFieldViewModel(AnisotropyBE.LPNorm, localizationService);
+            DomainX = new LocalizedFieldBase(AnisotropyBE.DomainX);
+            DomainY = new LocalizedFieldBase(AnisotropyBE.DomainY);
+            RangeX = new LocalizedFieldBase(AnisotropyBE.RangeX);
+            RangeY = new LocalizedFieldBase(AnisotropyBE.RangeY);
+            LPNorm = new LocalizedFieldBase(AnisotropyBE.LPNorm);
         }
 
         protected BE.IAnisotropyModel AnisotropyBE { get; }
 
-        public EditableFieldViewModel DomainX { get; set; }
+        public LocalizedFieldBase DomainX { get; set; }
 
-        public EditableFieldViewModel DomainY { get; set; }
+        public LocalizedFieldBase DomainY { get; set; }
 
-        public EditableFieldViewModel RangeX { get; set; }
+        public LocalizedFieldBase RangeX { get; set; }
 
-        public EditableFieldViewModel RangeY { get; set; }
+        public LocalizedFieldBase RangeY { get; set; }
 
-        public NamedEditableFieldViewModel LPNorm { get; set; }
+        public LocalizedFieldBase LPNorm { get; set; }
     }
 }

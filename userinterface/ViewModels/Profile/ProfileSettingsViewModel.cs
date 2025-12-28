@@ -1,4 +1,4 @@
-﻿using userinterface.Services;
+using userinterface.Services;
 using userinterface.ViewModels.Controls;
 using BE = userspace_backend.Model;
 
@@ -7,19 +7,17 @@ namespace userinterface.ViewModels.Profile
     public partial class ProfileSettingsViewModel : ViewModelBase
     {
         private readonly INotificationService notificationService;
-        private readonly LocalizationService localizationService;
 
-        public ProfileSettingsViewModel(INotificationService notificationService, LocalizationService localizationService)
+        public ProfileSettingsViewModel(INotificationService notificationService)
         {
             this.notificationService = notificationService;
-            this.localizationService = localizationService;
         }
 
         protected BE.IProfileModel ProfileModelBE { get; private set; } = null!;
 
-        public EditableFieldViewModel OutputDPIField { get; private set; } = null!;
+        public LocalizedFieldBase OutputDPIField { get; private set; } = null!;
 
-        public EditableFieldViewModel YXRatioField { get; private set; } = null!;
+        public LocalizedFieldBase YXRatioField { get; private set; } = null!;
 
         public AccelerationProfileSettingsViewModel AccelerationSettings { get; private set; } = null!;
 
@@ -28,9 +26,9 @@ namespace userinterface.ViewModels.Profile
         public void Initialize(BE.IProfileModel profileModel)
         {
             ProfileModelBE = profileModel;
-            OutputDPIField = new EditableFieldViewModel(profileModel.OutputDPI);
-            YXRatioField = new EditableFieldViewModel(profileModel.YXRatio);
-            AccelerationSettings = new AccelerationProfileSettingsViewModel(profileModel.Acceleration, notificationService, localizationService);
+            OutputDPIField = new LocalizedFieldBase(profileModel.OutputDPI);
+            YXRatioField = new LocalizedFieldBase(profileModel.YXRatio);
+            AccelerationSettings = new AccelerationProfileSettingsViewModel(profileModel.Acceleration, notificationService);
             HiddenSettings = new HiddenProfileSettingsViewModel(profileModel.Hidden);
         }
     }
