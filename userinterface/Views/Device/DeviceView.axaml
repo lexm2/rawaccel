@@ -92,7 +92,7 @@
 
 				<ContentControl Grid.Column="2"
                                 HorizontalAlignment="Left"
-                                Content="{Binding IgnoreBool}" />
+                                Content="{Binding IgnoreField}" />
 
 				<ContentControl Grid.Column="3"
                                 HorizontalAlignment="Left"

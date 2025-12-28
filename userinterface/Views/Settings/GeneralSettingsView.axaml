@@ -59,14 +59,9 @@
 			<Setter Property="Background" Value="{DynamicResource PrimaryButtonHoverBrush}" />
 			<Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonHoverBrush}" />
 		</Style>
-
-		<Style Selector="controls|DualColumnLabelFieldView ContentPresenter">
-			<Setter Property="HorizontalAlignment" Value="Stretch"/>
-			<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-		</Style>
 	</UserControl.Styles>
 
 	<StackPanel Spacing="12" x:Name="SettingsStackPanel">
-		<!-- The DualColumnLabelFieldView will be added in code-behind -->
+		<!-- Settings fields are added in code-behind -->
 	</StackPanel>
 </UserControl>

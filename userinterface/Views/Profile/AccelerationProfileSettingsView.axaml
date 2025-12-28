@@ -4,7 +4,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:userinterface.ViewModels.Profile"
              xmlns:controls="using:userinterface.Controls"
-             xmlns:localControls="using:userinterface.Views.Controls"
              xmlns:ext="using:userinterface.Extensions"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="userinterface.Views.Profile.AccelerationProfileSettingsView"
@@ -44,11 +43,6 @@
 		<Style Selector="ComboBox /template/ Border#PART_PopupBorder">
 			<Setter Property="MinWidth" Value="150"/>
 			<Setter Property="MaxWidth" Value="300"/>
-		</Style>
-
-		<Style Selector="localControls|DualColumnLabelFieldView ContentPresenter">
-			<Setter Property="HorizontalAlignment" Value="Stretch"/>
-			<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
 		</Style>
 	</UserControl.Styles>
 

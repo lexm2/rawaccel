@@ -2,17 +2,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:v="using:userinterface.Views"
              xmlns:vm="using:userinterface.ViewModels.Profile"
              xmlns:controls="using:userinterface.Controls"
-             xmlns:localControls="using:userinterface.Views.Controls"
              xmlns:ext="using:userinterface.Extensions"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="userinterface.Views.Profile.HiddenProfileSettingsView"
              x:DataType="vm:HiddenProfileSettingsViewModel">
 
 	<UserControl.Styles>
-		<Style Selector="ComboBox, TextBox, NumericUpDown">
+		<Style Selector="TextBox">
 			<Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
 			<Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
 			<Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -21,10 +19,10 @@
 			<Setter Property="HorizontalAlignment" Value="Stretch"/>
 			<Setter Property="VerticalAlignment" Value="Center"/>
 		</Style>
-
-		<Style Selector="localControls|DualColumnLabelFieldView ContentPresenter">
-			<Setter Property="HorizontalAlignment" Value="Stretch"/>
-			<Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+		<Style Selector="TextBlock.FieldLabel">
+			<Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+			<Setter Property="VerticalAlignment" Value="Center"/>
+			<Setter Property="FontSize" Value="14"/>
 		</Style>
 	</UserControl.Styles>
 
@@ -32,9 +30,31 @@
 	                               HorizontalAlignment="Stretch"
 	                               Margin="0,0,0,12">
 		<controls:EditableExpanderView.ExpanderContent>
-			<StackPanel Orientation="Vertical" Margin="16" Spacing="12" x:Name="MainStackPanel">
-				<!-- The DualColumnLabelFieldView will be added in code-behind -->
-			</StackPanel>
+			<Grid Margin="16" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12" ColumnSpacing="16">
+				<!-- Rotation -->
+				<TextBlock Grid.Row="0" Grid.Column="0" Classes="FieldLabel" Text="{Binding RotationField.Label}"/>
+				<ContentControl Grid.Row="0" Grid.Column="1" Content="{Binding RotationField}" HorizontalAlignment="Stretch"/>
+
+				<!-- LR Ratio -->
+				<TextBlock Grid.Row="1" Grid.Column="0" Classes="FieldLabel" Text="{Binding LRRatioField.Label}"/>
+				<ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding LRRatioField}" HorizontalAlignment="Stretch"/>
+
+				<!-- UD Ratio -->
+				<TextBlock Grid.Row="2" Grid.Column="0" Classes="FieldLabel" Text="{Binding UDRatioField.Label}"/>
+				<ContentControl Grid.Row="2" Grid.Column="1" Content="{Binding UDRatioField}" HorizontalAlignment="Stretch"/>
+
+				<!-- Speed Cap -->
+				<TextBlock Grid.Row="3" Grid.Column="0" Classes="FieldLabel" Text="{Binding SpeedCapField.Label}"/>
+				<ContentControl Grid.Row="3" Grid.Column="1" Content="{Binding SpeedCapField}" HorizontalAlignment="Stretch"/>
+
+				<!-- Angle Snapping -->
+				<TextBlock Grid.Row="4" Grid.Column="0" Classes="FieldLabel" Text="{Binding AngleSnappingField.Label}"/>
+				<ContentControl Grid.Row="4" Grid.Column="1" Content="{Binding AngleSnappingField}" HorizontalAlignment="Stretch"/>
+
+				<!-- Output Smoothing Half Life -->
+				<TextBlock Grid.Row="5" Grid.Column="0" Classes="FieldLabel" Text="{Binding OutputSmoothingHalfLifeField.Label}"/>
+				<ContentControl Grid.Row="5" Grid.Column="1" Content="{Binding OutputSmoothingHalfLifeField}" HorizontalAlignment="Stretch"/>
+			</Grid>
 		</controls:EditableExpanderView.ExpanderContent>
 	</controls:EditableExpanderView>
 </UserControl>
