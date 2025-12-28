@@ -2,10 +2,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="userinterface.App"
              xmlns:local="using:userinterface"
+             xmlns:controls="using:userinterface.ViewModels.Controls"
              RequestedThemeVariant="Default">
 	<!-- "Default" ThemeVariant follows system theme variant. -->
 	<Application.DataTemplates>
 		<local:ViewLocator/>
+		<!-- DataTemplate for LocalizedFieldBase - renders as a TextBox -->
+		<DataTemplate DataType="controls:LocalizedFieldBase">
+			<TextBox Text="{Binding ValueText, Mode=TwoWay}"
+			         HorizontalAlignment="Stretch"
+			         VerticalAlignment="Center"/>
+		</DataTemplate>
 	</Application.DataTemplates>
 
 	<Application.Resources>

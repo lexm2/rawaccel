@@ -66,8 +66,6 @@ public partial class App : Application
 
         services.AddSingleton<INotificationService>(provider =>
             new NotificationService(
-                provider.GetRequiredService<IEventBus>(),
-                provider.GetRequiredService<LocalizationService>(),
                 provider.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IModalService>(provider =>
             new ModalService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>()));
@@ -77,7 +75,6 @@ public partial class App : Application
         services.AddSingleton<LocalizationService>();
         services.AddSingleton<PreviewChartRenderer>();
         services.AddSingleton<ISettingsService, SettingsService>();
-        services.AddSingleton<IEventBus, EventBus>();
 
         RegisterViewModels(services);
 
@@ -130,20 +127,17 @@ public partial class App : Application
         // Control ViewModels (registered first as they may be dependencies)
         services.AddSingleton<ViewModels.Controls.ToastViewModel>(provider =>
             new ViewModels.Controls.ToastViewModel(
-                provider.GetRequiredService<IEventBus>(),
                 provider.GetRequiredService<LocalizationService>()));
 
         // Device ViewModels
         services.AddSingleton<ViewModels.Device.DevicesPageViewModel>(provider =>
             new ViewModels.Device.DevicesPageViewModel(
                 provider.GetRequiredService<IBackEnd>(),
-                provider.GetRequiredService<IModalService>(),
-                provider.GetRequiredService<LocalizationService>()));
+                provider.GetRequiredService<IModalService>()));
         services.AddTransient<ViewModels.Device.DevicesListViewModel>(provider =>
             new ViewModels.Device.DevicesListViewModel(
                 provider.GetRequiredService<IBackEnd>().Devices,
-                provider.GetRequiredService<IModalService>(),
-                provider.GetRequiredService<LocalizationService>()));
+                provider.GetRequiredService<IModalService>()));
         services.AddTransient<ViewModels.Device.DeviceGroupsViewModel>();
         services.AddTransient<ViewModels.Device.DeviceGroupViewModel>();
         services.AddTransient<ViewModels.Device.DeviceGroupSelectorViewModel>();
@@ -155,8 +149,7 @@ public partial class App : Application
         services.AddTransient<ViewModels.Profile.ProfileViewModel>();
         services.AddTransient<ViewModels.Profile.ProfileSettingsViewModel>(provider =>
             new ViewModels.Profile.ProfileSettingsViewModel(
-                provider.GetRequiredService<INotificationService>(),
-                provider.GetRequiredService<LocalizationService>()));
+                provider.GetRequiredService<INotificationService>()));
         services.AddTransient<ViewModels.Profile.ProfileChartViewModel>();
         services.AddTransient<ViewModels.Profile.AccelerationFormulaSettingsViewModel>();
         services.AddTransient<ViewModels.Profile.AccelerationLUTSettingsViewModel>();
