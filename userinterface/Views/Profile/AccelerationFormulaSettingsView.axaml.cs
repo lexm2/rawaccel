@@ -1,7 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using System;
 using userinterface.ViewModels.Controls;
 using userinterface.ViewModels.Profile;
 using userinterface.Views.Controls;
@@ -11,8 +10,6 @@ namespace userinterface.Views.Profile;
 
 public partial class AccelerationFormulaSettingsView : UserControl
 {
-    private const BEData.AccelerationFormulaType DefaultFormulaType = BEData.AccelerationFormulaType.Synchronous;
-
     private Grid? FormulaTypeGrid;
     private StackPanel? FieldsContainer;
     private LocalizedComboBox? FormulaTypeCombo;
@@ -49,12 +46,14 @@ public partial class AccelerationFormulaSettingsView : UserControl
         CreateFieldsContainer();
         AddControlsToStackPanel();
 
-        var currentFormulaType = GetCurrentFormulaType(viewModel.FormulaAccelBE.Selection.InterfaceValue);
-        UpdateFormulaFields(currentFormulaType, viewModel);
+        UpdateFormulaFields(viewModel.FormulaAccelBE.FormulaType.ModelValue, viewModel);
     }
 
     private void CreateFormulaTypeComboBox()
     {
+        if (DataContext is not AccelerationFormulaSettingsViewModel viewModel)
+            return;
+
         FormulaTypeCombo = new LocalizedComboBox
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -63,17 +62,21 @@ public partial class AccelerationFormulaSettingsView : UserControl
             EnumValues = AccelerationFormulaSettingsViewModel.FormulaTypesLocal
         };
 
+        FormulaTypeCombo.RefreshItems();
+
+        // Set initial selection to match backend value BEFORE attaching handler
+        FormulaTypeCombo.SetSelectedValue(viewModel.FormulaAccelBE.FormulaType.InterfaceValue);
+
+        // NOW attach the handler - only fires for future user changes
         FormulaTypeCombo.SelectionChanged += (s, e) =>
         {
-            if (DataContext is AccelerationFormulaSettingsViewModel viewModel && FormulaTypeCombo.SelectedEnumValue != null)
+            if (DataContext is AccelerationFormulaSettingsViewModel vm && FormulaTypeCombo.SelectedEnumValue != null)
             {
-                viewModel.FormulaAccelBE.FormulaType.InterfaceValue = FormulaTypeCombo.SelectedEnumValue;
-                viewModel.FormulaAccelBE.FormulaType.TryUpdateFromInterface();
+                vm.FormulaAccelBE.FormulaType.InterfaceValue = FormulaTypeCombo.SelectedEnumValue;
+                vm.FormulaAccelBE.FormulaType.TryUpdateFromInterface();
                 OnFormulaTypeSelectionChanged();
             }
         };
-
-        FormulaTypeCombo.RefreshItems();
     }
 
     private void CreateFormulaTypeGrid()
@@ -130,17 +133,7 @@ public partial class AccelerationFormulaSettingsView : UserControl
             return;
         }
 
-        var currentFormulaType = GetCurrentFormulaType(viewModel.FormulaAccelBE.Selection.InterfaceValue);
-        UpdateFormulaFields(currentFormulaType, viewModel);
-    }
-
-    private static BEData.AccelerationFormulaType GetCurrentFormulaType(string formulaTypeName)
-    {
-        if (Enum.TryParse<BEData.AccelerationFormulaType>(formulaTypeName, out var formulaType))
-        {
-            return formulaType;
-        }
-        return DefaultFormulaType;
+        UpdateFormulaFields(viewModel.FormulaAccelBE.FormulaType.ModelValue, viewModel);
     }
 
     private void UpdateFormulaFields(BEData.AccelerationFormulaType formulaType, AccelerationFormulaSettingsViewModel formulaSettings)

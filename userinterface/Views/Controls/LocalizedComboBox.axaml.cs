@@ -82,6 +82,15 @@ namespace userinterface.Views.Controls
             UpdateLocalizedItems();
         }
 
+        public void SetSelectedValue(string enumValue)
+        {
+            var matchingItem = localizedItems.FirstOrDefault(item => item.EnumValue == enumValue);
+            if (matchingItem != null)
+            {
+                SelectedItem = matchingItem;
+            }
+        }
+
         private void UpdateLocalizedItems()
         {
             var keys = LocalizationKeys?.ToList() ?? new List<string>();
@@ -116,11 +125,7 @@ namespace userinterface.Views.Controls
                 }
             }
 
-            // Auto-select first item only if nothing was previously selected
-            if (localizedItems.Count > 0 && SelectedItem == null)
-            {
-                SelectedItem = localizedItems[0];
-            }
+            // Don't auto-select - let the caller set the initial selection explicitly
         }
 
         private void OnLocalizationChanged(object sender, PropertyChangedEventArgs e)
