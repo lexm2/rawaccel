@@ -116,16 +116,12 @@ namespace userspace_backend.Model
 
         protected void AnyCurveSettingCollectionChangedEventHandler(object? sender, EventArgs e)
         {
-            // All settings collections currently require curve preview to be re-generated
             RecalculateCurvePreview();
         }
 
         protected void RecalculateCurvePreview()
         {
-            // Generate X curve points using this profile model
             XCurvePreview.GeneratePoints(this);
-
-            // Generate Y curve points by multiplying X curve outputs by YX ratio
             GenerateYCurvePoints();
         }
 

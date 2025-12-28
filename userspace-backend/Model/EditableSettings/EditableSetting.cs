@@ -9,13 +9,13 @@ namespace userspace_backend.Model.EditableSettings
         /// This value can be bound in UI for direct editing
         /// </summary>
         [ObservableProperty]
-        public string interfaceValue;
+        private string interfaceValue;
 
         /// <summary>
         /// This value can be bound in UI for logic based on validated input
         /// </summary>
         [ObservableProperty]
-        public T modelValue;
+        private T modelValue;
 
         public T CurrentValidatedValue => ModelValue;
 
@@ -115,6 +115,13 @@ namespace userspace_backend.Model.EditableSettings
             {
                 TryUpdateFromInterface();
             }
+        }
+
+        partial void OnModelValueChanged(T value)
+        {
+            // This partial method hook ensures that the CommunityToolkit.Mvvm source generator
+            // properly wires up PropertyChanged notifications when ModelValue changes.
+            // The method body can remain empty - its presence is what matters for the generator.
         }
 
         // TODO: unit test

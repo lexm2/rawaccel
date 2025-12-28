@@ -69,6 +69,9 @@ namespace userspace_backend.Model.EditableSettings
             SelectionLookup = new Dictionary<T, IEditableSettingsCollectionSpecific<U>>();
             InitSelectionLookup(serviceProvider);
             Selection = selection;
+
+            // Subscribe to all items in SelectionLookup to propagate their events
+            SubscribeToSelectionLookupItems();
         }
 
         public IEditableSettingSpecific<T> Selection { get; }
@@ -86,6 +89,31 @@ namespace userspace_backend.Model.EditableSettings
                 string key = EditableSettingsSelectorHelper.GetSelectionKey(value);
                 SelectionLookup.Add(value, serviceProvider.GetRequiredKeyedService<IEditableSettingsCollectionSpecific<U>>(key));
             }
+        }
+
+        /// <summary>
+        /// Subscribe to AnySettingChanged events from all items in SelectionLookup.
+        /// This ensures that changes in any selectable option propagate up the event chain.
+        /// </summary>
+        protected void SubscribeToSelectionLookupItems()
+        {
+            foreach (var kvp in SelectionLookup)
+            {
+                var collection = kvp.Value as IEditableSettingsCollectionV2;
+                if (collection != null)
+                {
+                    collection.AnySettingChanged += SelectionLookupItemChangedEventHandler;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handler for when any item in SelectionLookup fires AnySettingChanged.
+        /// This propagates the event up to this selector's own AnySettingChanged.
+        /// </summary>
+        protected void SelectionLookupItemChangedEventHandler(object? sender, EventArgs e)
+        {
+            OnAnySettingChanged();
         }
 
         public override U MapToData()
