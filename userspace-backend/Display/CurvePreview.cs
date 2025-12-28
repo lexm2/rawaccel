@@ -22,27 +22,76 @@ namespace userspace_backend.Display
 
     public class CurvePreview : ICurvePreview
     {
-        private readonly IAccelerationCalculatorFactory _calculatorFactory;
-
-        public CurvePreview(IAccelerationCalculatorFactory calculatorFactory)
+        public CurvePreview()
         {
-            _calculatorFactory = calculatorFactory;
             Points = new ObservableCollection<CurvePoint>();
-            InitPoints();
         }
 
         public ObservableCollection<CurvePoint> Points { get; }
 
         public void GeneratePoints(IProfileModel profile)
         {
-            IAccelerationCalculator accel = _calculatorFactory.Create(profile).CreateStatelessCopy();
+            // Get the LUT using the same workflow as Apply Settings
+            bool gain = profile.Acceleration.FormulaAccel?.Gain.ModelValue ?? false;
+            Driver.Types.DriverAccelArgs driverArgs = profile.Acceleration.MapToDriver(gain);
 
-            foreach (CurvePoint point in Points)
+            // Convert based on acceleration mode
+            List<CurvePoint> newPoints;
+
+            if (driverArgs.Mode == Driver.Types.AccelMode.NoAccel)
             {
-                var output = accel.Accelerate(point.MouseSpeed, 0, 1, 1);
-                var outputSpeed = Math.Sqrt(Math.Pow(output.x, 2) + Math.Pow(output.y, 2));
-                point.Output = outputSpeed / point.MouseSpeed;
+                // NoAccel: flat line at y=1 (no acceleration)
+                newPoints = GenerateFlatLine();
             }
+            else if (driverArgs.Mode == Driver.Types.AccelMode.Lut && driverArgs.LutData != null)
+            {
+                // Convert LUT data to CurvePoint objects
+                newPoints = ConvertLutToCurvePoints(driverArgs.LutData, driverArgs.LutLength);
+            }
+            else
+            {
+                // Unknown mode - generate flat line as fallback
+                newPoints = GenerateFlatLine();
+            }
+
+            // Replace existing points with new LUT-based points
+            SetPoints(newPoints);
+        }
+
+        private List<CurvePoint> GenerateFlatLine()
+        {
+            var points = new List<CurvePoint>();
+            // Generate simple flat line from 0 to 100
+            for (double speed = 0; speed <= 100; speed += 1.0)
+            {
+                points.Add(new CurvePoint
+                {
+                    MouseSpeed = speed,
+                    Output = 1.0  // No acceleration = sensitivity multiplier of 1
+                });
+            }
+            return points;
+        }
+
+        private List<CurvePoint> ConvertLutToCurvePoints(float[] lutData, int lutLength)
+        {
+            var points = new List<CurvePoint>();
+
+            // LutData is interleaved (x, y) pairs: [x0, y0, x1, y1, x2, y2, ...]
+            // lutLength is the total number of floats (2 * number_of_points)
+            for (int i = 0; i < lutLength; i += 2)
+            {
+                double mouseSpeed = lutData[i];
+                double sensitivityMultiplier = lutData[i + 1];
+
+                points.Add(new CurvePoint
+                {
+                    MouseSpeed = mouseSpeed,
+                    Output = sensitivityMultiplier
+                });
+            }
+
+            return points;
         }
 
         public void SetPoints(IEnumerable<CurvePoint> points)
@@ -51,16 +100,6 @@ namespace userspace_backend.Display
             foreach (var point in points)
             {
                 Points.Add(point);
-            }
-        }
-
-        protected void InitPoints()
-        {
-            ICollection<double> speeds = CurveCalculationHelpers.CalculateCurvePointSpeeds();
-            
-            foreach (double speed in speeds)
-            {
-                Points.Add(new CurvePoint() { MouseSpeed = speed, Output = 0.0 });
             }
         }
     }
