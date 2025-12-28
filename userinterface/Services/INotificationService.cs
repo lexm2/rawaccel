@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using userinterface.Models;
 
 namespace userinterface.Services
@@ -21,9 +21,5 @@ namespace userinterface.Services
 
         void ShowInfoToast(string messageKey, int durationMs = 4000);
         void ShowInfoToast(string messageKey, int durationMs = 4000, params object[] formatArgs);
-
-        event EventHandler<ToastNotificationEventArgs> ToastRequested;
-
-        event EventHandler ToastDismissed;
     }
 }

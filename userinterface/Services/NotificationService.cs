@@ -1,28 +1,30 @@
-﻿using System;
+using System;
 using System.Threading;
 using userinterface.Models;
+using userinterface.Services.Events;
 
 namespace userinterface.Services
 {
     public class NotificationService : INotificationService
     {
         private Timer? timer;
+        private readonly IEventBus eventBus;
         private readonly LocalizationService localizationService;
         private readonly ISettingsService settingsService;
 
-        public NotificationService(LocalizationService localizationService, ISettingsService settingsService)
+        public NotificationService(
+            IEventBus eventBus,
+            LocalizationService localizationService,
+            ISettingsService settingsService)
         {
+            this.eventBus = eventBus;
             this.localizationService = localizationService;
             this.settingsService = settingsService;
         }
 
-        public event EventHandler<ToastNotificationEventArgs>? ToastRequested;
-
-        public event EventHandler? ToastDismissed;
-
         public void ShowToast(string messageKey, ToastType type, int durationMs = 5000)
         {
-            ShowToast(messageKey, type, durationMs, new object[0]);
+            ShowToast(messageKey, type, durationMs, Array.Empty<object>());
         }
 
         public void ShowToast(string messageKey, ToastType type, int durationMs = 5000, params object[] formatArgs)
@@ -34,18 +36,12 @@ namespace userinterface.Services
 
             timer?.Dispose();
 
-            var localizedMessage = localizationService.GetText(messageKey);
-            if (formatArgs.Length > 0)
-            {
-                localizedMessage = string.Format(localizedMessage, formatArgs);
-            }
-
-            ToastRequested?.Invoke(this, new ToastNotificationEventArgs
-            {
-                Message = localizedMessage,
-                Type = type,
-                Duration = TimeSpan.FromMilliseconds(durationMs)
-            });
+            eventBus.Publish(new ToastRequestedEvent(
+                messageKey,
+                type,
+                TimeSpan.FromMilliseconds(durationMs),
+                formatArgs
+            ));
 
             timer = new Timer(state => HideToast(), null, durationMs, Timeout.Infinite);
         }
@@ -53,7 +49,7 @@ namespace userinterface.Services
         public void HideToast()
         {
             timer?.Dispose();
-            ToastDismissed?.Invoke(this, EventArgs.Empty);
+            eventBus.Publish(new ToastDismissedEvent());
         }
 
         public void ShowSuccessToast(string messageKey, int durationMs = 5000)
