@@ -12,6 +12,7 @@ using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Threading.Tasks;
 using userinterface.Services;
+using userinterface.Services.Events;
 using userinterface.ViewModels;
 using userinterface.ViewModels.Controls;
 using userinterface.ViewModels.Settings;
@@ -64,7 +65,10 @@ public partial class App : Application
         // Non-Windows: IBackEndLoader is registered by AddDebugDriver()
 
         services.AddSingleton<INotificationService>(provider =>
-            new NotificationService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>()));
+            new NotificationService(
+                provider.GetRequiredService<IEventBus>(),
+                provider.GetRequiredService<LocalizationService>(),
+                provider.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IModalService>(provider =>
             new ModalService(provider.GetRequiredService<LocalizationService>(), provider.GetRequiredService<ISettingsService>()));
         services.AddSingleton<IThemeService>(provider =>
@@ -73,6 +77,7 @@ public partial class App : Application
         services.AddSingleton<LocalizationService>();
         services.AddSingleton<PreviewChartRenderer>();
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IEventBus, EventBus>();
 
         RegisterViewModels(services);
 
@@ -123,11 +128,10 @@ public partial class App : Application
     private void RegisterViewModels(IServiceCollection services)
     {
         // Control ViewModels (registered first as they may be dependencies)
-        services.AddSingleton<ViewModels.Controls.ToastViewModel>();
-        services.AddTransient<ViewModels.Controls.DualColumnLabelFieldViewModel>(provider =>
-            new ViewModels.Controls.DualColumnLabelFieldViewModel(
+        services.AddSingleton<ViewModels.Controls.ToastViewModel>(provider =>
+            new ViewModels.Controls.ToastViewModel(
+                provider.GetRequiredService<IEventBus>(),
                 provider.GetRequiredService<LocalizationService>()));
-        services.AddTransient<ViewModels.Controls.EditableFieldViewModel>();
 
         // Device ViewModels
         services.AddSingleton<ViewModels.Device.DevicesPageViewModel>(provider =>
