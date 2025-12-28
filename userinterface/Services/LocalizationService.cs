@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using CommunityToolkit.Mvvm.Messaging;
+using userinterface.Services.Events;
 
 namespace userinterface.Services;
 
@@ -8,7 +10,7 @@ public class LocalizationService : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    // Specific property name for language changes
+    // Specific property name for language changes (kept for backward compatibility)
     public const string LanguageChangedPropertyName = "CurrentLanguage";
 
     public bool TryChangeLanguage(string cultureCode, out CultureInfo? culture)
@@ -22,6 +24,10 @@ public class LocalizationService : INotifyPropertyChanged
 
             Properties.Resources.Strings.Culture = culture;
 
+            // Publish via WeakReferenceMessenger
+            WeakReferenceMessenger.Default.Send(new LanguageChangedEvent(cultureCode));
+
+            // Keep PropertyChanged for backward compatibility
             OnPropertyChanged(LanguageChangedPropertyName);
             return true;
         }
@@ -41,12 +47,12 @@ public class LocalizationService : INotifyPropertyChanged
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var result = Properties.Resources.Strings.ResourceManager.GetString(key) ?? key;
-        
+
         if (stopwatch.ElapsedMilliseconds >= 10)
         {
             System.Diagnostics.Debug.WriteLine($"[LOCALIZATION] SLOW: GetText('{key}') took {stopwatch.ElapsedMilliseconds}ms on thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
         }
-        
+
         return result;
     }
 

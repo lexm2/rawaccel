@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using CommunityToolkit.Mvvm.Messaging;
 using userinterface.Models;
 using userinterface.Services.Events;
 
@@ -8,17 +9,10 @@ namespace userinterface.Services
     public class NotificationService : INotificationService
     {
         private Timer? timer;
-        private readonly IEventBus eventBus;
-        private readonly LocalizationService localizationService;
         private readonly ISettingsService settingsService;
 
-        public NotificationService(
-            IEventBus eventBus,
-            LocalizationService localizationService,
-            ISettingsService settingsService)
+        public NotificationService(ISettingsService settingsService)
         {
-            this.eventBus = eventBus;
-            this.localizationService = localizationService;
             this.settingsService = settingsService;
         }
 
@@ -36,7 +30,7 @@ namespace userinterface.Services
 
             timer?.Dispose();
 
-            eventBus.Publish(new ToastRequestedEvent(
+            WeakReferenceMessenger.Default.Send(new ToastRequestedEvent(
                 messageKey,
                 type,
                 TimeSpan.FromMilliseconds(durationMs),
@@ -49,7 +43,7 @@ namespace userinterface.Services
         public void HideToast()
         {
             timer?.Dispose();
-            eventBus.Publish(new ToastDismissedEvent());
+            WeakReferenceMessenger.Default.Send(new ToastDismissedEvent());
         }
 
         public void ShowSuccessToast(string messageKey, int durationMs = 5000)
