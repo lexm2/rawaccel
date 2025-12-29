@@ -64,7 +64,7 @@ sudo rmmod rawaccel
 
 ## Current Implementation Status
 
-### Phase 1: Core Infrastructure (In Progress)
+### Phase 1: Core Infrastructure (Nearly Complete!)
 - [x] Module skeleton (init/exit)
 - [x] Makefile and Kbuild
 - [x] DKMS configuration
@@ -73,14 +73,26 @@ sudo rmmod rawaccel
 - [x] Basic IOCTL interface (GET_VERSION)
 - [x] input_handler registration
 - [x] Device connect/disconnect callbacks
-- [ ] Event interception and buffering
-- [ ] Per-device context with acceleration state
-- [ ] LUT lookup implementation
+- [x] Event interception and buffering
+- [x] Per-device context with acceleration state
+- [x] LUT lookup implementation (binary search + interpolation)
+- [x] Fixed-point math (16.16 format)
+- [x] Euclidean speed calculation
+- [ ] IOCTL READ/WRITE for configuration
+- [ ] LUT population from userspace
+
+### What Works Now
+- Driver loads and creates `/dev/rawaccel`
+- Automatically connects to all mice
+- Buffers REL_X and REL_Y events until SYN_REPORT
+- Calculates movement speed and applies LUT lookup
+- Currently passes through events 1:1 (no acceleration yet)
+- Ready for LUT configuration via IOCTL
 
 ### Next Steps
-- Implement input handler for mouse event interception
-- Add LUT lookup implementation
-- Add device enumeration and management
+- Implement IOCTL READ/WRITE handlers
+- Add LUT validation
+- Backend: Implement LutComputer in C# (PLAN_BE_LUT_MIGRATION.md)
 
 ## Files
 
@@ -88,6 +100,7 @@ sudo rmmod rawaccel
 |------|---------|
 | `rawaccel_main.c` | Module entry point, device registration |
 | `rawaccel_types.h` | Data structures (LUT, device context) |
+| `rawaccel_lut.h` | LUT lookup with binary search + interpolation (header-only) |
 | `rawaccel_ioctl.c` | IOCTL command handlers |
 | `rawaccel_ioctl.h` | IOCTL interface definitions |
 | `rawaccel_input.c` | Input handler for mouse event interception |
