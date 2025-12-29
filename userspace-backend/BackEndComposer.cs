@@ -11,6 +11,7 @@ using userspace_backend.Model.AccelDefinitions;
 using userspace_backend.Model.AccelDefinitions.Formula;
 using userspace_backend.Model.EditableSettings;
 using userspace_backend.Model.ProfileComponents;
+using userspace_backend.Services;
 using static userspace_backend.Data.Profiles.Accel.FormulaAccel;
 using static userspace_backend.Data.Profiles.Accel.LookupTableAccel;
 using static userspace_backend.Data.Profiles.Acceleration;
@@ -27,6 +28,7 @@ namespace userspace_backend
 
             services.AddSingleton<ISystemDevicesProvider, SystemDevicesProvider>();
             services.AddSingleton<ILutComputer, LutComputer>();
+            services.AddSingleton<IDeviceDetectionService, DeviceDetectionService>();
 
             #region Parsers
 

@@ -14,6 +14,8 @@ namespace userspace_backend
     {
         void Load();
 
+        void AutoPopulateDevicesIfNeeded();
+
         bool Apply();
 
         DevicesModel Devices { get; }
@@ -33,7 +35,8 @@ namespace userspace_backend
             DevicesModel devicesModel,
             MappingsModel mappingsModel,
             IDriverService driverService,
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            Services.IDeviceDetectionService deviceDetectionService)
         {
             BackEndLoader = backEndLoader;
             Devices = devicesModel;
@@ -41,6 +44,7 @@ namespace userspace_backend
             Profiles = profilesModel;
             DriverService = driverService;
             ServiceProvider = serviceProvider;
+            DeviceDetectionService = deviceDetectionService;
         }
 
         public DevicesModel Devices { get; set; }
@@ -56,6 +60,8 @@ namespace userspace_backend
         protected IDriverService DriverService { get; set; }
 
         protected IServiceProvider ServiceProvider { get; set; }
+
+        protected Services.IDeviceDetectionService DeviceDetectionService { get; set; }
 
         public void Load()
         {
@@ -127,6 +133,30 @@ namespace userspace_backend
                 // DPI, PollRate, and Ignore already have sensible defaults from DI (1000, 1000, false)
 
                 Devices.TryInsert(0, defaultDevice);
+            }
+        }
+
+        /// <summary>
+        /// Auto-populate all system devices if only default device exists.
+        /// Called after Load() to ensure device list is populated before UI starts.
+        /// </summary>
+        public void AutoPopulateDevicesIfNeeded()
+        {
+            Console.WriteLine("[STARTUP] Checking if device auto-population is needed...");
+
+            // Check if we only have default device or no devices
+            bool shouldAutoPopulate = Devices.Elements.Count == 0 ||
+                (Devices.Elements.Count == 1 &&
+                 Devices.Elements[0].HardwareID.ModelValue == "DEFAULT_DEVICE_ID");
+
+            if (shouldAutoPopulate)
+            {
+                Console.WriteLine("[STARTUP] Auto-populating system devices...");
+                DeviceDetectionService.AutoPopulateAllSystemDevices(Devices);
+            }
+            else
+            {
+                Console.WriteLine($"[STARTUP] Skipping auto-population ({Devices.Elements.Count} device(s) already configured)");
             }
         }
 

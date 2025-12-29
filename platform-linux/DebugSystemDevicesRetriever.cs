@@ -14,9 +14,9 @@ namespace userspace_backend.Platform.Linux
             DebugLogger.LogHeader("GET SYSTEM DEVICES");
             var devices = new List<ISystemDevice>
             {
-                new DebugSystemDevice("Superlight 2", @"HID\VID_046D&PID_C54D&MI_00"),
-                new DebugSystemDevice("Outset AX", @"HID\VID_3057&PID_0001"),
-                new DebugSystemDevice("Razer Viper 8K", @"HID\VID_31E3&PID_1310"),
+                new DebugSystemDevice("Superlight 2", @"HID\VID_046D&PID_C54D&MI_00", null),
+                new DebugSystemDevice("Outset AX", @"HID\VID_3057&PID_0001", null),
+                new DebugSystemDevice("Razer Viper 8K", @"HID\VID_31E3&PID_1310", null),
             };
             DebugLogger.LogCollection("System Devices", devices);
             return devices;
@@ -26,5 +26,5 @@ namespace userspace_backend.Platform.Linux
     /// <summary>
     /// Simple record implementing ISystemDevice for debug/mock purposes.
     /// </summary>
-    internal record DebugSystemDevice(string Name, string HWID) : ISystemDevice;
+    internal record DebugSystemDevice(string Name, string HWID, string? EventDevicePath) : ISystemDevice;
 }

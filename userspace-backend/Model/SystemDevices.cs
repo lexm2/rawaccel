@@ -66,5 +66,11 @@ namespace userspace_backend.Model
         public string Name { get; }
 
         public string HWID { get; }
+
+        /// <summary>
+        /// Path to the event device (Linux: /dev/input/event*, Windows: null)
+        /// Used for active device detection on Linux.
+        /// </summary>
+        public string? EventDevicePath { get; }
     }
 }

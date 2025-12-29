@@ -71,6 +71,7 @@ public partial class App : Application
 
         IBackEnd backEnd = Services.GetRequiredService<IBackEnd>();
         backEnd.Load();
+        backEnd.AutoPopulateDevicesIfNeeded();
 
         ApplyStartupSettings();
 
@@ -144,7 +145,10 @@ public partial class App : Application
         services.AddTransient<ViewModels.Profile.HiddenProfileSettingsViewModel>();
 
         // Mapping ViewModels
-        services.AddSingleton<ViewModels.Mapping.MappingsPageViewModel>();
+        services.AddSingleton<ViewModels.Mapping.MappingsPageViewModel>(provider =>
+            new ViewModels.Mapping.MappingsPageViewModel(
+                provider.GetRequiredService<IBackEnd>(),
+                provider.GetRequiredService<IViewModelFactory>()));
         services.AddTransient<ViewModels.Mapping.MappingViewModel>();
         services.AddTransient<ViewModels.Mapping.MappingListElementViewModel>();
 

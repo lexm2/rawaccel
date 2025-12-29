@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using userspace_backend.ActiveDetection;
 using userspace_backend.Driver;
 using userspace_backend.IO.PathProviders;
 using userspace_backend.Model;
@@ -21,8 +22,11 @@ namespace userspace_backend.Platform.Linux
             // Register backend loader - NOW PERSISTS to ~/.config/rawaccel instead of mock data
             services.AddSingleton<IBackEndLoader, BackEndLoader>();
 
-            // Debug driver services (log data to console)
-            services.AddSingleton<ISystemDevicesRetriever, DebugSystemDevicesRetriever>();
+            // Device detection services
+            services.AddSingleton<ISystemDevicesRetriever, LinuxSystemDevicesRetriever>();
+            services.AddSingleton<IActiveDeviceDetector, LinuxActiveDeviceDetector>();
+
+            // Driver services
             services.AddSingleton<IDriverService, DebugDriverService>();
             services.AddSingleton<IAccelerationCalculatorFactory, DebugAccelerationCalculatorFactory>();
         }

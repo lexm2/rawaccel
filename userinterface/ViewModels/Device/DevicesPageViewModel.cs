@@ -12,7 +12,9 @@ namespace userinterface.ViewModels.Device
         private readonly BE.DevicesModel devicesModel;
         private readonly IModalService modalService;
 
-        public DevicesPageViewModel(IBackEnd backEnd, IModalService modalService)
+        public DevicesPageViewModel(
+            IBackEnd backEnd,
+            IModalService modalService)
         {
             devicesModel = backEnd?.Devices ?? throw new ArgumentNullException(nameof(backEnd));
             this.modalService = modalService;
