@@ -11,6 +11,7 @@
 
 #include "rawaccel_types.h"
 #include "rawaccel_ioctl.h"
+#include "rawaccel_input.h"
 
 /* Module metadata */
 MODULE_LICENSE("GPL");
@@ -52,10 +53,19 @@ static int __init rawaccel_init(void)
 	}
 	pr_info("rawaccel: Registered /dev/rawaccel\n");
 
-	/* TODO: Register input handler for mouse interception */
+	/* Register input handler for mouse interception */
+	ret = rawaccel_input_register();
+	if (ret) {
+		pr_err("rawaccel: Failed to register input handler: %d\n", ret);
+		goto err_unreg_misc;
+	}
 
 	pr_info("rawaccel: Driver loaded successfully\n");
 	return 0;
+
+err_unreg_misc:
+	misc_deregister(&rawaccel_misc);
+	return ret;
 }
 
 /*
@@ -66,7 +76,8 @@ static void __exit rawaccel_exit(void)
 {
 	pr_info("rawaccel: Unloading RawAccel driver\n");
 
-	/* TODO: Unregister input handler */
+	/* Unregister input handler */
+	rawaccel_input_unregister();
 
 	/* Unregister misc device */
 	misc_deregister(&rawaccel_misc);

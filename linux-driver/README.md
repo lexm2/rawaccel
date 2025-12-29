@@ -71,9 +71,11 @@ sudo rmmod rawaccel
 - [x] Basic data structures (rawaccel_types.h)
 - [x] misc device registration (/dev/rawaccel)
 - [x] Basic IOCTL interface (GET_VERSION)
-- [ ] input_handler registration
-- [ ] Basic event interception
-- [ ] Per-device context allocation
+- [x] input_handler registration
+- [x] Device connect/disconnect callbacks
+- [ ] Event interception and buffering
+- [ ] Per-device context with acceleration state
+- [ ] LUT lookup implementation
 
 ### Next Steps
 - Implement input handler for mouse event interception
@@ -88,6 +90,8 @@ sudo rmmod rawaccel
 | `rawaccel_types.h` | Data structures (LUT, device context) |
 | `rawaccel_ioctl.c` | IOCTL command handlers |
 | `rawaccel_ioctl.h` | IOCTL interface definitions |
+| `rawaccel_input.c` | Input handler for mouse event interception |
+| `rawaccel_input.h` | Input handler interface |
 | `test_ioctl.c` | Userspace test program |
 | `Makefile` | Build configuration |
 | `Kbuild` | Kernel build settings |

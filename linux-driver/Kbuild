@@ -1,4 +1,4 @@
 obj-m := rawaccel.o
-rawaccel-objs := rawaccel_main.o rawaccel_ioctl.o
+rawaccel-objs := rawaccel_main.o rawaccel_ioctl.o rawaccel_input.o
 
 ccflags-y := -O2 -Wall -Wno-declaration-after-statement
