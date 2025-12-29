@@ -1,0 +1,4 @@
+obj-m := rawaccel.o
+rawaccel-objs := rawaccel_main.o
+
+ccflags-y := -O2 -Wall -Wno-declaration-after-statement
