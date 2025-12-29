@@ -12,8 +12,8 @@ namespace writer
     class Program
     {
         static readonly string DefaultPath = "settings.json";
-        static readonly string Usage = 
-            $"Usage: {AppDomain.CurrentDomain.FriendlyName} <settings file path>\n";
+        static readonly string Usage =
+            $"Usage: {Path.GetFileName(Environment.ProcessPath ?? "writer")} <settings file path>\n";
 
         static void Exit(string msg)
         {

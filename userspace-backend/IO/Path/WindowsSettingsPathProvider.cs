@@ -33,7 +33,7 @@ namespace userspace_backend.IO.PathProviders
             else
             {
                 // Current behavior: use executable directory (backwards compatible)
-                _settingsRoot = AppDomain.CurrentDomain.BaseDirectory;
+                _settingsRoot = AppContext.BaseDirectory;
             }
 
             // Ensure directory exists
