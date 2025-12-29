@@ -135,9 +135,9 @@
     <Compile Include="SynchronousAccelTests.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\wrapper\wrapper.vcxproj">
+    <ProjectReference Include="..\windows-wrapper\wrapper.vcxproj">
       <Project>{28a3656f-a1de-405c-b547-191c32ec555f}</Project>
-      <Name>wrapper</Name>
+      <Name>windows-wrapper</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

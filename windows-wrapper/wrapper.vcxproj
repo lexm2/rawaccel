@@ -128,8 +128,8 @@
       </AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(TargetPath)" "$(SolutionDir)signed\$(TargetFileName)" &amp; 
-copy /Y "$(TargetDir)Newtonsoft.Json.dll" "$(SolutionDir)signed\Newtonsoft.Json.dll"</Command>
+      <Command>copy /Y "$(TargetPath)" "$(SolutionDir)windows-signed\$(TargetFileName)" &amp;
+copy /Y "$(TargetDir)Newtonsoft.Json.dll" "$(SolutionDir)windows-signed\Newtonsoft.Json.dll"</Command>
     </PostBuildEvent>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(SolutionDir)/common;</AdditionalIncludeDirectories>
@@ -147,8 +147,8 @@ copy /Y "$(TargetDir)Newtonsoft.Json.dll" "$(SolutionDir)signed\Newtonsoft.Json.
       </AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(TargetPath)" "$(SolutionDir)signed\$(TargetFileName)" &amp; 
-copy /Y "$(TargetDir)Newtonsoft.Json.dll" "$(SolutionDir)signed\Newtonsoft.Json.dll"</Command>
+      <Command>copy /Y "$(TargetPath)" "$(SolutionDir)windows-signed\$(TargetFileName)" &amp;
+copy /Y "$(TargetDir)Newtonsoft.Json.dll" "$(SolutionDir)windows-signed\Newtonsoft.Json.dll"</Command>
     </PostBuildEvent>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(SolutionDir)/common;</AdditionalIncludeDirectories>

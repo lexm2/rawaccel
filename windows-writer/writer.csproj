@@ -84,15 +84,15 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\wrapper\wrapper.vcxproj">
+    <ProjectReference Include="..\windows-wrapper\wrapper.vcxproj">
       <Project>{28a3656f-a1de-405c-b547-191c32ec555f}</Project>
-      <Name>wrapper</Name>
+      <Name>windows-wrapper</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>IF ($(ConfigurationName)) == (Debug) GOTO END
-copy /Y "$(TargetPath)" "$(SolutionDir)signed\$(TargetFileName)"
+copy /Y "$(TargetPath)" "$(SolutionDir)windows-signed\$(TargetFileName)"
 :END</PostBuildEvent>
   </PropertyGroup>
 </Project>

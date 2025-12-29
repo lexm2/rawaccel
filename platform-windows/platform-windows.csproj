@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\userspace-backend\userspace-backend.csproj" />
-    <ProjectReference Include="..\wrapper\wrapper.vcxproj" />
+    <ProjectReference Include="..\windows-wrapper\wrapper.vcxproj" />
   </ItemGroup>
 
 </Project>
