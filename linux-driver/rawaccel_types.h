@@ -7,6 +7,7 @@
 #define RAWACCEL_TYPES_H
 
 #include <linux/types.h>
+#include <linux/list.h>
 
 /* Fixed-point arithmetic (16.16 format) */
 typedef s32 fp16_t;
@@ -16,6 +17,9 @@ typedef s32 fp16_t;
 
 /* Maximum LUT points supported */
 #define LUT_MAX_POINTS 129
+
+/* Maximum devices we can track */
+#define MAX_DEVICES 16
 
 /*
  * LUT point structure
@@ -41,6 +45,9 @@ struct lut_data {
  * Stores acceleration state for each mouse device
  */
 struct rawaccel_dev {
+	/* List linkage */
+	struct list_head list;
+
 	/* Device identification */
 	char name[64];
 	char phys[64];

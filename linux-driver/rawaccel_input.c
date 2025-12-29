@@ -16,6 +16,10 @@
 /* Input handler instance */
 static struct input_handler rawaccel_handler;
 
+/* Global device list */
+static LIST_HEAD(device_list);
+static DEFINE_SPINLOCK(device_list_lock);
+
 /*
  * Process buffered movement and apply acceleration
  */
@@ -177,6 +181,11 @@ static int rawaccel_connect(struct input_handler *handler,
 		goto err_unregister;
 	}
 
+	/* Add to global device list */
+	spin_lock(&device_list_lock);
+	list_add_tail(&ra_dev->list, &device_list);
+	spin_unlock(&device_list_lock);
+
 	pr_info("rawaccel: Connected to device: %s\n", dev->name);
 	return 0;
 
@@ -202,6 +211,11 @@ static void rawaccel_disconnect(struct input_handle *handle)
 
 	input_close_device(handle);
 	input_unregister_handle(handle);
+
+	/* Remove from global device list */
+	spin_lock(&device_list_lock);
+	list_del(&ra_dev->list);
+	spin_unlock(&device_list_lock);
 
 	/* Free per-device context */
 	kfree(ra_dev);
@@ -257,4 +271,51 @@ void rawaccel_input_unregister(void)
 {
 	input_unregister_handler(&rawaccel_handler);
 	pr_info("rawaccel: Input handler unregistered\n");
+}
+
+/*
+ * Update all connected devices with new configuration
+ */
+void rawaccel_update_all_devices(const struct rawaccel_device_config *config)
+{
+	struct rawaccel_dev *ra_dev;
+	int i;
+
+	spin_lock(&device_list_lock);
+
+	list_for_each_entry(ra_dev, &device_list, list) {
+		/* Update enabled state */
+		ra_dev->enabled = config->enabled;
+		ra_dev->separate_axes = config->separate_axes;
+		ra_dev->dpi = config->dpi;
+		ra_dev->dpi_factor_fp = fp16_from_int(config->dpi) / 1000;
+
+		/* Update X-axis LUT */
+		ra_dev->lut_x.size = config->lut_x.size;
+		ra_dev->lut_x.velocity_mode = config->lut_x.velocity_mode;
+
+		for (i = 0; i < config->lut_x.size && i < LUT_MAX_POINTS; i++) {
+			ra_dev->lut_x.points[i].x_fp = config->lut_x.points_x[i];
+			ra_dev->lut_x.points[i].y_fp = config->lut_x.points_y[i];
+		}
+
+		/* Update Y-axis LUT if separate */
+		if (config->separate_axes) {
+			ra_dev->lut_y.size = config->lut_y.size;
+			ra_dev->lut_y.velocity_mode = config->lut_y.velocity_mode;
+
+			for (i = 0; i < config->lut_y.size && i < LUT_MAX_POINTS; i++) {
+				ra_dev->lut_y.points[i].x_fp = config->lut_y.points_x[i];
+				ra_dev->lut_y.points[i].y_fp = config->lut_y.points_y[i];
+			}
+		} else {
+			/* Use same LUT for both axes */
+			ra_dev->lut_y = ra_dev->lut_x;
+		}
+
+		pr_info("rawaccel: Updated device: %s (enabled=%d, dpi=%d, lut_size=%d)\n",
+		        ra_dev->name, ra_dev->enabled, ra_dev->dpi, ra_dev->lut_x.size);
+	}
+
+	spin_unlock(&device_list_lock);
 }
