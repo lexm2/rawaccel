@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using userspace_backend.Driver.Debug;
+using userspace_backend.Platform.Linux;
 using userspace_backend.Model;
 
 namespace userspace_backend_tests.ModelTests
@@ -26,6 +26,8 @@ namespace userspace_backend_tests.ModelTests
             public string Name { get; set; }
 
             public string HWID { get; set; }
+
+            public string? EventDevicePath { get; set; }
         }
 
         [TestMethod]
