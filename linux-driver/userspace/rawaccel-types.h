@@ -29,7 +29,8 @@ enum rawaccel_ipc_command {
     RAWACCEL_CMD_UPDATE_CONFIG = 1,
     RAWACCEL_CMD_DISABLE = 2,
     RAWACCEL_CMD_ENABLE = 3,
-    RAWACCEL_CMD_GET_STATUS = 4
+    RAWACCEL_CMD_GET_STATUS = 4,
+    RAWACCEL_CMD_GET_SPEED = 5
 };
 
 // IPC message format
@@ -38,6 +39,14 @@ struct rawaccel_ipc_message {
     uint32_t version;       // Protocol version
     uint32_t command;       // rawaccel_ipc_command
     uint32_t payload_size;  // Size of payload following this header
+};
+
+// Telemetry response for GET_SPEED command
+struct rawaccel_speed_telemetry {
+    float speed;        // Combined magnitude: sqrt(dx² + dy²)
+    float speed_x;      // X component (absolute)
+    float speed_y;      // Y component (absolute)
+    uint32_t reserved;  // Padding for alignment
 };
 
 #endif // RAWACCEL_TYPES_H

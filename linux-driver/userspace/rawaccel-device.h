@@ -16,6 +16,13 @@ struct rawaccel_device {
     // Accumulated motion (for combining REL_X and REL_Y before SYN_REPORT)
     int dx_accum;
     int dy_accum;
+
+    // Telemetry data for real-time monitoring
+    struct {
+        float last_speed;     // Last calculated speed
+        float last_speed_x;   // Last X component
+        float last_speed_y;   // Last Y component
+    } telemetry;
 };
 
 // Create and grab a device

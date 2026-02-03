@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <math.h>
 
 bool rawaccel_device_is_mouse(const char *path) {
     int fd = open(path, O_RDONLY | O_NONBLOCK);
@@ -126,6 +127,13 @@ int rawaccel_device_process_event(struct rawaccel_device *dev) {
         else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
             if (dev->dx_accum != 0 || dev->dy_accum != 0) {
                 int out_dx, out_dy;
+
+                // Store telemetry before applying acceleration
+                float dx_f = (float)dev->dx_accum;
+                float dy_f = (float)dev->dy_accum;
+                dev->telemetry.last_speed = sqrtf(dx_f * dx_f + dy_f * dy_f);
+                dev->telemetry.last_speed_x = fabsf(dx_f);
+                dev->telemetry.last_speed_y = fabsf(dy_f);
 
                 // Apply acceleration
                 rawaccel_apply_acceleration(&dev->config,
