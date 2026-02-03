@@ -30,5 +30,25 @@ namespace userspace_backend.Platform.Linux
             services.AddSingleton<IDriverService, DebugDriverService>();
             services.AddSingleton<IAccelerationCalculatorFactory, DebugAccelerationCalculatorFactory>();
         }
+
+        /// <summary>
+        /// Registers Linux platform implementations with userspace driver (libevdev + uinput).
+        /// </summary>
+        public static void AddUserspaceDriver(this IServiceCollection services)
+        {
+            // Register path provider for Linux
+            services.AddSingleton<ISettingsPathProvider, LinuxSettingsPathProvider>();
+
+            // Register backend loader
+            services.AddSingleton<IBackEndLoader, BackEndLoader>();
+
+            // Device detection services
+            services.AddSingleton<ISystemDevicesRetriever, LinuxSystemDevicesRetriever>();
+            services.AddSingleton<IActiveDeviceDetector, LinuxActiveDeviceDetector>();
+
+            // Driver services - Use userspace driver instead of debug
+            services.AddSingleton<IDriverService, LinuxUserspaceDriverService>();
+            services.AddSingleton<IAccelerationCalculatorFactory, DebugAccelerationCalculatorFactory>();
+        }
     }
 }
