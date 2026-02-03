@@ -29,6 +29,7 @@ namespace userinterface;
 public partial class App : Application
 {
     public static IServiceProvider? Services { get; private set; }
+    public static bool IsDebugDriver { get; private set; }
 
     public override void Initialize()
     {
@@ -61,20 +62,29 @@ public partial class App : Application
         services.AddSingleton<PreviewChartRenderer>();
         services.AddSingleton<ISettingsService, SettingsService>();
 
+        services.AddSingleton<MouseInputMonitorService>();
+
         RegisterViewModels(services);
 
 #if WINDOWS
         Services = BackEndComposer.Compose(services, s => s.AddWindowsDriver());
+        Console.WriteLine("[App] Using Windows driver");
 #else
         var useDebugDriver = Environment.GetEnvironmentVariable("RAWACCEL_DEBUG_DRIVER") == "1";
+        Console.WriteLine($"[App] RAWACCEL_DEBUG_DRIVER environment variable: '{Environment.GetEnvironmentVariable("RAWACCEL_DEBUG_DRIVER")}'");
+        Console.WriteLine($"[App] useDebugDriver: {useDebugDriver}");
+
         if (useDebugDriver)
         {
+            Console.WriteLine("[App] Registering DebugDriverService");
             Services = BackEndComposer.Compose(services, s => s.AddDebugDriver());
+            IsDebugDriver = true;
         }
         else
         {
-            // TODO: Replace with s.AddUserspaceDriver() once it's implemented
-            Services = BackEndComposer.Compose(services, s => s.AddDebugDriver());
+            Console.WriteLine("[App] Registering LinuxUserspaceDriverService");
+            Services = BackEndComposer.Compose(services, s => s.AddUserspaceDriver());
+            IsDebugDriver = false;
         }
 #endif
 

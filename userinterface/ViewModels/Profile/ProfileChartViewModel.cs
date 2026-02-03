@@ -65,6 +65,7 @@ namespace userinterface.ViewModels.Profile
         private readonly IThemeService themeService;
         private readonly LocalizationService localizationService;
         private readonly PreviewChartRenderer previewRenderer;
+        private readonly MouseInputMonitorService mouseInputMonitor;
         private BE.IProfileModel currentProfileModel = null!;
 
         // Sync object for thread safety - single allocation
@@ -74,18 +75,28 @@ namespace userinterface.ViewModels.Profile
         private LineSeries<CurvePoint>? cachedXSeries;
         private LineSeries<CurvePoint>? cachedYSeries;
 
-        public ProfileChartViewModel(IThemeService themeService, LocalizationService localizationService, PreviewChartRenderer previewRenderer)
+        // Chart control reference for coordinate transformation
+        private LiveChartsCore.SkiaSharpView.Avalonia.CartesianChart? chartControl;
+
+        // Last mouse speed for refreshing dot positions on zoom/resize
+        private double? lastMouseSpeed = null;
+
+        public ProfileChartViewModel(IThemeService themeService, LocalizationService localizationService, PreviewChartRenderer previewRenderer, MouseInputMonitorService mouseInputMonitor)
         {
             this.themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             this.localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
             this.previewRenderer = previewRenderer ?? throw new ArgumentNullException(nameof(previewRenderer));
+            this.mouseInputMonitor = mouseInputMonitor ?? throw new ArgumentNullException(nameof(mouseInputMonitor));
+
+            // Subscribe to mouse speed updates
+            this.mouseInputMonitor.MouseSpeedUpdated += OnMouseSpeedUpdated;
 
             RecreateAxesCommand = new RelayCommand(() => 
             {
                 EnsureInteractiveChartLoaded();
                 RecreateAxes();
             });
-            FitToDataCommand = new RelayCommand(() => 
+            FitToDataCommand = new RelayCommand(() =>
             {
                 EnsureInteractiveChartLoaded();
                 FitToData();
@@ -95,14 +106,102 @@ namespace userinterface.ViewModels.Profile
         public bool IsInitialized { get; private set; }
 
         public bool IsInitializing { get; private set; }
-        
+
         public bool IsInteractiveMode { get; private set; } = false;
-        
+
+        public bool IsDebugDriverActive => App.IsDebugDriver;
+
         public bool IsLoadingChart { get; private set; } = false;
-        
+
         public double ChartOpacity { get; private set; } = 0.0;
-        
+
         private bool hasUserInteracted = false;
+
+        // Input indicator visibility
+        private bool showInputIndicator = false;
+        public bool ShowInputIndicator
+        {
+            get => showInputIndicator;
+            set
+            {
+                if (showInputIndicator != value)
+                {
+                    showInputIndicator = value;
+                    OnPropertyChanged(nameof(ShowInputIndicator));
+
+                    // Start/stop monitoring when toggled
+                    if (value)
+                    {
+                        mouseInputMonitor.StartMonitoring();
+                    }
+                    else
+                    {
+                        mouseInputMonitor.StopMonitoring();
+                    }
+                }
+            }
+        }
+
+        // Show Y curve dot when YX ratio != 1.0
+        public bool ShowYCurveDot => ShowInputIndicator && YXRatio?.CurrentValidatedValue != 1.0;
+
+        // X Curve Dot Position (in pixels)
+        private double xDotPixelX = 0;
+        public double XDotPixelX
+        {
+            get => xDotPixelX;
+            private set
+            {
+                if (Math.Abs(xDotPixelX - value) > 0.1)
+                {
+                    xDotPixelX = value;
+                    OnPropertyChanged(nameof(XDotPixelX));
+                }
+            }
+        }
+
+        private double xDotPixelY = 0;
+        public double XDotPixelY
+        {
+            get => xDotPixelY;
+            private set
+            {
+                if (Math.Abs(xDotPixelY - value) > 0.1)
+                {
+                    xDotPixelY = value;
+                    OnPropertyChanged(nameof(XDotPixelY));
+                }
+            }
+        }
+
+        // Y Curve Dot Position (in pixels)
+        private double yDotPixelX = 0;
+        public double YDotPixelX
+        {
+            get => yDotPixelX;
+            private set
+            {
+                if (Math.Abs(yDotPixelX - value) > 0.1)
+                {
+                    yDotPixelX = value;
+                    OnPropertyChanged(nameof(YDotPixelX));
+                }
+            }
+        }
+
+        private double yDotPixelY = 0;
+        public double YDotPixelY
+        {
+            get => yDotPixelY;
+            private set
+            {
+                if (Math.Abs(yDotPixelY - value) > 0.1)
+                {
+                    yDotPixelY = value;
+                    OnPropertyChanged(nameof(YDotPixelY));
+                }
+            }
+        }
 
         public object Sync => syncObject;
 
@@ -367,6 +466,219 @@ namespace userinterface.ViewModels.Profile
 
             OnPropertyChanged(nameof(XAxes));
             OnPropertyChanged(nameof(YAxes));
+
+            // Refresh dot positions after axis recreation (coordinates changed)
+            if (ShowInputIndicator && lastMouseSpeed.HasValue)
+            {
+                UpdateInputIndicator(lastMouseSpeed.Value);
+            }
+        }
+
+        // ================================================================================================
+        // INPUT INDICATOR METHODS
+        // ================================================================================================
+
+        /// <summary>
+        /// Sets the chart control reference for coordinate transformation
+        /// </summary>
+        public void SetChartControl(LiveChartsCore.SkiaSharpView.Avalonia.CartesianChart chart)
+        {
+            chartControl = chart;
+            Console.WriteLine($"[ProfileChartViewModel] Chart control set: {chart != null}");
+        }
+
+        /// <summary>
+        /// Shows or hides the input indicator dots
+        /// </summary>
+        public void SetInputIndicatorVisible(bool visible)
+        {
+            ShowInputIndicator = visible;
+            if (visible)
+            {
+                OnPropertyChanged(nameof(ShowYCurveDot)); // Update Y dot visibility
+            }
+        }
+
+        /// <summary>
+        /// Enables or disables real-time indicator with monitoring service
+        /// </summary>
+        public void EnableRealtimeIndicator(bool enable)
+        {
+            ShowInputIndicator = enable;
+
+            if (enable)
+            {
+                mouseInputMonitor.StartMonitoring();
+            }
+            else
+            {
+                mouseInputMonitor.StopMonitoring();
+            }
+        }
+
+        private void OnMouseSpeedUpdated(object? sender, double mouseSpeed)
+        {
+            Console.WriteLine($"[ProfileChartViewModel] OnMouseSpeedUpdated called with speed: {mouseSpeed:F2}");
+            Console.WriteLine($"[ProfileChartViewModel] ShowInputIndicator: {ShowInputIndicator}, IsInteractiveMode: {IsInteractiveMode}");
+
+            // Dispatch to UI thread
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (ShowInputIndicator && IsInteractiveMode)
+                {
+                    UpdateInputIndicator(mouseSpeed);
+                }
+                else
+                {
+                    Console.WriteLine($"[ProfileChartViewModel] Skipping update - ShowInputIndicator: {ShowInputIndicator}, IsInteractiveMode: {IsInteractiveMode}");
+                }
+            });
+        }
+
+        /// <summary>
+        /// Updates the input indicator dot position based on real-time mouse speed input
+        /// </summary>
+        /// <param name="currentMouseSpeed">Current mouse speed in counts/inch or mm</param>
+        public void UpdateInputIndicator(double currentMouseSpeed)
+        {
+            Console.WriteLine($"[ProfileChartViewModel] UpdateInputIndicator called with speed: {currentMouseSpeed:F2}");
+            Console.WriteLine($"[ProfileChartViewModel] IsInitialized: {IsInitialized}, IsInteractiveMode: {IsInteractiveMode}, chartControl != null: {chartControl != null}");
+
+            if (!IsInitialized || !IsInteractiveMode || chartControl == null)
+            {
+                Console.WriteLine($"[ProfileChartViewModel] Skipping update - preconditions not met");
+                return;
+            }
+
+            lastMouseSpeed = currentMouseSpeed; // Store for refresh on zoom/resize
+
+            // Get Y values for the current X (mouse speed)
+            var xCurveY = GetYValueForX(currentMouseSpeed, XCurvePreview.Points);
+            Console.WriteLine($"[ProfileChartViewModel] X curve Y value: {xCurveY:F2}");
+
+            // Convert data coordinates to pixel coordinates
+            var (xPixelX, xPixelY) = DataToPixels(currentMouseSpeed, xCurveY);
+            Console.WriteLine($"[ProfileChartViewModel] Pixel coordinates: ({xPixelX:F2}, {xPixelY:F2})");
+
+            // Update X curve dot position
+            XDotPixelX = xPixelX;
+            XDotPixelY = xPixelY;
+            Console.WriteLine($"[ProfileChartViewModel] Updated dot position to ({XDotPixelX:F2}, {XDotPixelY:F2})");
+
+            // Update Y curve dot if visible
+            if (YXRatio.CurrentValidatedValue != 1.0)
+            {
+                var yCurveY = GetYValueForX(currentMouseSpeed, YCurvePreview.Points);
+                var (yPixelX, yPixelY) = DataToPixels(currentMouseSpeed, yCurveY);
+
+                YDotPixelX = yPixelX;
+                YDotPixelY = yPixelY;
+                Console.WriteLine($"[ProfileChartViewModel] Updated Y dot position to ({YDotPixelX:F2}, {YDotPixelY:F2})");
+            }
+        }
+
+        private (double pixelX, double pixelY) DataToPixels(double dataX, double dataY)
+        {
+            if (chartControl == null || XAxes == null || YAxes == null || XAxes.Length == 0 || YAxes.Length == 0)
+            {
+                Console.WriteLine($"[ProfileChartViewModel] DataToPixels: Chart or axes not initialized, returning (0, 0)");
+                return (0, 0);
+            }
+
+            var xAxis = XAxes[0];
+            var yAxis = YAxes[0];
+
+            // Get axis limits
+            var xMin = xAxis.MinLimit ?? 0;
+            var xMax = xAxis.MaxLimit ?? 100;
+            var yMin = yAxis.MinLimit ?? 0;
+            var yMax = yAxis.MaxLimit ?? 2;
+
+            Console.WriteLine($"[ProfileChartViewModel] DataToPixels: Axis limits: X[{xMin:F2}, {xMax:F2}], Y[{yMin:F2}, {yMax:F2}]");
+
+            // Get chart bounds (approximate, accounting for margins)
+            var chartWidth = chartControl.Bounds.Width;
+            var chartHeight = chartControl.Bounds.Height;
+
+            Console.WriteLine($"[ProfileChartViewModel] DataToPixels: Chart size: {chartWidth:F2} x {chartHeight:F2}");
+
+            // Approximate margins (LiveCharts uses internal margins for axes)
+            var marginLeft = 60.0;   // Space for Y-axis labels
+            var marginRight = 20.0;
+            var marginTop = 20.0;
+            var marginBottom = 40.0; // Space for X-axis labels
+
+            var plotWidth = chartWidth - marginLeft - marginRight;
+            var plotHeight = chartHeight - marginTop - marginBottom;
+
+            // Convert data coordinates to pixel coordinates
+            var normalizedX = (dataX - xMin) / (xMax - xMin);
+            var normalizedY = (dataY - yMin) / (yMax - yMin);
+
+            Console.WriteLine($"[ProfileChartViewModel] DataToPixels: Normalized coords: ({normalizedX:F4}, {normalizedY:F4})");
+
+            var pixelX = marginLeft + (normalizedX * plotWidth);
+            var pixelY = marginTop + ((1.0 - normalizedY) * plotHeight); // Invert Y (screen coords go down)
+
+            Console.WriteLine($"[ProfileChartViewModel] DataToPixels: Before offset: ({pixelX:F2}, {pixelY:F2})");
+
+            // Check if coordinates are valid
+            if (double.IsNaN(pixelX) || double.IsNaN(pixelY) ||
+                double.IsInfinity(pixelX) || double.IsInfinity(pixelY))
+            {
+                Console.WriteLine("[ProfileChartViewModel] DataToPixels: Invalid pixel coordinates (NaN or Infinity)");
+                return (0, 0);
+            }
+
+            // Adjust for dot center (dot is 12px, so offset by 6px)
+            return (pixelX - 6, pixelY - 6);
+        }
+
+        private double GetYValueForX(double xValue, ObservableCollection<CurvePoint> curvePoints)
+        {
+            if (curvePoints.Count == 0)
+            {
+                Console.WriteLine($"[ProfileChartViewModel] GetYValueForX: No curve points, returning 0");
+                return 0;
+            }
+
+            Console.WriteLine($"[ProfileChartViewModel] GetYValueForX: Finding Y for X={xValue:F2}, curve has {curvePoints.Count} points");
+
+            // Find surrounding points
+            CurvePoint? below = null;
+            CurvePoint? above = null;
+
+            for (int i = 0; i < curvePoints.Count; i++)
+            {
+                var point = curvePoints[i];
+                if (point.MouseSpeed <= xValue)
+                {
+                    below = point;
+                }
+                else
+                {
+                    above = point;
+                    break;
+                }
+            }
+
+            // Handle edge cases
+            if (below == null)
+            {
+                Console.WriteLine($"[ProfileChartViewModel] GetYValueForX: X below curve range, using first point: {curvePoints[0].Output:F2}");
+                return curvePoints[0].Output;
+            }
+            if (above == null)
+            {
+                Console.WriteLine($"[ProfileChartViewModel] GetYValueForX: X above curve range, using last point: {curvePoints[curvePoints.Count - 1].Output:F2}");
+                return curvePoints[curvePoints.Count - 1].Output;
+            }
+
+            // Linear interpolation between surrounding points
+            var t = (xValue - below.MouseSpeed) / (above.MouseSpeed - below.MouseSpeed);
+            var result = below.Output + t * (above.Output - below.Output);
+            Console.WriteLine($"[ProfileChartViewModel] GetYValueForX: Interpolated between ({below.MouseSpeed:F2}, {below.Output:F2}) and ({above.MouseSpeed:F2}, {above.Output:F2}), result: {result:F2}");
+            return result;
         }
 
         // ================================================================================================
@@ -375,6 +687,10 @@ namespace userinterface.ViewModels.Profile
 
         public void Dispose()
         {
+            // Stop monitoring and unsubscribe
+            mouseInputMonitor.StopMonitoring();
+            mouseInputMonitor.MouseSpeedUpdated -= OnMouseSpeedUpdated;
+
             themeService.ThemeChanged -= OnThemeChanged;
             localizationService.PropertyChanged -= OnLocalizationChanged;
             if (YXRatio != null)
@@ -496,6 +812,15 @@ namespace userinterface.ViewModels.Profile
             {
                 CreateSeries();
                 OnPropertyChanged(nameof(Series));
+
+                // Update Y dot visibility when ratio changes
+                OnPropertyChanged(nameof(ShowYCurveDot));
+
+                // Refresh dot positions for new curve
+                if (ShowInputIndicator && lastMouseSpeed.HasValue)
+                {
+                    UpdateInputIndicator(lastMouseSpeed.Value);
+                }
             }
         }
 

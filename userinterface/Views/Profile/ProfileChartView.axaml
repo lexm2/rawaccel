@@ -28,6 +28,25 @@
 			<Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}"/>
 			<Setter Property="Opacity" Value="1"/>
 		</Style>
+		<Style Selector="ToggleButton.chart-control">
+			<Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
+			<Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="CornerRadius" Value="4"/>
+			<Setter Property="Width" Value="32"/>
+			<Setter Property="Height" Value="32"/>
+			<Setter Property="Padding" Value="4"/>
+			<Setter Property="Margin" Value="4"/>
+			<Setter Property="Opacity" Value="0.8"/>
+		</Style>
+		<Style Selector="ToggleButton.chart-control:pointerover">
+			<Setter Property="Background" Value="{DynamicResource HoverBackgroundBrush}"/>
+			<Setter Property="Opacity" Value="1"/>
+		</Style>
+		<Style Selector="ToggleButton.chart-control:checked">
+			<Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+			<Setter Property="Opacity" Value="1"/>
+		</Style>
 		
 		<!-- Animations for smooth transitions -->
 		<Style Selector="lvc|CartesianChart.interactive-chart">
@@ -48,35 +67,62 @@
 			      Background="{DynamicResource ControlBackgroundBrush}"
 			      HorizontalAlignment="Stretch"
 			      VerticalAlignment="Stretch">
-				
+
 				<!-- Chart outline -->
-				<Border BorderBrush="{DynamicResource BorderBrush}" 
-				        BorderThickness="1" 
+				<Border BorderBrush="{DynamicResource BorderBrush}"
+				        BorderThickness="1"
 				        CornerRadius="4"
 				        Margin="20"
 				        Opacity="0.3">
-					
+
 					<!-- Loading dots -->
-					<StackPanel Orientation="Horizontal" 
-					           HorizontalAlignment="Center" 
+					<StackPanel Orientation="Horizontal"
+					           HorizontalAlignment="Center"
 					           VerticalAlignment="Center">
-						<Ellipse Width="8" Height="8" 
-						        Fill="{DynamicResource AccentBrush}" 
-						        Margin="2" 
+						<Ellipse Width="8" Height="8"
+						        Fill="{DynamicResource AccentBrush}"
+						        Margin="2"
 						        Opacity="0.7"/>
-						<Ellipse Width="8" Height="8" 
-						        Fill="{DynamicResource AccentBrush}" 
-						        Margin="2" 
+						<Ellipse Width="8" Height="8"
+						        Fill="{DynamicResource AccentBrush}"
+						        Margin="2"
 						        Opacity="0.5"/>
-						<Ellipse Width="8" Height="8" 
-						        Fill="{DynamicResource AccentBrush}" 
-						        Margin="2" 
+						<Ellipse Width="8" Height="8"
+						        Fill="{DynamicResource AccentBrush}"
+						        Margin="2"
 						        Opacity="0.3"/>
 					</StackPanel>
 				</Border>
 			</Grid>
-			
-			
+
+			<!-- Debug Driver Warning Banner -->
+			<Border IsVisible="{Binding IsDebugDriverActive}"
+			        Background="#FFF3CD"
+			        BorderBrush="#FFC107"
+			        BorderThickness="1"
+			        CornerRadius="4"
+			        Padding="12"
+			        Margin="12,12,12,0"
+			        VerticalAlignment="Top">
+				<StackPanel Spacing="8">
+					<TextBlock Text="⚠️ Debug Driver Active"
+					           FontWeight="Bold"
+					           Foreground="#856404" />
+					<TextBlock TextWrapping="Wrap"
+					           Foreground="#856404">
+						The application is running with DebugDriverService.
+						Mouse telemetry and input indicator features will not work.
+						To enable real telemetry, unset the RAWACCEL_DEBUG_DRIVER environment variable.
+					</TextBlock>
+					<TextBlock TextWrapping="Wrap"
+					           FontSize="11"
+					           Foreground="#856404"
+					           FontStyle="Italic">
+						Run: unset RAWACCEL_DEBUG_DRIVER &amp;&amp; ./run.sh
+					</TextBlock>
+				</StackPanel>
+			</Border>
+
 			<!-- Interactive Chart (shown after loading) -->
 			<lvc:CartesianChart x:Name="Chart"
 			                    Classes="interactive-chart"
@@ -95,7 +141,44 @@
 			                    AutoUpdateEnabled="True"
 			                    IsVisible="{Binding IsInteractiveMode}"
 			                    Opacity="{Binding ChartOpacity}"/>
-			
+
+			<!-- Overlay Canvas for animated input indicator dots -->
+			<Canvas IsVisible="{Binding IsInteractiveMode}">
+				<!-- X Curve Dot -->
+				<Ellipse x:Name="XCurveDot"
+				         Canvas.Left="{Binding XDotPixelX}"
+				         Canvas.Top="{Binding XDotPixelY}"
+				         Width="12" Height="12"
+				         Fill="CornflowerBlue"
+				         Stroke="{DynamicResource BorderBrush}"
+				         StrokeThickness="2"
+				         IsVisible="{Binding ShowInputIndicator}">
+					<Ellipse.Transitions>
+						<Transitions>
+							<DoubleTransition Property="Canvas.Left" Duration="0:0:0.1"/>
+							<DoubleTransition Property="Canvas.Top" Duration="0:0:0.05"/>
+						</Transitions>
+					</Ellipse.Transitions>
+				</Ellipse>
+
+				<!-- Y Curve Dot (only visible when YXRatio != 1.0) -->
+				<Ellipse x:Name="YCurveDot"
+				         Canvas.Left="{Binding YDotPixelX}"
+				         Canvas.Top="{Binding YDotPixelY}"
+				         Width="12" Height="12"
+				         Fill="OrangeRed"
+				         Stroke="{DynamicResource BorderBrush}"
+				         StrokeThickness="2"
+				         IsVisible="{Binding ShowYCurveDot}">
+					<Ellipse.Transitions>
+						<Transitions>
+							<DoubleTransition Property="Canvas.Left" Duration="0:0:0.1"/>
+							<DoubleTransition Property="Canvas.Top" Duration="0:0:0.05"/>
+						</Transitions>
+					</Ellipse.Transitions>
+				</Ellipse>
+			</Canvas>
+
 			<!-- Chart Controls -->
 			<StackPanel Orientation="Horizontal"
 			            HorizontalAlignment="Right"
@@ -112,6 +195,11 @@
 				        ToolTip.Tip="{ext:Localized ProfileFitToData}">
 					<PathIcon Data="{StaticResource full_screen_zoom_regular}"/>
 				</Button>
+				<ToggleButton Classes="chart-control"
+				              IsChecked="{Binding ShowInputIndicator}"
+				              ToolTip.Tip="Show Real-Time Input">
+					<Ellipse Width="10" Height="10" Fill="{DynamicResource PrimaryTextBrush}"/>
+				</ToggleButton>
 			</StackPanel>
 		</Grid>
 	</Border>
