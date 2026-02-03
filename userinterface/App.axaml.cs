@@ -66,7 +66,16 @@ public partial class App : Application
 #if WINDOWS
         Services = BackEndComposer.Compose(services, s => s.AddWindowsDriver());
 #else
-        Services = BackEndComposer.Compose(services, s => s.AddDebugDriver());
+        // Use userspace driver if available, fallback to debug driver
+        var useDebugDriver = Environment.GetEnvironmentVariable("RAWACCEL_DEBUG_DRIVER") == "1";
+        if (useDebugDriver)
+        {
+            Services = BackEndComposer.Compose(services, s => s.AddDebugDriver());
+        }
+        else
+        {
+            Services = BackEndComposer.Compose(services, s => s.AddUserspaceDriver());
+        }
 #endif
 
         IBackEnd backEnd = Services.GetRequiredService<IBackEnd>();
