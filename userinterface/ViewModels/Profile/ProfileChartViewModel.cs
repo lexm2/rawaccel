@@ -154,24 +154,24 @@ namespace userinterface.ViewModels.Profile
                     {
                         // Small delay to show skeleton loader
                         await Task.Delay(100);
-                        
-                        // Initialize chart components on background thread
-                        await Task.Run(() =>
-                        {
-                            Series.Clear();
-                            CreateSeries();
-                        });
-                        
-                        // UI updates must happen on UI thread
+
+                        // All UI updates must happen on UI thread (including Series modification)
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
                             try
                             {
-                                XAxes = CreateXAxes();
-                                YAxes = CreateYAxes();
+                                Series.Clear();
+                                CreateSeries();
+
+                                // Calculate proper axis limits based on data BEFORE creating axes
+                                var (xMin, xMax, yMin, yMax) = CalculateInitialAxisLimits();
+
+                                // Create axes with correct limits from the start
+                                XAxes = CreateXAxes(xMin, xMax);
+                                YAxes = CreateYAxes(yMin, yMax);
                                 TooltipTextPaint = new SolidColorPaint(themeService.GetCachedColor(AxisTitleBrush));
                                 TooltipBackgroundPaint = new SolidColorPaint(themeService.GetCachedColor(TooltipBackgroundBrush).WithAlpha(TooltipBackgroundAlpha));
-                                
+
                                 // Subscribe to events
                                 this.themeService.ThemeChanged += OnThemeChanged;
                                 this.localizationService.PropertyChanged += OnLocalizationChanged;
@@ -182,16 +182,16 @@ namespace userinterface.ViewModels.Profile
                                 OnPropertyChanged(nameof(TooltipTextPaint));
                                 OnPropertyChanged(nameof(TooltipBackgroundPaint));
                                 OnPropertyChanged(nameof(Series));
-                                
+
                                 // Transition to interactive mode
                                 TransitionToInteractiveMode();
-                                
+
                                 IsInitialized = true;
                             }
                             catch (Exception ex)
                             {
                                 System.Diagnostics.Debug.WriteLine($"[CHART INIT] Error in UI thread: {ex.Message}");
-                                
+
                                 // Hide skeleton loader on error
                                 IsLoadingChart = false;
                                 OnPropertyChanged(nameof(IsLoadingChart));
@@ -201,7 +201,7 @@ namespace userinterface.ViewModels.Profile
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"[CHART INIT] Error in background initialization: {ex.Message}");
-                        
+
                         // Hide skeleton loader on error
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         {
@@ -274,20 +274,13 @@ namespace userinterface.ViewModels.Profile
 
         private async void TransitionToInteractiveMode()
         {
-            // Hide skeleton loader and show interactive chart at 0 opacity
+            // Hide skeleton loader and show interactive chart
             IsLoadingChart = false;
             IsInteractiveMode = true;
-            ChartOpacity = 0.0;
-            
+            ChartOpacity = 1.0;
+
             OnPropertyChanged(nameof(IsLoadingChart));
             OnPropertyChanged(nameof(IsInteractiveMode));
-            OnPropertyChanged(nameof(ChartOpacity));
-            
-            // Small delay to ensure chart is rendered
-            await Task.Delay(100);
-            
-            // Fade in interactive chart
-            ChartOpacity = 1.0;
             OnPropertyChanged(nameof(ChartOpacity));
         }
 
@@ -577,6 +570,51 @@ namespace userinterface.ViewModels.Profile
         // ================================================================================================
         // AXIS LIMITS MANAGEMENT
         // ================================================================================================
+
+        private (double xMin, double xMax, double yMin, double yMax) CalculateInitialAxisLimits()
+        {
+            var allPoints = XCurvePreview.Points.ToList();
+
+            if (YXRatio.CurrentValidatedValue != 1.0)
+            {
+                allPoints.AddRange(YCurvePreview.Points);
+            }
+
+            if (allPoints.Count == 0)
+            {
+                // Return default limits
+                return (0, DefaultMaxX, 0, DefaultMaxY);
+            }
+
+            var (minX, maxX, minY, maxY) = CalculateDataBounds(allPoints);
+
+            if (maxY == minY)
+            {
+                // Return centered limits
+                var centerY = (minY + maxY) / 2;
+                var centerX = (minX + maxX) / 2;
+                return (
+                    Math.Max(0, centerX - DefaultAxisRange),
+                    centerX + DefaultAxisRange,
+                    Math.Max(0, centerY - DefaultYRange),
+                    centerY + DefaultYRange
+                );
+            }
+            else
+            {
+                // Return padded limits
+                var xRange = maxX - minX;
+                var yRange = maxY - minY;
+                var xPadding = xRange * DataPaddingRatio;
+                var yPadding = yRange * DataPaddingRatio;
+                return (
+                    Math.Max(0, minX - xPadding),
+                    maxX + xPadding,
+                    Math.Max(0, minY - yPadding),
+                    maxY + yPadding
+                );
+            }
+        }
 
         private void SetDefaultLimits()
         {
