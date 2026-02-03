@@ -66,7 +66,6 @@ public partial class App : Application
 #if WINDOWS
         Services = BackEndComposer.Compose(services, s => s.AddWindowsDriver());
 #else
-        // Use userspace driver if available, fallback to debug driver
         var useDebugDriver = Environment.GetEnvironmentVariable("RAWACCEL_DEBUG_DRIVER") == "1";
         if (useDebugDriver)
         {
@@ -74,7 +73,8 @@ public partial class App : Application
         }
         else
         {
-            Services = BackEndComposer.Compose(services, s => s.AddUserspaceDriver());
+            // TODO: Replace with s.AddUserspaceDriver() once it's implemented
+            Services = BackEndComposer.Compose(services, s => s.AddDebugDriver());
         }
 #endif
 
@@ -102,9 +102,6 @@ public partial class App : Application
             }
 
             desktop.MainWindow = mainWindow;
-
-            // Preload libraries that cause first-page stutter
-            _ = PreloadLibrariesAsync();
 
             // Show alpha build warning modal
             _ = ShowAlphaBuildWarningAsync();
@@ -228,55 +225,6 @@ public partial class App : Application
         catch (Exception ex)
         {
             Debug.WriteLine($"Failed to open Discord URL: {ex.Message}");
-        }
-    }
-
-    /* 
-     * This was originally intended to preload libraries that cause stutter 
-     * but it seems to not have much effect. Will leave it here for now.
-     * 
-     * Could also do these
-     * System.Runtime.Intrinsics
-     * System.Text.Json
-     * System.Text.Encodings.Web
-     * System.Text.Encoding.Extensions
-     * System.IO.Pipelines
-    */
-    private async Task PreloadLibrariesAsync()
-    {
-        try
-        {
-            Debug.WriteLine("[PRELOAD] Starting library preload...");
-
-            await Task.Run(() =>
-            {
-                try
-                {
-                    _ = typeof(LiveChartsCore.SkiaSharpView.Avalonia.CartesianChart).Assembly;
-
-                    _ = typeof(SkiaSharp.HarfBuzz.SKShaper).Assembly;
-
-                    _ = typeof(SkiaSharp.SKCanvas).Assembly;
-
-                    _ = typeof(LiveChartsCore.CartesianChart<>).Assembly;
-
-                    _ = typeof(Avalonia.Controls.ItemsRepeater).Assembly;
-                    
-                    _ = typeof(System.Security.Cryptography.MD5).Assembly;
-                    
-                    _ = typeof(Avalonia.Media.Imaging.Bitmap).Assembly;
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[PRELOAD] Library loading failed: {ex.Message}");
-                }
-            });
-
-            Debug.WriteLine("[PRELOAD] All libraries preloaded successfully");
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[PRELOAD] Preload task failed: {ex.Message}");
         }
     }
 
