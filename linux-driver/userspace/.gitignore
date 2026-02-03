@@ -1,0 +1,13 @@
+# Build artifacts
+*.o
+rawaccel-daemon
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Core dumps
+core
+core.*
