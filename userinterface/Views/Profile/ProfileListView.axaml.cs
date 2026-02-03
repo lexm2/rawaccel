@@ -8,7 +8,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
-using System.Threading.Tasks;
 using userinterface.Services;
 using userinterface.ViewModels.Profile;
 using userspace_backend;
@@ -247,9 +246,7 @@ public partial class ProfileListView : UserControl
     {
         if (targetIndex < 0 || targetIndex > GetProfileCount()) return;
 
-        var profileBorder = CreateProfileBorder(null!, targetIndex);
-        profileBorder.ZIndex = 1000;
-        profileBorder.Opacity = 1.0;
+        var profileBorder = CreateProfileBorder(targetIndex);
 
         int itemIndex = targetIndex + 1;
         allItems.Insert(itemIndex, profileBorder);
@@ -284,7 +281,7 @@ public partial class ProfileListView : UserControl
         return border;
     }
 
-    private Border CreateProfileBorder(IBrush color, int targetIndex)
+    private Border CreateProfileBorder(int targetIndex)
     {
         var profileName = targetIndex < profilesModel.Profiles.Count ? profilesModel.Profiles[targetIndex].CurrentNameForDisplay : $"Profile {targetIndex + 1}";
         var isDefaultProfile = targetIndex < profilesModel.Profiles.Count && profilesModel.Profiles[targetIndex] == profilesModel.DefaultProfile;
@@ -329,7 +326,6 @@ public partial class ProfileListView : UserControl
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(8, 0, 8, ProfileSpacing),
             Child = grid,
-            Opacity = 1.0,
             ZIndex = targetIndex
         };
 
@@ -401,9 +397,7 @@ public partial class ProfileListView : UserControl
     {
         for (int i = 0; i < profilesModel.Profiles.Count; i++)
         {
-            var profileBorder = CreateProfileBorder(null!, i);
-            profileBorder.ZIndex = 1000;
-            profileBorder.Opacity = 1.0;
+            var profileBorder = CreateProfileBorder(i);
 
             int itemIndex = i + 1;
             allItems.Insert(itemIndex, profileBorder);
@@ -479,21 +473,5 @@ public partial class ProfileListView : UserControl
                 }
             }
         }
-    }
-
-    public Task ExpandElements()
-    {
-        SetAllElementPositions();
-        return Task.CompletedTask;
-    }
-
-    public Task CollapseElements()
-    {
-        // Set all elements to position 0 (collapsed)
-        for (int i = 0; i < allItems.Count; i++)
-        {
-            allItems[i].Margin = new Thickness(8, 0, 8, ProfileSpacing);
-        }
-        return Task.CompletedTask;
     }
 }

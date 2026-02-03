@@ -27,9 +27,6 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(CurrentPageContent))]
     private NavigationPage selectedPage = NavigationPage.Devices;
 
-    [ObservableProperty]
-    private bool isProfilesExpanded = false;
-
     // Pre-created ViewModels
     private readonly DevicesPageViewModel devicesPage;
     private readonly ProfilesPageViewModel profilesPage;
@@ -107,7 +104,6 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         Console.WriteLine($"SelectPage called with: {page}");
         SelectedPage = page;
-        IsProfilesExpanded = page == NavigationPage.Profiles;
 
         if (page == NavigationPage.Profiles && profileListView.SelectedProfile == null)
         {
@@ -153,7 +149,6 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         SelectedPage = page;
-        IsProfilesExpanded = page == NavigationPage.Profiles;
 
         if (page == NavigationPage.Profiles && profileListView.SelectedProfile == null)
         {
@@ -166,30 +161,6 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 profileListView.SelectedProfile = backEnd.Profiles.Profiles[0];
             }
-        }
-    }
-
-    private async void ExpandProfiles()
-    {
-        var view = App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-            ? desktop.MainWindow?.FindControl<userinterface.Views.Profile.ProfileListView>("ProfileListView")
-            : null;
-
-        if (view != null)
-        {
-            await view.ExpandElements();
-        }
-    }
-
-    private async void CollapseProfiles()
-    {
-        var view = App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
-            ? desktop.MainWindow?.FindControl<userinterface.Views.Profile.ProfileListView>("ProfileListView")
-            : null;
-
-        if (view != null)
-        {
-            await view.CollapseElements();
         }
     }
 
@@ -225,18 +196,6 @@ public partial class MainWindowViewModel : ViewModelBase
         if (selectedProfile != null && SelectedPage != NavigationPage.Profiles)
         {
             SelectPage(NavigationPage.Profiles);
-        }
-    }
-
-    partial void OnIsProfilesExpandedChanged(bool value)
-    {
-        if (value)
-        {
-            ExpandProfiles();
-        }
-        else
-        {
-            CollapseProfiles();
         }
     }
 }
