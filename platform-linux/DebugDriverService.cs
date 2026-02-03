@@ -44,5 +44,11 @@ namespace userspace_backend.Platform.Linux
             DebugLogger.LogHeader("DEACTIVATE");
             DebugLogger.Log("Driver deactivated");
         }
+
+        public double GetCurrentMouseSpeed()
+        {
+            System.Console.WriteLine("[DebugDriverService] GetCurrentMouseSpeed() called - returning 0 (no real data)");
+            return 0;  // Debug service has no real data
+        }
     }
 }

@@ -38,6 +38,12 @@ namespace userspace_backend.Platform.Windows
             }
         }
 
+        public double GetCurrentMouseSpeed()
+        {
+            // TODO: Windows implementation using Raw Input or driver telemetry
+            return 0;
+        }
+
         private DriverConfig MapToDriverConfig(MappingModel mappingModel, IEnumerable<IDeviceModel> allDevices)
         {
             // Use shared DriverMapper to get shared types
