@@ -26,5 +26,11 @@ namespace userspace_backend.Driver
         /// Deactivates the driver, resetting to default behavior.
         /// </summary>
         void Deactivate();
+
+        /// <summary>
+        /// Gets the current mouse speed in counts/ms from the driver.
+        /// Returns 0 if no data available or driver not active.
+        /// </summary>
+        double GetCurrentMouseSpeed();
     }
 }
