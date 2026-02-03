@@ -83,6 +83,66 @@ namespace userspace_backend.Platform.Linux
             }
         }
 
+        public double GetCurrentMouseSpeed()
+        {
+            Console.WriteLine($"[LinuxUserspaceDriverService] GetCurrentMouseSpeed() called");
+            Console.WriteLine($"[LinuxUserspaceDriverService] Socket connected: {_socket?.Connected ?? false}");
+
+            // Ensure daemon is running and socket is connected
+            try
+            {
+                EnsureDaemonRunning();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[LinuxUserspaceDriverService] Failed to connect to daemon: {ex.Message}");
+                return 0;
+            }
+
+            if (_socket == null || !_socket.Connected)
+            {
+                Console.WriteLine($"[LinuxUserspaceDriverService] Socket not connected, returning 0");
+                return 0;
+            }
+
+            try
+            {
+                // Send GET_SPEED command
+                var message = new RawaccelIpcMessage
+                {
+                    Magic = IPC_MAGIC,
+                    Version = IPC_VERSION,
+                    Command = (uint)IpcCommand.GetSpeed,
+                    PayloadSize = 0
+                };
+
+                Console.WriteLine($"[LinuxUserspaceDriverService] Sending GET_SPEED command");
+                byte[] headerBytes = StructToBytes(message);
+                _socket.Send(headerBytes);
+
+                // Receive telemetry response
+                byte[] responseBytes = new byte[Marshal.SizeOf<RawaccelSpeedTelemetry>()];
+                int bytesReceived = _socket.Receive(responseBytes);
+                Console.WriteLine($"[LinuxUserspaceDriverService] Received {bytesReceived} bytes");
+
+                if (bytesReceived == responseBytes.Length)
+                {
+                    var telemetry = BytesToStruct<RawaccelSpeedTelemetry>(responseBytes);
+                    Console.WriteLine($"[LinuxUserspaceDriverService] Speed: {telemetry.Speed:F2}, X: {telemetry.SpeedX:F2}, Y: {telemetry.SpeedY:F2}");
+                    return telemetry.Speed;
+                }
+
+                Console.WriteLine($"[LinuxUserspaceDriverService] Invalid response size, returning 0");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[LinuxUserspaceDriverService] Error getting speed: {ex.Message}");
+                Console.WriteLine($"[LinuxUserspaceDriverService] Stack trace: {ex.StackTrace}");
+                return 0;
+            }
+        }
+
         private RawaccelDeviceConfig ConvertToDeviceConfig(DriverProfile profile)
         {
             var config = new RawaccelDeviceConfig
@@ -341,6 +401,21 @@ namespace userspace_backend.Platform.Linux
             return bytes;
         }
 
+        private T BytesToStruct<T>(byte[] bytes) where T : struct
+        {
+            int size = Marshal.SizeOf<T>();
+            IntPtr ptr = Marshal.AllocHGlobal(size);
+            try
+            {
+                Marshal.Copy(bytes, 0, ptr, size);
+                return Marshal.PtrToStructure<T>(ptr);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+
         private byte[] ConfigToBytes(RawaccelDeviceConfig config)
         {
             using var ms = new MemoryStream();
@@ -391,7 +466,8 @@ namespace userspace_backend.Platform.Linux
             UpdateConfig = 1,
             Disable = 2,
             Enable = 3,
-            GetStatus = 4
+            GetStatus = 4,
+            GetSpeed = 5
         }
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -401,6 +477,15 @@ namespace userspace_backend.Platform.Linux
             public uint Version;
             public uint Command;
             public uint PayloadSize;
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        private struct RawaccelSpeedTelemetry
+        {
+            public float Speed;       // Combined magnitude
+            public float SpeedX;      // X component
+            public float SpeedY;      // Y component
+            public uint Reserved;     // Padding
         }
 
         private struct RawaccelLut
