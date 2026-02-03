@@ -101,7 +101,7 @@ static int scan_and_add_devices(struct rawaccel_daemon *daemon) {
         // Add to epoll
         struct epoll_event ev = {0};
         ev.events = EPOLLIN;
-        ev.data.ptr = dev;
+        ev.data.fd = dev->fd;
 
         if (epoll_ctl(daemon->epoll_fd, EPOLL_CTL_ADD, dev->fd, &ev) < 0) {
             fprintf(stderr, "Failed to add device to epoll: %s\n",
@@ -162,6 +162,7 @@ int main(int argc, char **argv) {
     // Create config server
     daemon.config_server = rawaccel_config_server_create(
         daemon.socket_path,
+        daemon.epoll_fd,
         config_update_callback,
         &daemon
     );
@@ -175,10 +176,9 @@ int main(int argc, char **argv) {
     // Add config server to epoll
     struct epoll_event ev = {0};
     ev.events = EPOLLIN;
-    ev.data.ptr = daemon.config_server;
+    ev.data.fd = rawaccel_config_server_get_fd(daemon.config_server);
 
-    int server_fd = rawaccel_config_server_get_fd(daemon.config_server);
-    if (epoll_ctl(daemon.epoll_fd, EPOLL_CTL_ADD, server_fd, &ev) < 0) {
+    if (epoll_ctl(daemon.epoll_fd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0) {
         fprintf(stderr, "Failed to add config server to epoll: %s\n",
                 strerror(errno));
         goto cleanup;
@@ -211,17 +211,29 @@ int main(int argc, char **argv) {
         }
 
         for (int i = 0; i < nfds; i++) {
-            void *ptr = events[i].data.ptr;
+            int fd = events[i].data.fd;
 
-            // Check if it's the config server
-            if (ptr == daemon.config_server) {
+            // Check if it's the config server listen socket
+            if (fd == rawaccel_config_server_get_fd(daemon.config_server)) {
+                rawaccel_config_server_process(daemon.config_server);
+            } else if (rawaccel_config_server_is_client(daemon.config_server, fd)) {
+                // It's a client connection
                 rawaccel_config_server_process(daemon.config_server);
             } else {
-                // It's a device
-                struct rawaccel_device *dev = ptr;
-                if (rawaccel_device_process_event(dev) < 0) {
-                    fprintf(stderr, "Error processing event from %s\n",
-                            dev->name);
+                // It's a device - find it in our device list
+                struct rawaccel_device *dev = NULL;
+                for (int j = 0; j < daemon.num_devices; j++) {
+                    if (daemon.devices[j] && daemon.devices[j]->fd == fd) {
+                        dev = daemon.devices[j];
+                        break;
+                    }
+                }
+
+                if (dev) {
+                    if (rawaccel_device_process_event(dev) < 0) {
+                        fprintf(stderr, "Error processing event from %s\n",
+                                dev->name);
+                    }
                 }
             }
         }

@@ -14,6 +14,7 @@ typedef void (*rawaccel_config_callback_t)(struct rawaccel_device *dev,
 // Create Unix socket server
 struct rawaccel_config_server *rawaccel_config_server_create(
     const char *socket_path,
+    int epoll_fd,
     rawaccel_config_callback_t callback,
     void *userdata
 );
@@ -23,6 +24,9 @@ void rawaccel_config_server_destroy(struct rawaccel_config_server *server);
 
 // Get server file descriptor for epoll
 int rawaccel_config_server_get_fd(struct rawaccel_config_server *server);
+
+// Check if fd is a client connection
+bool rawaccel_config_server_is_client(struct rawaccel_config_server *server, int fd);
 
 // Process incoming data
 int rawaccel_config_server_process(struct rawaccel_config_server *server);
