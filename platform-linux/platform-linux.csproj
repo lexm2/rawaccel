@@ -9,10 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Text.Json" Version="10.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\userspace-backend\userspace-backend.csproj" />
   </ItemGroup>
 
