@@ -1,7 +1,6 @@
 use anyhow::{Result, anyhow};
 use tracing::{info, warn, debug};
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::os::unix::io::{AsRawFd, RawFd};
 use std::io::{Read, Write, ErrorKind};
 use std::fs;
 use std::path::Path;
@@ -42,11 +41,6 @@ impl IpcServer {
             listener,
             clients: Vec::new(),
         })
-    }
-
-    /// Get file descriptor for epoll integration
-    pub fn fd(&self) -> RawFd {
-        self.listener.as_raw_fd()
     }
 
     /// Handle incoming IPC connections

@@ -65,10 +65,4 @@ impl Device {
         // Stub: no actual event processing yet
         Ok(())
     }
-
-    /// Get file descriptor for epoll (stub)
-    pub fn fd(&self) -> i32 {
-        // Stub: return dummy FD
-        -1
-    }
 }
