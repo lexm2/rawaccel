@@ -21,7 +21,7 @@ namespace userspace_backend.Platform.Linux
     {
         private const string SocketPath = "/tmp/rawaccel.sock";
         private const string DaemonPath = "/usr/local/bin/rawaccel-daemon";
-        private const uint IPC_MAGIC = 0x52415743;  // "RAWC"
+        private const uint IPC_MAGIC = 0x52415943;  // Protocol magic (must match daemon)
         private const uint IPC_VERSION = 1;
         private const int MAX_LUT_POINTS = 256;
 
