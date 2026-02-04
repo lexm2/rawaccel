@@ -1,0 +1,19 @@
+[package]
+name = "rawaccel-daemon"
+version = "1.0.0"
+edition = "2021"
+authors = ["RawAccel Contributors"]
+description = "RawAccel userspace daemon for Linux"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+signal-hook = "0.3"
+clap = { version = "4.0", features = ["derive"] }
+libc = "0.2"
+
+[[bin]]
+name = "rawaccel-daemon"
+path = "src/main.rs"

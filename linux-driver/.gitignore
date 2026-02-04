@@ -1,0 +1,18 @@
+# Rust
+target/
+Cargo.lock
+
+# Build artifacts
+*.o
+*.so
+*.a
+
+# Scripts
+run-daemon.sh
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
