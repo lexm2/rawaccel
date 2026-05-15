@@ -70,3 +70,26 @@ add_executable(json_tests
 )
 target_link_libraries(json_tests PRIVATE rawaccel_json_io)
 add_test(NAME json_tests COMMAND json_tests)
+
+# Step 5 agent skeleton: control plane state + UDS server. The agent owns
+# the active modifier_settings and applies the 1s WriteDelay debounce that
+# mirrors driver/driver.cpp:446-451.
+add_library(rawaccel_agent STATIC
+    agent/agent.cpp
+    agent/control_server.cpp
+)
+target_include_directories(rawaccel_agent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/agent)
+target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io)
+
+add_executable(rawaccel-agentd agent/main.cpp)
+target_link_libraries(rawaccel-agentd PRIVATE rawaccel_agent)
+
+find_package(Threads REQUIRED)
+add_executable(agent_tests
+    tests/test_main.cpp
+    tests/agent_tests.cpp
+    tests/control_server_tests.cpp
+    tests/control_server_socket_tests.cpp
+)
+target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
+add_test(NAME agent_tests COMMAND agent_tests)
