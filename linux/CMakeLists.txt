@@ -22,6 +22,27 @@ target_compile_options(rawaccel_common INTERFACE
     -Wno-changes-meaning
 )
 
+include(FetchContent)
+
+# Prefer a system-installed nlohmann_json (e.g. pacman -S nlohmann-json).
+# Fall back to fetching the v3.11.3 single-header release from upstream at
+# configure time. Requires internet on the fresh configure; subsequent
+# builds reuse the cached copy in build/_deps.
+find_package(nlohmann_json 3.11 QUIET)
+if(NOT nlohmann_json_FOUND)
+    # TODO: pin URL_HASH once verified against an authoritative source.
+    FetchContent_Declare(
+        nlohmann_json
+        URL https://github.com/nlohmann/json/releases/download/v3.11.3/include.zip
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
+# Step 4 JSON layer mirroring wrapper/wrapper.cpp's JsonProperty schema.
+add_library(rawaccel_json_io STATIC agent/json_io.cpp)
+target_include_directories(rawaccel_json_io PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/agent)
+target_link_libraries(rawaccel_json_io PUBLIC rawaccel_common nlohmann_json::nlohmann_json)
+
 enable_testing()
 
 # Step 2 portability check: compiles only the math headers and instantiates
@@ -41,3 +62,11 @@ add_executable(parity_tests
 )
 target_link_libraries(parity_tests PRIVATE rawaccel_common)
 add_test(NAME parity_tests COMMAND parity_tests)
+
+# Step 4 JSON roundtrip tests against the Windows JsonProperty schema.
+add_executable(json_tests
+    tests/test_main.cpp
+    tests/json_roundtrip_tests.cpp
+)
+target_link_libraries(json_tests PRIVATE rawaccel_json_io)
+add_test(NAME json_tests COMMAND json_tests)
