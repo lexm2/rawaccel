@@ -4,10 +4,15 @@ using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using RawAccel.Contracts;
 using userspace_backend.Data.Profiles;
+using userspace_backend.Driver;
 using userspace_backend.IO;
 using userspace_backend.Model;
 using DATA = userspace_backend.Data;
+using Profile = RawAccel.Contracts.RawAccelProfile;
+using DeviceSettings = RawAccel.Contracts.RawAccelDeviceSettings;
+using DeviceConfig = RawAccel.Contracts.RawAccelDeviceConfig;
 
 namespace userspace_backend
 {
@@ -35,11 +40,11 @@ namespace userspace_backend
     public class BackEnd : IBackEnd
     {
         private readonly ILogger<BackEnd> logger;
-        private readonly IDriverConfigActivator driverConfigActivator;
+        private readonly IRawAccelDriver driver;
 
         public BackEnd(
             IBackEndLoader backEndLoader,
-            IDriverConfigActivator driverConfigActivator,
+            IRawAccelDriver driver,
             IProfilesModel profilesModel,
             DevicesModel devicesModel,
             MappingsModel mappingsModel,
@@ -47,7 +52,7 @@ namespace userspace_backend
             ILogger<BackEnd>? logger = null)
         {
             BackEndLoader = backEndLoader;
-            this.driverConfigActivator = driverConfigActivator;
+            this.driver = driver;
             Devices = devicesModel;
             Mappings = mappingsModel;
             Profiles = profilesModel;
@@ -233,7 +238,7 @@ namespace userspace_backend
                 return;
             }
 
-            DriverConfig? config = null;
+            RawAccelConfig? config = null;
             try
             {
                 config = MapToDriverConfig(mappingToApply);
@@ -242,26 +247,26 @@ namespace userspace_backend
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Apply: error building DriverConfig");
+                logger.LogError(ex, "Apply: error building RawAccelConfig");
             }
 
             if (config != null)
             {
                 try
                 {
-                    driverConfigActivator.Write(config);
-                    logger.LogInformation("Apply: driver.Activate() succeeded");
+                    driver.Apply(config);
+                    logger.LogInformation("Apply: driver.Apply() succeeded");
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Apply: driver.Activate() failed");
+                    logger.LogError(ex, "Apply: driver.Apply() failed");
                 }
             }
 
             WriteSettingsToDisk();
         }
 
-        private void LogDriverConfigSummary(MappingModel mapping, DriverConfig config)
+        private void LogDriverConfigSummary(MappingModel mapping, RawAccelConfig config)
         {
             int profileCount = config.profiles?.Count ?? 0;
             int deviceCount = config.devices?.Count ?? 0;
@@ -296,18 +301,18 @@ namespace userspace_backend
             }
         }
 
-        private void LogDriverConfigJson(DriverConfig config)
+        private void LogDriverConfigJson(RawAccelConfig config)
         {
             try
             {
                 string json = Newtonsoft.Json.JsonConvert.SerializeObject(
                     config,
                     Newtonsoft.Json.Formatting.Indented);
-                logger.LogDebug("Apply: DriverConfig JSON{NewLine}{Json}", Environment.NewLine, json);
+                logger.LogDebug("Apply: RawAccelConfig JSON{NewLine}{Json}", Environment.NewLine, json);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Apply: could not serialize DriverConfig to JSON");
+                logger.LogWarning(ex, "Apply: could not serialize RawAccelConfig to JSON");
             }
         }
 
@@ -334,16 +339,18 @@ namespace userspace_backend
             }
         }
 
-        protected DriverConfig MapToDriverConfig(MappingModel mappingModel)
+        protected RawAccelConfig MapToDriverConfig(MappingModel mappingModel)
         {
             IEnumerable<DeviceSettings> configDevices = MapToDriverDevices(mappingModel);
             IEnumerable<Profile> configProfiles = MapToDriverProfiles(mappingModel);
 
-            DriverConfig config = DriverConfig.GetDefault();
-            config.profiles = configProfiles.ToList();
-            config.devices = configDevices.ToList();
-            config.accels = configProfiles.Select(p => new ManagedAccel(p)).ToList();
-            return config;
+            return new RawAccelConfig
+            {
+                version = RawAccelConstants.VersionString,
+                defaultDeviceConfig = new DeviceConfig(),
+                profiles = configProfiles.ToList(),
+                devices = configDevices.ToList(),
+            };
         }
 
         protected IEnumerable<DeviceSettings> MapToDriverDevices(MappingModel mapping)

@@ -1,8 +1,11 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System;
+using System.Runtime.InteropServices;
 using DATA = userspace_backend.Data;
 using userspace_backend.Display;
+using userspace_backend.Driver;
+using userspace_backend.Driver.Linux;
 using userspace_backend.IO;
 using userspace_backend.Model;
 using userspace_backend.Model.AccelDefinitions;
@@ -20,7 +23,7 @@ namespace userspace_backend
     {
         public static IServiceProvider Compose(IServiceCollection services)
         {
-            services.TryAddSingleton<ISystemDevicesRetriever, SystemDevicesRetriever>();
+            RegisterPlatformServices(services);
             services.TryAddSingleton<ISystemDevicesProvider, SystemDevicesProvider>();
 
             #region Parsers
@@ -588,13 +591,52 @@ namespace userspace_backend
 
             services.AddSingleton<IProfilesModel, ProfilesModel>();
 
-            services.TryAddSingleton<IDriverConfigActivator, DriverConfigActivator>();
-
             services.AddSingleton<IBackEnd, BackEnd>();
 
             #endregion BackEnd
 
             return services.BuildServiceProvider();
+        }
+
+        // Per-OS driver/evaluator/device-enumeration registration. Runtime
+        // probe (not #if WINDOWS) so the same assembly runs everywhere.
+        private static void RegisterPlatformServices(IServiceCollection services)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // Windows-side impls (WindowsRawAccelDriver, ManagedAccelEvaluator,
+                // WindowsSystemDevicesRetriever) live under Driver/Windows/ and
+                // are excluded from non-Windows builds via csproj. They depend
+                // on wrapper.dll (C++/CLI). Registered via reflection so this
+                // method can compile on Linux where those types do not exist.
+                RegisterWindowsServicesByReflection(services);
+            }
+            else
+            {
+                services.TryAddSingleton<IRawAccelDriver, LinuxAgentDriver>();
+                services.TryAddSingleton<IAccelEvaluator, LinuxAccelEvaluator>();
+                services.TryAddSingleton<ISystemDevicesRetriever, LinuxSystemDevicesRetriever>();
+            }
+        }
+
+        private static void RegisterWindowsServicesByReflection(IServiceCollection services)
+        {
+            var asm = typeof(BackEndComposer).Assembly;
+
+            var driverType = asm.GetType("userspace_backend.Driver.Windows.WindowsRawAccelDriver");
+            var evaluatorType = asm.GetType("userspace_backend.Driver.Windows.ManagedAccelEvaluator");
+            var devicesType = asm.GetType("userspace_backend.Driver.Windows.WindowsSystemDevicesRetriever");
+
+            if (driverType is null || evaluatorType is null || devicesType is null)
+            {
+                throw new InvalidOperationException(
+                    "Windows driver/evaluator/devices types missing from this build; " +
+                    "ensure userspace-backend was built on Windows so wrapper.dll is referenced.");
+            }
+
+            services.TryAddSingleton(typeof(IRawAccelDriver), driverType);
+            services.TryAddSingleton(typeof(IAccelEvaluator), evaluatorType);
+            services.TryAddSingleton(typeof(ISystemDevicesRetriever), devicesType);
         }
     }
 }

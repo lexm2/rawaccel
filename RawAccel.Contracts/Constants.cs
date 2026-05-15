@@ -19,5 +19,12 @@ namespace RawAccel.Contracts
         public const int LutPointsCapacity = LutRawDataCapacity / 2;
 
         public const string SettingsKey = "Driver settings";
+
+        // Mirrors RA_VER_* in common/rawaccel-version.h. Bump when the
+        // settings shape or wire protocol changes incompatibly.
+        public const int VersionMajor = 1;
+        public const int VersionMinor = 7;
+        public const int VersionPatch = 0;
+        public const string VersionString = "1.7.0";
     }
 }
