@@ -25,7 +25,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\userspace-backend\userspace-backend.csproj" />
+  </ItemGroup>
+
+  <!-- Wrapper is C++/CLI net472, only buildable on Windows. Tests that
+       exercise the Windows IOCTL path (BackEndApplyTests, SystemDevicesTests)
+       are excluded from the Linux build via the next ItemGroup. -->
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
     <ProjectReference Include="..\wrapper\wrapper.vcxproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <Compile Remove="ModelTests\BackEndApplyTests.cs" />
+    <Compile Remove="ModelTests\SystemDevicesTests.cs" />
   </ItemGroup>
 
   <!--
