@@ -6,6 +6,11 @@ namespace RawAccel.Contracts
     // contract; do not rename without bumping settings.json compatibility.
     public class RawAccelAccelArgs
     {
+        // Maximum number of LUT (input, output) sample pairs the native side
+        // accepts; mirrors wrapper.cpp's literal AccelArgs.MaxLutPoints which
+        // resolves to ra::LUT_POINTS_CAPACITY.
+        public const int MaxLutPoints = RawAccelConstants.LutPointsCapacity;
+
         public AccelMode mode { get; set; } = AccelMode.noaccel;
 
         [JsonProperty("Gain / Velocity")]

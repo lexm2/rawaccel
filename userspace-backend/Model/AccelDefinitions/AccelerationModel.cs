@@ -4,6 +4,7 @@ using userspace_backend.Data.Profiles;
 using userspace_backend.Model.EditableSettings;
 using userspace_backend.Model.ProfileComponents;
 using static userspace_backend.Data.Profiles.Acceleration;
+using AccelArgs = RawAccel.Contracts.RawAccelAccelArgs;
 
 namespace userspace_backend.Model.AccelDefinitions
 {
