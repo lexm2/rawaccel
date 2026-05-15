@@ -136,18 +136,23 @@ int BPF_PROG(rawaccel_hid_device_event,
         return 0;
     }
 
-    /* Bounds-check the offsets the verifier needs to see against the
-     * view size we asked for above. */
-    if (cfg->dx_byte_offset + cfg->dx_byte_size > RA_REPORT_VIEW_BYTES) return 0;
-    if (cfg->dy_byte_offset + cfg->dy_byte_size > RA_REPORT_VIEW_BYTES) return 0;
+    /* Narrow byte sizes to {1, 2} so the size-branch in read_signed /
+     * write_signed has a known shape. */
     if (cfg->dx_byte_size != 1 && cfg->dx_byte_size != 2) return 0;
     if (cfg->dy_byte_size != 1 && cfg->dy_byte_size != 2) return 0;
 
-    /* The verifier can't trust an arbitrary __u8* + __u8 arithmetic, so
-     * mask offsets to a known small range. RA_REPORT_VIEW_BYTES is a
-     * power of 2 minus 1 so the mask is cheap. */
+    /* Mask offsets to keep the verifier happy with __u8* + __u8
+     * arithmetic. Then tighten unconditionally to (RA_REPORT_VIEW_BYTES
+     * - 2): even when dx_byte_size == 1 we reserve room for two bytes,
+     * because the verifier tracks dx_off independently of dx_byte_size
+     * and will not infer 'dx_off+1 in range' from 'dx_off+size <= 16'
+     * inside the size==2 branch. Losing one byte at the high end of the
+     * view is harmless: real mouse descriptors put X/Y near the start
+     * of the report, never at byte 15. */
     __u32 dx_off = cfg->dx_byte_offset & (RA_REPORT_VIEW_BYTES - 1);
     __u32 dy_off = cfg->dy_byte_offset & (RA_REPORT_VIEW_BYTES - 1);
+    if (dx_off > RA_REPORT_VIEW_BYTES - 2) return 0;
+    if (dy_off > RA_REPORT_VIEW_BYTES - 2) return 0;
 
     __s32 dx = read_signed(rpt + dx_off, cfg->dx_byte_size);
     __s32 dy = read_signed(rpt + dy_off, cfg->dy_byte_size);

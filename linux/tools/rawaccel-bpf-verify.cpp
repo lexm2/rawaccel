@@ -52,16 +52,31 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    // Per-program log buffer: the default is small enough that a non-trivial
+    // verifier rejection gets truncated and the actual reason scrolls off.
+    // 1 MiB is comfortably more than the kernel will emit. Allocated on the
+    // heap so the binary stack stays small.
+    static std::vector<char> verifier_log(1 << 20);
+    bpf_program* p = nullptr;
+    bpf_object__for_each_program(p, obj) {
+        bpf_program__set_log_buf(p, verifier_log.data(), verifier_log.size());
+        bpf_program__set_log_level(p, 1);
+    }
+
     int rc = bpf_object__load(obj);
     if (rc != 0) {
         const int saved = errno;
+        // EACCES is the verifier saying "your program is unsafe"; the log
+        // explains why. EPERM is missing CAP_BPF / RLIMIT_MEMLOCK and the
+        // program never made it to the verifier.
+        if (saved != EPERM) {
+            std::fprintf(stderr,
+                "---- verifier log ----\n%s---- end verifier log ----\n",
+                verifier_log.data());
+        }
         std::fprintf(stderr, "bpf_object__load failed: rc=%d errno=%d (%s)\n",
                      rc, saved, std::strerror(saved));
         bpf_object__close(obj);
-        // EPERM here almost always means the user lacks CAP_BPF (or root)
-        // and RLIMIT_MEMLOCK could not be bumped. The object itself loaded
-        // and relocated cleanly; the verifier just never got a chance.
-        // Exit 77 so ctest treats this as SKIP rather than FAIL.
         if (saved == EPERM) {
             std::fprintf(stderr,
                 "verifier check skipped: needs CAP_BPF or root. "
