@@ -86,12 +86,23 @@ add_library(rawaccel_agent STATIC
     agent/evdev_device.cpp
     agent/udev_watcher.cpp
     agent/evdev_backend.cpp
+    agent/trace_format.cpp
+    agent/trace_replay.cpp
 )
 target_include_directories(rawaccel_agent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/agent)
 target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io PkgConfig::UDEV)
 
 add_executable(rawaccel-agentd agent/main.cpp)
 target_link_libraries(rawaccel-agentd PRIVATE rawaccel_agent)
+
+# Step 8 calibration tools. rawaccel-replay drives a trace through the
+# processor for cross-OS parity diffs; rawaccel-latency pairs raw vs
+# uinput SYN_REPORTs to characterize tail latency on real hardware.
+add_executable(rawaccel-replay tools/rawaccel-replay.cpp)
+target_link_libraries(rawaccel-replay PRIVATE rawaccel_agent)
+
+add_executable(rawaccel-latency tools/rawaccel-latency.cpp)
+target_link_libraries(rawaccel-latency PRIVATE rawaccel_agent)
 
 find_package(Threads REQUIRED)
 add_executable(agent_tests
@@ -103,6 +114,7 @@ add_executable(agent_tests
     tests/evdev_device_tests.cpp
     tests/grab_registry_tests.cpp
     tests/per_device_state_tests.cpp
+    tests/trace_replay_tests.cpp
 )
 target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
 add_test(NAME agent_tests COMMAND agent_tests)
