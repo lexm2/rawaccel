@@ -71,15 +71,24 @@ add_executable(json_tests
 target_link_libraries(json_tests PRIVATE rawaccel_json_io)
 add_test(NAME json_tests COMMAND json_tests)
 
-# Step 5 agent skeleton: control plane state + UDS server. The agent owns
-# the active modifier_settings and applies the 1s WriteDelay debounce that
-# mirrors driver/driver.cpp:446-451.
+# Step 5/6 agent: control plane + per-device evdev/uinput backend. The agent
+# owns active modifier_settings and the 1s WriteDelay debounce; the evdev
+# backend owns udev hotplug, EVIOCGRAB, uinput mirroring, and the per-packet
+# read/transform/write loop (driver/driver.cpp:84-131 mirror).
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
+
 add_library(rawaccel_agent STATIC
     agent/agent.cpp
     agent/control_server.cpp
+    agent/evdev_processor.cpp
+    agent/evdev_io.cpp
+    agent/evdev_device.cpp
+    agent/udev_watcher.cpp
+    agent/evdev_backend.cpp
 )
 target_include_directories(rawaccel_agent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/agent)
-target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io)
+target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io PkgConfig::UDEV)
 
 add_executable(rawaccel-agentd agent/main.cpp)
 target_link_libraries(rawaccel-agentd PRIVATE rawaccel_agent)
@@ -90,6 +99,9 @@ add_executable(agent_tests
     tests/agent_tests.cpp
     tests/control_server_tests.cpp
     tests/control_server_socket_tests.cpp
+    tests/evdev_processor_tests.cpp
+    tests/evdev_device_tests.cpp
+    tests/grab_registry_tests.cpp
 )
 target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
 add_test(NAME agent_tests COMMAND agent_tests)
