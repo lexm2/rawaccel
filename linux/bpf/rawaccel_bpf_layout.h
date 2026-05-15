@@ -3,10 +3,6 @@
 
 /* Shared map layout between the BPF program and its userspace loader.
  *
- * Included from:
- *   linux/bpf/rawaccel.bpf.c        -- kernel-context, types via vmlinux.h
- *   linux/agent/... (future)        -- userspace C++ via stdint.h
- *
  * Keep field types stdint-style so the same struct is consumable on both
  * sides without C++ <-> kernel-C dance. The BPF program treats them as
  * the natural-width kernel types via implicit conversion.
@@ -31,7 +27,7 @@
  * gives a quantization step <= 0.025 in/s at typical NORMALIZED_DPI. */
 #define RA_LUT_SIZE 4096
 
-/* Per-axis lookup tables (anisotropy). Step 11 fills these at apply-time. */
+/* Per-axis lookup tables (anisotropy). The agent fills these at apply-time. */
 struct ra_bpf_config {
     /* HID report layout, copied verbatim from
      * linux/agent/hid_descriptor.hpp's BpfMouseLayout. */

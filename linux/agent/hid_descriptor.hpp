@@ -12,9 +12,10 @@
 // (UsagePage, Usage) is (Generic Desktop, X) or (..., Y) we record its
 // position within the report.
 //
-// `validate_for_bpf` enforces the conservative shape the plan calls for:
-// byte-aligned, 8- or 16-bit signed, same report, in a top-level Mouse or
-// Pointer collection. Anything weirder falls back to the evdev backend.
+// `validate_for_bpf` enforces the conservative shape the BPF backend
+// supports: byte-aligned, 8- or 16-bit signed, same report, in a top-level
+// Mouse or Pointer collection. Anything weirder falls back to the evdev
+// backend.
 
 #include <cstddef>
 #include <cstdint>

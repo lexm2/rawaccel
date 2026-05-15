@@ -1,6 +1,6 @@
-// Tests for the Step 12 helpers. The full BpfBackend::start() path needs
-// CAP_BPF and a live mouse on /sys; that is the privileged smoke test the
-// user runs interactively. These cover the unit-testable seams.
+// Tests for the BPF backend helpers. The full BpfBackend::start() path
+// needs CAP_BPF and a live mouse on /sys; that is the privileged smoke
+// test the user runs interactively. These cover the unit-testable seams.
 
 #include "bpf_backend.hpp"
 #include "bpf_capability.hpp"

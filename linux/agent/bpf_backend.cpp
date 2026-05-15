@@ -115,7 +115,7 @@ bool BpfBackend::start()
             "bpf backend: no mouse passed validate_for_bpf at start; "
             "use rawaccel-hid-probe to inspect attached devices\n");
     }
-    return true;  // partial start is success per plan's fail-open framing.
+    return true;  // partial start is success: fail-open passthrough.
 }
 
 void BpfBackend::stop()

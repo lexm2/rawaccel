@@ -7,7 +7,7 @@
 // tool runs. Repeat under `stress -c $(nproc)` to characterize tail.
 //
 // Out of scope: cross-device pairing, multi-source aggregation, GUI. This
-// is a Step 8 calibration aid, not a long-running monitor.
+// is a calibration aid, not a long-running monitor.
 
 #include "evdev_io.hpp"
 

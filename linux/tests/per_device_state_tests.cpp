@@ -1,4 +1,4 @@
-// Step 7 verification: per-device speed_processor state lives inside each
+// Verify that per-device speed_processor state lives inside each
 // EvdevProcessor instance, smoothers are wired through the processor path,
 // and a settings update resets that state (mirror of
 // driver/driver.cpp:402,417 calling speed_processor.init on every write).

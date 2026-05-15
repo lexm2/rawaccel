@@ -230,7 +230,7 @@ int BPF_PROG(rawaccel_hid_device_event,
 
 SEC(".struct_ops.link")
 struct hid_bpf_ops rawaccel_ops = {
-    /* hid_id is patched at load time by the userspace loader (step 12). */
+    /* hid_id is patched at load time by the userspace loader. */
     .hid_id = 0,
     .hid_device_event = (void *)rawaccel_hid_device_event,
 };

@@ -1,4 +1,4 @@
-// Tests for the Step 8 trace format + replay primitive.
+// Tests for the trace format + replay primitive.
 
 #include "evdev_processor.hpp"
 #include "test_harness.hpp"

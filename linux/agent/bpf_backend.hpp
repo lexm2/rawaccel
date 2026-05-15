@@ -4,11 +4,11 @@
 // the per-device config and LUT maps with values from lut_builder.cpp,
 // sets hid_id, and registers the struct_ops link.
 //
-// Per-device fallback (plan Step 9): when validate_for_bpf rejects a
-// descriptor we skip that device entirely under --backend=bpf. The user
-// can choose --backend=evdev for blanket coverage of an unusual mouse.
-// Mixing backends per device is feasible but out of scope here; the
-// rawaccel-hid-probe tool surfaces which devices fall in each bucket.
+// Per-device fallback: when validate_for_bpf rejects a descriptor we skip
+// that device entirely under --backend=bpf. The user can choose
+// --backend=evdev for blanket coverage of an unusual mouse. Mixing
+// backends per device is out of scope here; rawaccel-hid-probe surfaces
+// which devices fall in each bucket.
 
 #include "backend.hpp"
 #include "hid_descriptor.hpp"

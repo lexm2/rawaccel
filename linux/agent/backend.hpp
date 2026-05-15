@@ -1,9 +1,7 @@
 #pragma once
 
-// Backend interface for rawaccel-agentd. Mirrors the contract in the plan:
-// the agent owns the math/state, backends own the per-packet transport.
-// Step 5 only defines the interface and a no-op backend used by tests; the
-// evdev and BPF backends are added in later steps.
+// Backend interface for rawaccel-agentd: the agent owns the math/state,
+// backends own the per-packet transport.
 
 #include "rawaccel.hpp"
 

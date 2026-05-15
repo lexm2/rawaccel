@@ -96,7 +96,7 @@ private:
 
 // Build a ra::modifier_settings from the first profile in a driver_config.
 // The agent currently surfaces one active profile to the backend; multi-device
-// routing arrives with the evdev backend in step 6.
+// routing is handled by the evdev backend.
 ra::modifier_settings primary_profile(const rajson::driver_config& cfg);
 
 } // namespace rawaccel_agent

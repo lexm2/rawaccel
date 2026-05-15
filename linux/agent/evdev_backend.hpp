@@ -11,7 +11,7 @@
 //   stop()     : close every src fd to unblock its reader, join threads,
 //                ungrab and destroy uinput mirrors.
 //
-// Two robustness mitigations from the plan:
+// Two robustness mitigations:
 //   - Panic-ungrab: a static registry of grabbed fds; install_panic_handler()
 //     wires up a signal handler that walks the registry and EVIOCGRAB(0)s
 //     every fd before the process exits. ioctl is the only call inside the

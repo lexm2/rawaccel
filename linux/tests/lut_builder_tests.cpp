@@ -1,4 +1,4 @@
-// Tests for the Step 11 curve -> LUT precomputation.
+// Tests for the curve -> LUT precomputation.
 //
 // The LUT must reflect what the BPF program will compute at runtime:
 //   v_q16 = raw_count * dpi_norm_q16

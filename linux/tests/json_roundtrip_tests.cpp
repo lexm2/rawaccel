@@ -1,4 +1,4 @@
-// Step 4 roundtrip tests for linux/agent/json_io.
+// Roundtrip tests for linux/agent/json_io.
 //
 // The Windows JsonProperty names are the cross-OS contract. These tests
 // pin them by string match and by structural roundtrip. Adding or

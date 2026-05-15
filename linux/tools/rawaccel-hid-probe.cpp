@@ -1,9 +1,8 @@
 // Probe every /sys/class/hidraw/hidrawN device on the system, parse its
 // report descriptor, and report whether the BPF backend would accept it.
 //
-// Diagnostic tool for Step 9 / Step 10 onboarding: run on a target machine
-// and confirm the parser handles every connected mouse before flipping the
-// BPF backend on.
+// Diagnostic tool: run on a target machine and confirm the parser handles
+// every connected mouse before flipping the BPF backend on.
 
 #include "hid_descriptor.hpp"
 

@@ -4,10 +4,6 @@
 // at runtime. The agent walks the active modifier at quantized speeds
 // using full-precision common/ math; the resulting LUTs are what live in
 // the kernel-side ra_lut_x and ra_lut_y maps.
-//
-// Step 11 of LINUX_PORT_PLAN.md. Producer side: drives the modifier; runs
-// at user-mode 'apply' time. Consumer side (step 12): copies the result
-// straight into the BPF maps before attach.
 
 #include "rawaccel.hpp"
 #include "rawaccel-base.hpp"
@@ -27,8 +23,8 @@ struct LutBuildResult {
     std::array<std::int32_t, RA_LUT_SIZE> lut_x{};
     std::array<std::int32_t, RA_LUT_SIZE> lut_y{};
 
-    // ra_bpf_config fields the LUT builder owns. Step 12 fills the rest
-    // (report_id, dx/dy byte offset and size) from the HID descriptor
+    // ra_bpf_config fields the LUT builder owns; the BPF backend fills the
+    // rest (report_id, dx/dy byte offset and size) from the HID descriptor
     // parser and copies all of them into the kernel ra_config map.
     std::int32_t lut_step_q16     = 0;
     std::int32_t lut_max_q16      = 0;
