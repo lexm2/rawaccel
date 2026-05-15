@@ -12,18 +12,14 @@
  * the natural-width kernel types via implicit conversion.
  */
 
+/* On the BPF side vmlinux.h supplies the kernel fixed-width types
+ * (__u8 / __s8 / ... __u64 / __s64).  On the userspace side we pull
+ * <linux/types.h> for the same names so a single struct definition is
+ * consumable in both translation units. */
 #ifdef __BPF__
 #include "vmlinux.h"
 #else
-#include <stdint.h>
-typedef uint8_t  __u8;
-typedef int8_t   __s8;
-typedef uint16_t __u16;
-typedef int16_t  __s16;
-typedef uint32_t __u32;
-typedef int32_t  __s32;
-typedef uint64_t __u64;
-typedef int64_t  __s64;
+#include <linux/types.h>
 #endif
 
 /* Q16.16 fixed-point: 16 integer bits + 16 fractional bits. All scale,

@@ -97,6 +97,19 @@ target_include_directories(rawaccel_agent PUBLIC
 )
 target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io PkgConfig::UDEV)
 
+# Step 12: BPF backend + capability probe. Compiled when libbpf is present
+# (clang/bpftool are only required for the .bpf.c build above). The agent
+# library always links the capability probe so --backend=auto can run on
+# any host; only BpfBackend itself depends on libbpf.
+if(LIBBPF_FOUND)
+    target_sources(rawaccel_agent PRIVATE
+        agent/bpf_capability.cpp
+        agent/bpf_backend.cpp
+    )
+    target_link_libraries(rawaccel_agent PUBLIC PkgConfig::LIBBPF)
+    target_compile_definitions(rawaccel_agent PUBLIC RA_HAVE_LIBBPF=1)
+endif()
+
 add_executable(rawaccel-agentd agent/main.cpp)
 target_link_libraries(rawaccel-agentd PRIVATE rawaccel_agent)
 
@@ -186,6 +199,7 @@ add_executable(agent_tests
     tests/trace_replay_tests.cpp
     tests/hid_descriptor_tests.cpp
     tests/lut_builder_tests.cpp
+    tests/bpf_backend_tests.cpp
 )
 target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
 add_test(NAME agent_tests COMMAND agent_tests)
