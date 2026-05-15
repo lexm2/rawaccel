@@ -1,7 +1,7 @@
 // Step 2 portability check.
 //
 // Includes only the math headers from common/. Does NOT include
-// rawaccel-io.hpp or rawaccel-io-def.h — those are intentionally
+// rawaccel-io.hpp or rawaccel-io-def.h. Those are intentionally
 // Windows-only (DWORD, GetLastError, <Windows.h>) and the Linux agent
 // must never pull them in.
 //

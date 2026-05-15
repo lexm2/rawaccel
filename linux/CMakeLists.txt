@@ -29,3 +29,15 @@ enable_testing()
 add_executable(compile_check tests/compile_check.cpp)
 target_link_libraries(compile_check PRIVATE rawaccel_common)
 add_test(NAME compile_check COMMAND compile_check)
+
+# Step 3 parity tests: representative subset of wrapper-tests/, ported to
+# native C++. Smoothers and the synchronous-curve simulator are reimplemented
+# independently inside the test files so parity is checked, not tautological.
+add_executable(parity_tests
+    tests/test_main.cpp
+    tests/end_to_end_tests.cpp
+    tests/speed_tests.cpp
+    tests/synchronous_accel_tests.cpp
+)
+target_link_libraries(parity_tests PRIVATE rawaccel_common)
+add_test(NAME parity_tests COMMAND parity_tests)
