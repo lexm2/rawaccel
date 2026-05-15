@@ -110,6 +110,65 @@ target_link_libraries(rawaccel-latency PRIVATE rawaccel_agent)
 add_executable(rawaccel-hid-probe tools/rawaccel-hid-probe.cpp)
 target_link_libraries(rawaccel-hid-probe PRIVATE rawaccel_agent)
 
+# Step 10 HID-BPF kernel program: compile rawaccel.bpf.c via clang -target bpf
+# and verifier-check it via a libbpf loader. Gated on clang + bpftool being
+# present so a host without them can still build the rest of the agent.
+find_program(CLANG_EXE NAMES clang)
+find_program(BPFTOOL_EXE NAMES bpftool)
+pkg_check_modules(LIBBPF IMPORTED_TARGET libbpf)
+
+if(CLANG_EXE AND BPFTOOL_EXE AND LIBBPF_FOUND)
+    set(RA_BPF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bpf)
+    set(RA_VMLINUX_H ${CMAKE_CURRENT_BINARY_DIR}/vmlinux.h)
+    set(RA_BPF_OBJ ${CMAKE_CURRENT_BINARY_DIR}/rawaccel.bpf.o)
+
+    add_custom_command(
+        OUTPUT ${RA_VMLINUX_H}
+        COMMAND ${BPFTOOL_EXE} btf dump file /sys/kernel/btf/vmlinux format c
+                > ${RA_VMLINUX_H}
+        COMMENT "Generating vmlinux.h from /sys/kernel/btf/vmlinux"
+        VERBATIM
+    )
+
+    # __TARGET_ARCH_x86 is the convention libbpf-bootstrap uses to gate
+    # CO-RE relocations to the host arch. ARM hosts would set arm64.
+    add_custom_command(
+        OUTPUT ${RA_BPF_OBJ}
+        DEPENDS ${RA_BPF_DIR}/rawaccel.bpf.c
+                ${RA_BPF_DIR}/rawaccel_bpf_layout.h
+                ${RA_VMLINUX_H}
+        COMMAND ${CLANG_EXE}
+                -O2 -g -Wall
+                # vmlinux.h has a handful of empty struct decls in nested
+                # scopes that newer clang flags; they are kernel-side noise.
+                -Wno-missing-declarations
+                -target bpf
+                -D__TARGET_ARCH_x86
+                -I${CMAKE_CURRENT_BINARY_DIR}
+                -I${RA_BPF_DIR}
+                -c ${RA_BPF_DIR}/rawaccel.bpf.c
+                -o ${RA_BPF_OBJ}
+        COMMENT "clang -target bpf -> rawaccel.bpf.o"
+        VERBATIM
+    )
+    add_custom_target(rawaccel_bpf_object ALL DEPENDS ${RA_BPF_OBJ})
+
+    add_executable(rawaccel-bpf-verify tools/rawaccel-bpf-verify.cpp)
+    target_link_libraries(rawaccel-bpf-verify PRIVATE PkgConfig::LIBBPF)
+    add_dependencies(rawaccel-bpf-verify rawaccel_bpf_object)
+    add_test(NAME bpf_verify
+        COMMAND rawaccel-bpf-verify --object ${RA_BPF_OBJ})
+    # Exit 77 from rawaccel-bpf-verify when CAP_BPF / RLIMIT_MEMLOCK is
+    # absent means "skipped, not failed" -- avoids a noisy CI failure on
+    # unprivileged developer boxes while still letting `sudo ctest` exercise
+    # the verifier end to end.
+    set_tests_properties(bpf_verify PROPERTIES SKIP_RETURN_CODE 77)
+else()
+    message(STATUS
+        "BPF backend disabled (clang=${CLANG_EXE} bpftool=${BPFTOOL_EXE} "
+        "libbpf_found=${LIBBPF_FOUND}). Install all three to enable.")
+endif()
+
 find_package(Threads REQUIRED)
 add_executable(agent_tests
     tests/test_main.cpp
