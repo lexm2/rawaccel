@@ -88,6 +88,7 @@ add_library(rawaccel_agent STATIC
     agent/evdev_backend.cpp
     agent/trace_format.cpp
     agent/trace_replay.cpp
+    agent/hid_descriptor.cpp
 )
 target_include_directories(rawaccel_agent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/agent)
 target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io PkgConfig::UDEV)
@@ -104,6 +105,11 @@ target_link_libraries(rawaccel-replay PRIVATE rawaccel_agent)
 add_executable(rawaccel-latency tools/rawaccel-latency.cpp)
 target_link_libraries(rawaccel-latency PRIVATE rawaccel_agent)
 
+# Step 9 diagnostic: probe every hidraw node and report whether the parser
+# accepts it for BPF rewriting. Run on a target host before enabling BPF.
+add_executable(rawaccel-hid-probe tools/rawaccel-hid-probe.cpp)
+target_link_libraries(rawaccel-hid-probe PRIVATE rawaccel_agent)
+
 find_package(Threads REQUIRED)
 add_executable(agent_tests
     tests/test_main.cpp
@@ -115,6 +121,7 @@ add_executable(agent_tests
     tests/grab_registry_tests.cpp
     tests/per_device_state_tests.cpp
     tests/trace_replay_tests.cpp
+    tests/hid_descriptor_tests.cpp
 )
 target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
 add_test(NAME agent_tests COMMAND agent_tests)
