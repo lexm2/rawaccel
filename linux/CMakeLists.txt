@@ -89,8 +89,12 @@ add_library(rawaccel_agent STATIC
     agent/trace_format.cpp
     agent/trace_replay.cpp
     agent/hid_descriptor.cpp
+    agent/lut_builder.cpp
 )
-target_include_directories(rawaccel_agent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/agent)
+target_include_directories(rawaccel_agent PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/agent
+    ${CMAKE_CURRENT_SOURCE_DIR}/bpf
+)
 target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io PkgConfig::UDEV)
 
 add_executable(rawaccel-agentd agent/main.cpp)
@@ -181,6 +185,7 @@ add_executable(agent_tests
     tests/per_device_state_tests.cpp
     tests/trace_replay_tests.cpp
     tests/hid_descriptor_tests.cpp
+    tests/lut_builder_tests.cpp
 )
 target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
 add_test(NAME agent_tests COMMAND agent_tests)
