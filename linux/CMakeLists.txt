@@ -102,6 +102,7 @@ add_executable(agent_tests
     tests/evdev_processor_tests.cpp
     tests/evdev_device_tests.cpp
     tests/grab_registry_tests.cpp
+    tests/per_device_state_tests.cpp
 )
 target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
 add_test(NAME agent_tests COMMAND agent_tests)
