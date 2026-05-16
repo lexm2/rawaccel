@@ -424,6 +424,71 @@ namespace userspace_backend_tests.ModelTests
             Assert.AreEqual(4.0, classic.Cap.ModelValue);
         }
 
+        // Regression: an older AccelerationModel fallback wrote
+        // Anisotropy.Domain={0,0} / Range={0,0} when the on-disk profile had a
+        // missing Anisotropy block. Those zeros then round-tripped back to disk
+        // and degenerated the preview curve to a flat line (domain=0 collapses
+        // input speed to 0; range=0 collapses scale to 1). Loading a profile
+        // with the legacy all-zero Anisotropy must sanitize back to identity
+        // weights so the curve preview is meaningful.
+        private sealed class ZeroAnisotropyLoader : IBackEndLoader
+        {
+            public IEnumerable<DATA.Device> LoadDevices() => Array.Empty<DATA.Device>();
+            public DATA.MappingSet LoadMappings() => new DATA.MappingSet
+            {
+                Mappings = Array.Empty<DATA.Mapping>(),
+                ActiveMappingIndex = 0,
+            };
+            public IEnumerable<DATA.Profile> LoadProfiles() => new[]
+            {
+                new DATA.Profile
+                {
+                    Name = "Default",
+                    OutputDPI = 1000,
+                    YXRatio = 1,
+                    Acceleration = new ClassicAccel
+                    {
+                        Acceleration = 0.01,
+                        Anisotropy = new Anisotropy
+                        {
+                            Domain = new Vector2 { X = 0, Y = 0 },
+                            Range = new Vector2 { X = 0, Y = 0 },
+                            LPNorm = 2,
+                            CombineXYComponents = false,
+                        },
+                    },
+                    Hidden = new Hidden(),
+                },
+            };
+            public DATA.Settings? LoadSettings() => null;
+            public void WriteSettingsToDisk(
+                IEnumerable<IDeviceModel> devices,
+                MappingsModel mappings,
+                IEnumerable<IProfileModel> profiles) { }
+            public void WriteSettings(DATA.Settings settings) { }
+        }
+
+        [TestMethod]
+        public void Load_ProfileWithZeroAnisotropy_SanitizesToIdentityWeights()
+        {
+            var services = new ServiceCollection();
+            services.AddSingleton<IBackEndLoader>(new ZeroAnisotropyLoader());
+            services.AddSingleton<ISystemDevicesRetriever>(new StubSystemDevicesRetriever());
+            services.AddSingleton<IRawAccelDriver>(new CapturingDriver());
+            var sp = BackEndComposer.Compose(services);
+            var backEnd = sp.GetRequiredService<IBackEnd>();
+
+            backEnd.Load();
+
+            var aniso = backEnd.Profiles.Elements.Single().Acceleration.Anisotropy;
+            Assert.AreEqual(1.0, aniso.DomainX.ModelValue,
+                "DomainX must be sanitized to identity; zero collapses input speed to 0.");
+            Assert.AreEqual(1.0, aniso.DomainY.ModelValue);
+            Assert.AreEqual(1.0, aniso.RangeX.ModelValue,
+                "RangeX must be sanitized to identity; zero collapses curve scale to 1.");
+            Assert.AreEqual(1.0, aniso.RangeY.ModelValue);
+        }
+
         // Simulates the user-reported flow: app boots with a Default profile of
         // Type=None on disk, user switches DefinitionType to Formula then picks
         // Classic and edits a coefficient. The chained Apply must see the

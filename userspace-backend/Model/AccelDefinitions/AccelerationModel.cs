@@ -78,8 +78,8 @@ namespace userspace_backend.Model.AccelDefinitions
             else
                 result &= Anisotropy.TryMapFromData(new Anisotropy
                 {
-                    Domain = new Vector2(),
-                    Range = new Vector2(),
+                    Domain = new Vector2 { X = 1, Y = 1 },
+                    Range = new Vector2 { X = 1, Y = 1 },
                     LPNorm = 2.0,
                     CombineXYComponents = false
                 });
