@@ -22,6 +22,22 @@ target_compile_options(rawaccel_common INTERFACE
     -Wno-changes-meaning
 )
 
+# Cross-OS C-ABI shim over common/. Exposes the curve dispatch from
+# accel_union via an opaque handle so .NET callers P/Invoke a stable C
+# surface instead of pinning to common/'s C++ layout.
+add_library(rawaccel_common_shim SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shim/ra_curve.cpp
+)
+target_include_directories(rawaccel_common_shim PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shim
+)
+target_link_libraries(rawaccel_common_shim PRIVATE rawaccel_common)
+set_target_properties(rawaccel_common_shim PROPERTIES
+    OUTPUT_NAME rawaccel_common
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+)
+
 include(FetchContent)
 
 # Prefer a system-installed nlohmann_json (e.g. pacman -S nlohmann-json).
