@@ -101,6 +101,11 @@ rajson::driver_config Agent::get_active() const
     return active_;
 }
 
+double Agent::current_speed() const
+{
+    return backend_.current_speed();
+}
+
 Agent::Status Agent::status(time_point now) const
 {
     std::lock_guard<std::mutex> lock(mu_);

@@ -12,6 +12,7 @@
 #include "rawaccel.hpp"
 #include "rawaccel-base.hpp"
 
+#include <atomic>
 #include <cstdint>
 
 namespace rawaccel_agent {
@@ -54,6 +55,15 @@ public:
     const ra::modifier_settings& settings() const { return settings_; }
     const vec2d& carry() const { return carry_; }
 
+    // Last EMA-smoothed input speed (DPI-normalized magnitude per ms, the
+    // same unit the curve sees in modify()). Updated on every process()
+    // call; read by Agent::current_speed() for the UI gauge. Atomic so the
+    // control thread can read while the IO thread writes.
+    double current_speed() const
+    {
+        return current_speed_.load(std::memory_order_relaxed);
+    }
+
 private:
     ra::modifier_settings settings_{};
     ra::modifier mod_;
@@ -61,6 +71,7 @@ private:
     vec2d carry_{0.0, 0.0};
     ra::time_clamp clamp_{};
     double dpi_factor_ = 1.0;
+    std::atomic<double> current_speed_{0.0};
 };
 
 // Carry validity check from driver/driver.cpp:37-42. NaN-safe: returns false

@@ -55,6 +55,10 @@ public:
 
     std::size_t active_device_count() const;
 
+    // Max smoothed input speed across all attached devices (delegates to
+    // each EvdevProcessor::current_speed()). 0 when no device is active.
+    double current_speed() const override;
+
 private:
     struct Slot {
         std::unique_ptr<EvdevDevice> dev;

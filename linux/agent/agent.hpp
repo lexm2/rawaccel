@@ -69,6 +69,12 @@ public:
     // Snapshot of the currently active config. Includes nothing pending.
     rajson::driver_config get_active() const;
 
+    // Most recent smoothed input speed across all backend-tracked devices,
+    // in the same units the curve sees (DPI-normalized magnitude per ms).
+    // Delegates to Backend::current_speed(); returns 0 when the backend
+    // has no per-packet visibility (e.g. BPF).
+    double current_speed() const;
+
     // Status info for the "status" RPC.
     struct Status {
         bool has_active_config;

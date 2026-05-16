@@ -26,6 +26,12 @@ struct Backend {
     virtual void on_settings_changed(const ra::modifier_settings&) = 0;
     virtual void on_device_added(const DeviceInfo&) = 0;
     virtual void on_device_removed(DeviceId) = 0;
+
+    // Most recent smoothed input speed across all connected devices, in the
+    // same units the curve sees (DPI-normalized magnitude per ms). Returns
+    // 0 when the backend has no per-packet visibility (e.g. BPF, which
+    // runs in-kernel and does not surface samples to userspace).
+    virtual double current_speed() const { return 0.0; }
 };
 
 // Used by tests and as the default until a real backend is selected.

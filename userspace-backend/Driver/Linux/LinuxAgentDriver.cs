@@ -103,8 +103,18 @@ namespace userspace_backend.Driver.Linux
 
         public double GetCurrentMouseSpeed()
         {
-            // Telemetry not yet exposed by the agent; UI gauge will read 0.
-            return 0;
+            try
+            {
+                var respJson = client.Call("{\"cmd\":\"stats\"}");
+                var resp = JObject.Parse(respJson);
+                if (!resp.Value<bool>("ok")) return 0;
+                return resp.Value<double?>("current_speed") ?? 0;
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "agent stats probe failed");
+                return 0;
+            }
         }
     }
 }

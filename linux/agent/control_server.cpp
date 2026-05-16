@@ -160,6 +160,13 @@ std::string dispatch(Agent& agent, const std::string& request_json,
         return resp.dump();
     }
 
+    if (cmd == "stats") {
+        json resp;
+        resp["ok"] = true;
+        resp["current_speed"] = agent.current_speed();
+        return resp.dump();
+    }
+
     if (cmd == "status") {
         auto s = agent.status(now);
         json resp;

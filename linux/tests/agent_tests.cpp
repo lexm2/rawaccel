@@ -9,6 +9,20 @@
 using namespace rawaccel_agent;
 namespace ra = rawaccel;
 
+RA_TEST("Agent: current_speed delegates to backend")
+{
+    struct SpeedBackend : NoopBackend {
+        double speed = 0.0;
+        double current_speed() const override { return speed; }
+    };
+    SpeedBackend backend;
+    Agent agent(backend);
+
+    RA_CHECK_EQ(agent.current_speed(), 0.0);
+    backend.speed = 12.5;
+    RA_CHECK_EQ(agent.current_speed(), 12.5);
+}
+
 RA_TEST("Agent: deactivate clears pending, applies default immediately")
 {
     NoopBackend backend;

@@ -51,6 +51,20 @@ ProcessedDelta EvdevProcessor::process(std::int32_t dx, std::int32_t dy,
 
     const ra::milliseconds t = ra::clampsd(time_ms, clamp_.min, clamp_.max);
 
+    {
+        // EMA-smoothed input speed for the telemetry gauge. Same unit the
+        // curve evaluator consumes inside modify(): DPI-normalized magnitude
+        // per millisecond. Alpha=0.2 gives a 50-100ms response at typical
+        // 1kHz polling without doing time-aware halflife math.
+        const double mag = std::sqrt(
+            static_cast<double>(dx) * dx +
+            static_cast<double>(dy) * dy);
+        const double ips = mag * dpi_factor_ / t;
+        const double prev = current_speed_.load(std::memory_order_relaxed);
+        current_speed_.store(0.2 * ips + 0.8 * prev,
+                             std::memory_order_relaxed);
+    }
+
     vec2d in{static_cast<double>(dx), static_cast<double>(dy)};
     mod_.modify(in, speed_, settings_, dpi_factor_, t);
 

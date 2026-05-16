@@ -160,6 +160,18 @@ std::size_t EvdevBackend::active_device_count() const
     return slots_.size();
 }
 
+double EvdevBackend::current_speed() const
+{
+    std::lock_guard<std::mutex> lock(slots_mu_);
+    double max = 0.0;
+    for (const auto& kv : slots_) {
+        if (!kv.second || !kv.second->dev) continue;
+        double s = kv.second->dev->processor().current_speed();
+        if (s > max) max = s;
+    }
+    return max;
+}
+
 bool EvdevBackend::attach(const UdevDevice& node)
 {
     int src = evdev_open(node.devnode);
