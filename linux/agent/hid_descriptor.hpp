@@ -14,8 +14,7 @@
 //
 // `validate_for_bpf` enforces the conservative shape the BPF backend
 // supports: byte-aligned, 8- or 16-bit signed, same report, in a top-level
-// Mouse or Pointer collection. Anything weirder falls back to the evdev
-// backend.
+// Mouse or Pointer collection. Devices that do not match are skipped.
 
 #include <cstddef>
 #include <cstdint>

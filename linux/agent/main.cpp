@@ -1,11 +1,10 @@
 // rawaccel-agentd: long-running daemon that owns the active rawaccel modifier
 // state, accepts apply/get/version/status RPCs over an AF_UNIX control socket,
-// and forwards settings changes to the active backend.
+// and forwards settings changes to the BPF backend.
 //
 // Backend choices:
-//   --backend auto  : probe kernel + bpf(); pick bpf if supported, else evdev.
+//   --backend auto  : probe kernel + bpf(); pick bpf if supported, else exit.
 //   --backend bpf   : force HID-BPF (rawaccel.bpf.o, kernel >= 6.11, CAP_BPF).
-//   --backend evdev : force the evdev/uinput userspace fallback.
 //   --backend noop  : no transport; control-plane only. Tests use this.
 
 #include "agent.hpp"
@@ -13,7 +12,6 @@
 #include "bpf_backend.hpp"
 #include "bpf_capability.hpp"
 #include "control_server.hpp"
-#include "evdev_backend.hpp"
 
 #include <csignal>
 #include <cstdio>
@@ -28,11 +26,6 @@ rawaccel_agent::ControlServer* g_server = nullptr;
 
 void on_signal(int)
 {
-    // Async-signal-safe path: ioctl EVIOCGRAB(0) on every grabbed device so a
-    // hard exit cannot leave the user's mouse stuck. Then nudge the control
-    // server to leave its poll loop; full thread joins / uinput destroy run
-    // on the main thread after the loop exits.
-    rawaccel_agent::grab_registry_panic_ungrab_all();
     if (g_server) g_server->stop();
 }
 
@@ -40,7 +33,7 @@ void usage()
 {
     std::fprintf(stderr,
         "usage: rawaccel-agentd [--socket PATH] [--settings PATH] "
-        "[--backend {auto,bpf,evdev,noop}] [--bpf-object PATH]\n");
+        "[--backend {auto,bpf,noop}] [--bpf-object PATH]\n");
 }
 
 std::string default_bpf_object_path(const char* argv0)
@@ -81,32 +74,26 @@ int main(int argc, char** argv)
         }
     }
 
-    // Resolve auto: probe BPF capability and announce the choice.
     std::string resolved = backend_name;
     if (resolved == "auto") {
         auto probe = rawaccel_agent::probe_bpf_capability();
-        if (probe.ok()) {
-            resolved = "bpf";
+        if (!probe.ok()) {
             std::fprintf(stderr,
-                "rawaccel: auto-selected bpf backend (kernel %d.%d)\n",
-                probe.kernel_major, probe.kernel_minor);
-        } else {
-            resolved = "evdev";
-            std::fprintf(stderr,
-                "rawaccel: auto-selected evdev backend (%s)\n",
+                "rawaccel: HID-BPF not available (%s). "
+                "rawaccel-agentd requires kernel >= 6.11 with CAP_BPF.\n",
                 probe.reason.c_str());
+            return 1;
         }
+        resolved = "bpf";
+        std::fprintf(stderr,
+            "rawaccel: bpf backend (kernel %d.%d)\n",
+            probe.kernel_major, probe.kernel_minor);
     }
 
     std::unique_ptr<rawaccel_agent::Backend> backend;
-    rawaccel_agent::EvdevBackend* evdev_ptr = nullptr;
     rawaccel_agent::BpfBackend* bpf_ptr = nullptr;
 
-    if (resolved == "evdev") {
-        auto eb = std::make_unique<rawaccel_agent::EvdevBackend>();
-        evdev_ptr = eb.get();
-        backend = std::move(eb);
-    } else if (resolved == "bpf") {
+    if (resolved == "bpf") {
         auto bb = std::make_unique<rawaccel_agent::BpfBackend>(bpf_object_path);
         bpf_ptr = bb.get();
         backend = std::move(bb);
@@ -128,12 +115,6 @@ int main(int argc, char** argv)
         }
     }
 
-    if (evdev_ptr) {
-        if (!evdev_ptr->start()) {
-            std::fprintf(stderr, "evdev backend failed to start\n");
-            return 1;
-        }
-    }
     if (bpf_ptr) {
         if (!bpf_ptr->start()) {
             std::fprintf(stderr, "bpf backend failed to start\n");
@@ -153,7 +134,6 @@ int main(int argc, char** argv)
 
     server.run();
 
-    if (evdev_ptr) evdev_ptr->stop();
     if (bpf_ptr) bpf_ptr->stop();
     return 0;
 }

@@ -44,7 +44,7 @@ std::string resolve_device_sysname(const std::string& syspath)
     return slash ? std::string(slash + 1) : std::string(buf);
 }
 
-DeviceId hash_id(const std::string& key)
+std::uint64_t hash_id(const std::string& key)
 {
     constexpr std::uint64_t OFFSET = 1469598103934665603ull;
     constexpr std::uint64_t PRIME  = 1099511628211ull;
@@ -270,9 +270,6 @@ void BpfBackend::on_settings_changed(const ra::modifier_settings& s)
         populate_maps(*slot, s);
     }
 }
-
-void BpfBackend::on_device_added(const DeviceInfo&) {}
-void BpfBackend::on_device_removed(DeviceId) {}
 
 std::size_t BpfBackend::attached_count() const
 {

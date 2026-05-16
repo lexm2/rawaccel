@@ -4,11 +4,8 @@
 // the per-device config and LUT maps with values from lut_builder.cpp,
 // sets hid_id, and registers the struct_ops link.
 //
-// Per-device fallback: when validate_for_bpf rejects a descriptor we skip
-// that device entirely under --backend=bpf. The user can choose
-// --backend=evdev for blanket coverage of an unusual mouse. Mixing
-// backends per device is out of scope here; rawaccel-hid-probe surfaces
-// which devices fall in each bucket.
+// When validate_for_bpf rejects a descriptor we skip that device.
+// rawaccel-hid-probe surfaces which devices are accepted.
 
 #include "backend.hpp"
 #include "hid_descriptor.hpp"
@@ -46,14 +43,12 @@ public:
     void stop();
 
     void on_settings_changed(const ra::modifier_settings& s) override;
-    void on_device_added(const DeviceInfo&) override;
-    void on_device_removed(DeviceId) override;
 
     std::size_t attached_count() const;
 
 private:
     struct Slot {
-        DeviceId id = 0;
+        std::uint64_t id = 0;
         std::string sysname;
         std::uint32_t hid_id = 0;
         BpfMouseLayout layout{};
@@ -71,7 +66,7 @@ private:
 
     std::string object_path_;
     mutable std::mutex mu_;
-    std::unordered_map<DeviceId, std::unique_ptr<Slot>> slots_;
+    std::unordered_map<std::uint64_t, std::unique_ptr<Slot>> slots_;
     ra::modifier_settings current_settings_{};
 };
 

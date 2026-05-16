@@ -106,8 +106,8 @@ private:
 };
 
 // Build a ra::modifier_settings from the first profile in a driver_config.
-// The agent currently surfaces one active profile to the backend; multi-device
-// routing is handled by the evdev backend.
+// The agent surfaces one active profile to the backend; the BPF backend
+// applies it across every attached hidraw mouse.
 ra::modifier_settings primary_profile(const rajson::driver_config& cfg);
 
 } // namespace rawaccel_agent
