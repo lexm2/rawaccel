@@ -43,16 +43,25 @@ namespace userspace_backend.Driver.Windows
             }
         }
 
-        public void Apply(RawAccelConfig config)
+        public bool Apply(RawAccelConfig config)
         {
-            var json = JsonConvert.SerializeObject(config);
-            var native = JsonConvert.DeserializeObject<DriverConfig>(json)
-                ?? throw new InvalidOperationException(
-                    "POCO -> wrapper.DriverConfig deserialization returned null");
-            native.accels = native.profiles
-                .Select(p => new ManagedAccel(p))
-                .ToList();
-            native.Activate();
+            try
+            {
+                var json = JsonConvert.SerializeObject(config);
+                var native = JsonConvert.DeserializeObject<DriverConfig>(json)
+                    ?? throw new InvalidOperationException(
+                        "POCO -> wrapper.DriverConfig deserialization returned null");
+                native.accels = native.profiles
+                    .Select(p => new ManagedAccel(p))
+                    .ToList();
+                native.Activate();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "driver apply failed");
+                return false;
+            }
         }
 
         public RawAccelConfig Read()

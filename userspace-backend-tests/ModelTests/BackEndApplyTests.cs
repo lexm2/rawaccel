@@ -68,10 +68,11 @@ namespace userspace_backend_tests.ModelTests
 
             public bool IsAvailable => true;
 
-            public void Apply(RawAccelConfig config)
+            public bool Apply(RawAccelConfig config)
             {
                 CapturedConfig = config;
                 ApplyCount++;
+                return true;
             }
 
             public RawAccelConfig Read() => CapturedConfig ?? new RawAccelConfig();

@@ -20,7 +20,7 @@ namespace userspace_backend
     {
         void Load();
 
-        void Apply();
+        bool Apply();
 
         void SaveToDisk();
 
@@ -226,7 +226,7 @@ namespace userspace_backend
             }
         }
 
-        public void Apply()
+        public bool Apply()
         {
             logger.LogInformation("Apply clicked");
 
@@ -235,7 +235,7 @@ namespace userspace_backend
             {
                 logger.LogWarning("Apply: no active mapping to apply");
                 WriteSettingsToDisk();
-                return;
+                return false;
             }
 
             RawAccelConfig? config = null;
@@ -250,20 +250,22 @@ namespace userspace_backend
                 logger.LogError(ex, "Apply: error building RawAccelConfig");
             }
 
+            bool driverApplied = false;
             if (config != null)
             {
-                try
+                driverApplied = driver.Apply(config);
+                if (driverApplied)
                 {
-                    driver.Apply(config);
                     logger.LogInformation("Apply: driver.Apply() succeeded");
                 }
-                catch (Exception ex)
+                else
                 {
-                    logger.LogError(ex, "Apply: driver.Apply() failed");
+                    logger.LogError("Apply: driver.Apply() failed");
                 }
             }
 
             WriteSettingsToDisk();
+            return driverApplied;
         }
 
         private void LogDriverConfigSummary(MappingModel mapping, RawAccelConfig config)

@@ -14,10 +14,13 @@ namespace userspace_backend.Driver
         // socket exists and is connectable. UI gates Apply on this.
         bool IsAvailable { get; }
 
-        // Push a configuration. Throws on transport or validation failure.
+        // Push a configuration. Returns true on success, false if the
+        // backend rejected the config or the transport failed. Implementations
+        // should log the underlying error rather than letting it surface as
+        // an exception so callers can render a simple success/fail toast.
         // The 1s WriteDelay anti-abuse mitigation is enforced by the backend
         // (driver / agent), not by this method.
-        void Apply(RawAccelConfig config);
+        bool Apply(RawAccelConfig config);
 
         // Read the currently active configuration from the backend.
         RawAccelConfig Read();

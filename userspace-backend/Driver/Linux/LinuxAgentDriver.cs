@@ -54,24 +54,34 @@ namespace userspace_backend.Driver.Linux
             }
         }
 
-        public void Apply(RawAccelConfig config)
+        public bool Apply(RawAccelConfig config)
         {
-            var configToken = JObject.FromObject(config, JsonSerializer.Create(JsonSettings));
-            var request = new JObject
+            try
             {
-                ["cmd"] = "apply",
-                ["config"] = configToken,
-            };
-            var respJson = client.Call(request.ToString(Formatting.None));
-            var resp = JObject.Parse(respJson);
-            if (!resp.Value<bool>("ok"))
-            {
-                var error = resp.Value<string>("error") ?? "unknown agent error";
-                throw new InvalidOperationException($"agent apply failed: {error}");
+                var configToken = JObject.FromObject(config, JsonSerializer.Create(JsonSettings));
+                var request = new JObject
+                {
+                    ["cmd"] = "apply",
+                    ["config"] = configToken,
+                };
+                var respJson = client.Call(request.ToString(Formatting.None));
+                var resp = JObject.Parse(respJson);
+                if (!resp.Value<bool>("ok"))
+                {
+                    var error = resp.Value<string>("error") ?? "unknown agent error";
+                    logger.LogError("agent apply failed: {Error}", error);
+                    return false;
+                }
+                var deferredMs = resp.Value<int?>("deferred_ms") ?? 0;
+                logger.LogInformation(
+                    "agent apply scheduled (deferred {DeferredMs} ms)", deferredMs);
+                return true;
             }
-            var deferredMs = resp.Value<int?>("deferred_ms") ?? 0;
-            logger.LogInformation(
-                "agent apply scheduled (deferred {DeferredMs} ms)", deferredMs);
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "agent apply failed");
+                return false;
+            }
         }
 
         public RawAccelConfig Read()
