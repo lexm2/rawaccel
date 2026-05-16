@@ -8,6 +8,15 @@ using System.Threading.Tasks;
 
 namespace userspace_backend.Driver.Linux
 {
+    // Thrown by AgentClient.Call when the agent socket file is missing,
+    // i.e. rawaccel-agentd is not running. Distinct from generic transport
+    // errors so callers can surface a "start the daemon" hint instead of a
+    // confusing AF_UNIX SocketException.
+    public sealed class AgentUnavailableException : Exception
+    {
+        public AgentUnavailableException(string message) : base(message) { }
+    }
+
     // Minimal unix-domain-socket client for the rawaccel-agent control
     // protocol. Wire format mirrors linux/agent/control_server.cpp:
     //   request:  4-byte big-endian length + UTF-8 JSON
@@ -37,6 +46,18 @@ namespace userspace_backend.Driver.Linux
             {
                 throw new InvalidOperationException(
                     $"request frame too large: {requestBytes.Length} > {MaxFrameBytes}");
+            }
+
+            // Fast-fail when the socket file is missing. Without this, .NET
+            // surfaces EADDRNOTAVAIL ("Cannot assign requested address") for
+            // AF_UNIX connects to a non-existent path, which obscures the
+            // actual cause: rawaccel-agentd is not running.
+            if (!File.Exists(socketPath))
+            {
+                throw new AgentUnavailableException(
+                    $"rawaccel-agent socket not found at {socketPath}. "
+                    + "Start rawaccel-agentd (linux/run-dev-agent.sh) or "
+                    + "set RAWACCEL_SOCKET to the active socket path.");
             }
 
             using var socket = new Socket(
