@@ -74,13 +74,21 @@ namespace userspace_backend
 
         public void Load()
         {
-            IEnumerable<DATA.Device> devicesData = BackEndLoader.LoadDevices();
+            List<DATA.Device> devicesData = BackEndLoader.LoadDevices().ToList();
             LoadDevicesFromData(devicesData);
 
             IEnumerable<DATA.Profile> profilesData = BackEndLoader.LoadProfiles();
             LoadProfilesFromData(profilesData);
 
             DATA.MappingSet mappingData = BackEndLoader.LoadMappings();
+
+            // DeviceGroups.DeviceGroupModels is the master list the UI and
+            // MappingModel.TryAddMapping look up against. It is not serialized
+            // directly: group names live implicitly inside devices.json (per
+            // device) and mappings.json (as map keys). Restore the list before
+            // applying mappings so non-Default rows are not silently dropped.
+            RestoreDeviceGroupsFromData(devicesData, mappingData);
+
             LoadMappingsFromData(mappingData);
 
             Settings = BackEndLoader.LoadSettings() ?? new DATA.Settings();
@@ -89,6 +97,30 @@ namespace userspace_backend
             EnsureDefaultDeviceExists();
             EnsureDefaultProfileExists();
             EnsureDefaultMappingExists();
+        }
+
+        protected void RestoreDeviceGroupsFromData(
+            IEnumerable<DATA.Device> devicesData,
+            DATA.MappingSet mappingData)
+        {
+            foreach (DATA.Device device in devicesData)
+            {
+                if (!string.IsNullOrEmpty(device.DeviceGroup))
+                {
+                    Devices.DeviceGroups.AddOrGetDeviceGroup(device.DeviceGroup);
+                }
+            }
+
+            foreach (DATA.Mapping mapping in mappingData?.Mappings ?? [])
+            {
+                foreach (string group in mapping.GroupsToProfiles.Keys)
+                {
+                    if (!string.IsNullOrEmpty(group))
+                    {
+                        Devices.DeviceGroups.AddOrGetDeviceGroup(group);
+                    }
+                }
+            }
         }
 
         protected void LoadDevicesFromData(IEnumerable<DATA.Device> devicesData)

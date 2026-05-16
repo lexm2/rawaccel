@@ -458,6 +458,90 @@ namespace userspace_backend_tests.ModelTests
                 "Apply must see the edited Classic coefficient, not stale state.");
         }
 
+        // Regression: a user-created device group (e.g. "DeviceGroup0") was lost
+        // on reload because DeviceGroups.DeviceGroupModels is the master list
+        // backing the UI dropdown and MappingModel.TryAddMapping, but is never
+        // rehydrated from devices.json or mappings.json. Symptoms:
+        //   1. devices.json keeps device.DeviceGroup="DeviceGroup0" - this part
+        //      survives, but the UI dropdown only shows "Default".
+        //   2. mappings.json has DeviceGroup0 -> Some Profile, but TryAddMapping
+        //      rejects the row because "DeviceGroup0" isn't registered.
+        private sealed class CustomDeviceGroupLoader : IBackEndLoader
+        {
+            public IEnumerable<DATA.Device> LoadDevices() => new[]
+            {
+                new DATA.Device
+                {
+                    Name = "Mouse In Custom Group",
+                    HWID = @"HID\VID_1111&PID_2222",
+                    DPI = 1000,
+                    PollingRate = 1000,
+                    DeviceGroup = "DeviceGroup0",
+                },
+            };
+            public DATA.MappingSet LoadMappings() => new DATA.MappingSet
+            {
+                Mappings = new[]
+                {
+                    new DATA.Mapping
+                    {
+                        Name = "Default",
+                        GroupsToProfiles = new DATA.Mapping.GroupsToProfilesMapping
+                        {
+                            { "Default", "Default" },
+                            { "DeviceGroup0", "Default" },
+                        },
+                    },
+                },
+                ActiveMappingIndex = 0,
+            };
+            public IEnumerable<DATA.Profile> LoadProfiles() => new[]
+            {
+                new DATA.Profile
+                {
+                    Name = "Default",
+                    OutputDPI = 1000,
+                    YXRatio = 1,
+                    Acceleration = new userspace_backend.Data.Profiles.Accel.NoAcceleration(),
+                    Hidden = new Hidden(),
+                },
+            };
+            public DATA.Settings? LoadSettings() => null;
+            public void WriteSettingsToDisk(
+                IEnumerable<IDeviceModel> devices,
+                MappingsModel mappings,
+                IEnumerable<IProfileModel> profiles) { }
+            public void WriteSettings(DATA.Settings settings) { }
+        }
+
+        [TestMethod]
+        public void Load_CustomDeviceGroupInDevicesAndMappings_RestoresGroupList()
+        {
+            var services = new ServiceCollection();
+            services.AddSingleton<IBackEndLoader>(new CustomDeviceGroupLoader());
+            services.AddSingleton<ISystemDevicesRetriever>(new StubSystemDevicesRetriever());
+            services.AddSingleton<IRawAccelDriver>(new CapturingDriver());
+            var sp = BackEndComposer.Compose(services);
+            var backEnd = sp.GetRequiredService<IBackEnd>();
+
+            backEnd.Load();
+
+            CollectionAssert.Contains(
+                backEnd.Devices.DeviceGroups.DeviceGroupModels,
+                "DeviceGroup0",
+                "DeviceGroup0 should be restored into the master list from devices.json / mappings.json.");
+            CollectionAssert.Contains(
+                backEnd.Devices.DeviceGroups.DeviceGroupModels,
+                DeviceGroups.DefaultDeviceGroup);
+
+            Assert.IsTrue(
+                backEnd.Mappings.TryGetMapping("Default", out MappingModel? mapping) && mapping != null);
+            var groupNames = mapping!.IndividualMappings.Select(m => m.DeviceGroup).ToList();
+            CollectionAssert.Contains(groupNames, "DeviceGroup0",
+                "MappingModel must keep the DeviceGroup0 row after Load (was silently dropped before restore).");
+            CollectionAssert.Contains(groupNames, DeviceGroups.DefaultDeviceGroup);
+        }
+
         [TestMethod]
         public void ImportSystemDevices_SyncsInterfaceValueSoUiReflectsRealValues()
         {
