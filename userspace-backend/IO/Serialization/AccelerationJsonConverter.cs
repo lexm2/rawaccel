@@ -116,10 +116,18 @@ namespace userspace_backend.IO.Serialization
 
             switch (formulaType)
             {
+                case AccelerationFormulaType.Synchronous:
+                    return JsonSerializer.Deserialize<SynchronousAccel>(ref readerFromStart);
                 case AccelerationFormulaType.Linear:
                     return JsonSerializer.Deserialize<LinearAccel>(ref readerFromStart);
                 case AccelerationFormulaType.Classic:
                     return JsonSerializer.Deserialize<ClassicAccel>(ref readerFromStart);
+                case AccelerationFormulaType.Power:
+                    return JsonSerializer.Deserialize<PowerAccel>(ref readerFromStart);
+                case AccelerationFormulaType.Natural:
+                    return JsonSerializer.Deserialize<NaturalAccel>(ref readerFromStart);
+                case AccelerationFormulaType.Jump:
+                    return JsonSerializer.Deserialize<JumpAccel>(ref readerFromStart);
                 default:
                     throw new JsonException($"Unknown formula type {formulaTypeString}");
             }

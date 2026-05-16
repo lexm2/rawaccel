@@ -424,6 +424,40 @@ namespace userspace_backend_tests.ModelTests
             Assert.AreEqual(4.0, classic.Cap.ModelValue);
         }
 
+        // Simulates the user-reported flow: app boots with a Default profile of
+        // Type=None on disk, user switches DefinitionType to Formula then picks
+        // Classic and edits a coefficient. The chained Apply must see the
+        // Classic args in the RawAccelConfig the driver receives.
+        [TestMethod]
+        public void TypeChange_FromNoneToClassic_FlowsThroughApply()
+        {
+            var (backEnd, driver) = BuildBackEndWithDefaults();
+            var profile = backEnd.Profiles.Elements[0];
+
+            Assert.AreEqual(Acceleration.AccelerationDefinitionType.None,
+                profile.Acceleration.DefinitionType.ModelValue,
+                "Test precondition: fresh-install profile is Type=None.");
+
+            Assert.IsTrue(profile.Acceleration.DefinitionType.TryUpdateModelDirectly(
+                Acceleration.AccelerationDefinitionType.Formula));
+
+            var formula = (FormulaAccelModel)profile.Acceleration.GetSelectable(
+                Acceleration.AccelerationDefinitionType.Formula);
+
+            Assert.IsTrue(formula.FormulaType.TryUpdateModelDirectly(
+                FormulaAccel.AccelerationFormulaType.Classic));
+
+            var classic = (ClassicAccelerationDefinitionModel)formula.GetSelectable(
+                FormulaAccel.AccelerationFormulaType.Classic);
+            Assert.IsTrue(classic.Acceleration.TryUpdateModelDirectly(0.42));
+
+            var cfg = ApplyAndCapture(backEnd, driver);
+            Assert.AreEqual(RawAccel.Contracts.AccelMode.classic, cfg.profiles[0].argsX.mode,
+                "Apply must see Classic mode after the user-driven type change.");
+            Assert.AreEqual(0.42, cfg.profiles[0].argsX.acceleration,
+                "Apply must see the edited Classic coefficient, not stale state.");
+        }
+
         [TestMethod]
         public void ImportSystemDevices_SyncsInterfaceValueSoUiReflectsRealValues()
         {
