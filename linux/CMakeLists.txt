@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+include(GNUInstallDirs)
+
 # Header-only view of common/ for the Linux side. Anything that consumes
 # the shared math links to this target instead of poking at common/ directly.
 # The win_compat.hpp shim is force-included so the MSVC-isms in common/
@@ -128,6 +130,30 @@ endif()
 
 add_executable(rawaccel-agentd agent/main.cpp)
 target_link_libraries(rawaccel-agentd PRIVATE rawaccel_agent)
+
+# Install rules. `cmake --install build` deploys the daemon, the curve
+# shim, and a systemd unit pointing at the installed binary path. The
+# systemd unit dir is queried via pkg-config when present, otherwise
+# falls back to /usr/lib/systemd/system.
+install(TARGETS rawaccel-agentd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS rawaccel_common_shim LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+pkg_check_modules(SYSTEMD systemd)
+if(SYSTEMD_FOUND)
+    pkg_get_variable(RA_SYSTEMD_UNIT_DIR systemd systemdsystemunitdir)
+endif()
+if(NOT RA_SYSTEMD_UNIT_DIR)
+    set(RA_SYSTEMD_UNIT_DIR /usr/lib/systemd/system)
+endif()
+
+set(RA_AGENT_BIN ${CMAKE_INSTALL_FULL_BINDIR}/rawaccel-agentd)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/packaging/rawaccel-agentd.service.in
+    ${CMAKE_CURRENT_BINARY_DIR}/rawaccel-agentd.service
+    @ONLY
+)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/rawaccel-agentd.service
+        DESTINATION ${RA_SYSTEMD_UNIT_DIR})
 
 # Step 8 calibration tools. rawaccel-replay drives a trace through the
 # processor for cross-OS parity diffs; rawaccel-latency pairs raw vs

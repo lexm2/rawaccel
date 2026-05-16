@@ -1,0 +1,43 @@
+[Unit]
+Description=Raw Accel mouse acceleration daemon
+Documentation=https://github.com/RawAccelOfficial/rawaccel
+After=systemd-udevd.service
+Wants=systemd-udevd.service
+
+[Service]
+Type=simple
+ExecStart=@RA_AGENT_BIN@
+Restart=on-failure
+RestartSec=2
+
+# /run/rawaccel created by systemd on start, removed on stop. The agent
+# binds its control socket here and chmods it to 0660, so members of the
+# Group= below get read/write access.
+RuntimeDirectory=rawaccel
+RuntimeDirectoryMode=0750
+Group=input
+
+# BPF backend needs CAP_BPF (>=5.8) plus CAP_SYS_ADMIN for program load
+# and map operations. CAP_NET_ADMIN is required for some BPF hook types
+# on older kernels; included defensively. evdev backend needs nothing
+# beyond read access to /dev/input/event*, which Group=input provides.
+AmbientCapabilities=CAP_BPF CAP_SYS_ADMIN CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_BPF CAP_SYS_ADMIN CAP_NET_ADMIN
+
+# Hardening. MemoryDenyWriteExecute is intentionally off because the BPF
+# JIT requires writable+executable mappings.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictNamespaces=true
+
+[Install]
+WantedBy=multi-user.target
