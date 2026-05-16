@@ -7,6 +7,7 @@ using System.Linq;
 using userspace_backend;
 using userspace_backend.Data.Profiles;
 using userspace_backend.Data.Profiles.Accel;
+using userspace_backend.Data.Profiles.Accel.Formula;
 using userspace_backend.Driver;
 using userspace_backend.IO;
 using userspace_backend.Model;
@@ -358,6 +359,69 @@ namespace userspace_backend_tests.ModelTests
                 "DriverConfig should reflect the tweaked Classic.Acceleration coefficient. " +
                 "If this fails with the default coefficient, EditableSettingsSelector is not " +
                 "propagating nested sub-model changes up to ProfileModel.");
+        }
+
+        // Regression: a saved ClassicAccel used to StackOverflow on Load via
+        // EditableSettingsSelectable.TryMapFromData recursing into itself.
+        private sealed class ClassicAccelLoader : IBackEndLoader
+        {
+            public IEnumerable<DATA.Device> LoadDevices() => Array.Empty<DATA.Device>();
+            public DATA.MappingSet LoadMappings() => new DATA.MappingSet
+            {
+                Mappings = Array.Empty<DATA.Mapping>(),
+                ActiveMappingIndex = 0,
+            };
+            public IEnumerable<DATA.Profile> LoadProfiles() => new[]
+            {
+                new DATA.Profile
+                {
+                    Name = "Default",
+                    OutputDPI = 1000,
+                    YXRatio = 1,
+                    Acceleration = new ClassicAccel
+                    {
+                        Acceleration = 0.05,
+                        Exponent = 2.3,
+                        Offset = 1.5,
+                        Cap = 4.0,
+                        Gain = true,
+                    },
+                    Hidden = new Hidden(),
+                },
+            };
+            public DATA.Settings? LoadSettings() => null;
+            public void WriteSettingsToDisk(
+                IEnumerable<IDeviceModel> devices,
+                MappingsModel mappings,
+                IEnumerable<IProfileModel> profiles) { }
+            public void WriteSettings(DATA.Settings settings) { }
+        }
+
+        [TestMethod]
+        public void Load_ProfileWithClassicAccel_DoesNotRecurse()
+        {
+            var services = new ServiceCollection();
+            services.AddSingleton<IBackEndLoader>(new ClassicAccelLoader());
+            services.AddSingleton<ISystemDevicesRetriever>(new StubSystemDevicesRetriever());
+            services.AddSingleton<IRawAccelDriver>(new CapturingDriver());
+            var sp = BackEndComposer.Compose(services);
+            var backEnd = sp.GetRequiredService<IBackEnd>();
+
+            backEnd.Load();
+
+            var profile = backEnd.Profiles.Elements.Single();
+            Assert.AreEqual(Acceleration.AccelerationDefinitionType.Formula,
+                profile.Acceleration.DefinitionType.ModelValue);
+            var formula = (FormulaAccelModel)profile.Acceleration.GetSelectable(
+                Acceleration.AccelerationDefinitionType.Formula);
+            Assert.AreEqual(FormulaAccel.AccelerationFormulaType.Classic,
+                formula.FormulaType.ModelValue);
+            var classic = (ClassicAccelerationDefinitionModel)formula.GetSelectable(
+                FormulaAccel.AccelerationFormulaType.Classic);
+            Assert.AreEqual(0.05, classic.Acceleration.ModelValue);
+            Assert.AreEqual(2.3, classic.Exponent.ModelValue);
+            Assert.AreEqual(1.5, classic.Offset.ModelValue);
+            Assert.AreEqual(4.0, classic.Cap.ModelValue);
         }
 
         [TestMethod]
