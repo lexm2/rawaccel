@@ -36,7 +36,7 @@ public partial class App : Application
         AvaloniaXamlLoader.Load(this);
     }
 
-#if DEBUG
+#if DEBUG && WINDOWS
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool AllocConsole();
@@ -82,7 +82,7 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-#if DEBUG
+#if DEBUG && WINDOWS
         // Attach a console so backend ILogger output is visible alongside the UI window.
         AllocConsole();
         AttachConsoleStreams();
