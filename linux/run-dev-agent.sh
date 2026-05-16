@@ -43,4 +43,19 @@ For the GUI in another terminal:
 
 EOF
 
-exec sudo "${AGENT}" --backend "${BACKEND}" --socket "${SOCKET}"
+# Run sudo in the background and trap SIGINT/SIGTERM so Ctrl+C in this
+# terminal forwards a clean shutdown signal to the agent instead of being
+# swallowed. Using exec sudo would replace the shell and remove the trap.
+sudo "${AGENT}" --backend "${BACKEND}" --socket "${SOCKET}" &
+agent_pid=$!
+
+shutdown() {
+    kill -INT "${agent_pid}" 2>/dev/null || true
+}
+trap shutdown INT TERM
+
+# Loop because the first wait returns once the signal handler runs; the
+# agent may still need a moment to flush its shutdown path.
+while kill -0 "${agent_pid}" 2>/dev/null; do
+    wait "${agent_pid}" 2>/dev/null || true
+done
