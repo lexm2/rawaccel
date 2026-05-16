@@ -80,6 +80,21 @@ void Agent::apply_locked(const rajson::driver_config& cfg)
     has_active_ = true;
 }
 
+void Agent::deactivate()
+{
+    rajson::driver_config default_cfg;
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        pending_.reset();
+        pending_at_ = time_point::min();
+        apply_locked(default_cfg);
+        last_apply_unix_ms_ = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+    auto ms = primary_profile(default_cfg);
+    backend_.on_settings_changed(ms);
+}
+
 rajson::driver_config Agent::get_active() const
 {
     std::lock_guard<std::mutex> lock(mu_);

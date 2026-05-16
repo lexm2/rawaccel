@@ -153,6 +153,13 @@ std::string dispatch(Agent& agent, const std::string& request_json,
         return resp.dump();
     }
 
+    if (cmd == "deactivate") {
+        agent.deactivate();
+        json resp;
+        resp["ok"] = true;
+        return resp.dump();
+    }
+
     if (cmd == "status") {
         auto s = agent.status(now);
         json resp;

@@ -9,6 +9,36 @@
 using namespace rawaccel_agent;
 namespace ra = rawaccel;
 
+RA_TEST("Agent: deactivate clears pending, applies default immediately")
+{
+    NoopBackend backend;
+    Agent agent(backend);
+
+    rajson::driver_config cfg;
+    cfg.profiles.emplace_back();
+
+    auto t0 = clock_type::now();
+    agent.schedule_apply(cfg, t0);
+    {
+        auto s = agent.status(t0);
+        RA_CHECK(s.has_pending_apply);
+    }
+
+    agent.deactivate();
+
+    auto s = agent.status(t0);
+    RA_CHECK(!s.has_pending_apply);
+    RA_CHECK(s.has_active_config);
+    RA_CHECK_EQ(backend.settings_changes, 1);
+
+    auto active = agent.get_active();
+    RA_CHECK(active.profiles.empty());
+
+    // A subsequent tick should be a no-op (no pending).
+    RA_CHECK(!agent.tick(t0 + std::chrono::milliseconds(2000)));
+    RA_CHECK_EQ(backend.settings_changes, 1);
+}
+
 RA_TEST("Agent: apply debounces to one backend call")
 {
     NoopBackend backend;

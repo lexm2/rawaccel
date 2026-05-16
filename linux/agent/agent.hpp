@@ -61,6 +61,11 @@ public:
     // true if it swapped settings into the backend this call.
     bool tick(time_point now);
 
+    // Reset to a default (no-acceleration) config immediately, bypassing
+    // the WRITE_DELAY debounce. Cancels any pending apply. Notifies the
+    // backend on the same call so input passes through with no scaling.
+    void deactivate();
+
     // Snapshot of the currently active config. Includes nothing pending.
     rajson::driver_config get_active() const;
 

@@ -91,9 +91,14 @@ namespace userspace_backend.Driver.Linux
 
         public void Deactivate()
         {
-            // Agent has no explicit deactivate command today; pushing a
-            // default config achieves the same effect.
-            Apply(new RawAccelConfig());
+            var respJson = client.Call("{\"cmd\":\"deactivate\"}");
+            var resp = JObject.Parse(respJson);
+            if (!resp.Value<bool>("ok"))
+            {
+                var error = resp.Value<string>("error") ?? "unknown agent error";
+                throw new InvalidOperationException(
+                    $"agent deactivate failed: {error}");
+            }
         }
 
         public double GetCurrentMouseSpeed()
