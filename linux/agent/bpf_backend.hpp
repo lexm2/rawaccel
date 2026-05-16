@@ -1,11 +1,9 @@
 #pragma once
 
-// HID-BPF backend. Loads rawaccel.bpf.o once per attached device, fills
-// the per-device config and LUT maps with values from lut_builder.cpp,
-// sets hid_id, and registers the struct_ops link.
-//
-// When validate_for_bpf rejects a descriptor we skip that device.
-// rawaccel-hid-probe surfaces which devices are accepted.
+// HID-BPF backend: loads rawaccel.bpf.o per attached hidraw mouse, fills the
+// config and LUT maps from the agent's bind_device call, and registers the
+// struct_ops link. Rejected descriptors are skipped (devices remain
+// pass-through, not broken). See rawaccel-hid-probe for diagnostics.
 
 #include "backend.hpp"
 #include "hid_descriptor.hpp"
@@ -27,52 +25,56 @@ namespace rawaccel_agent {
 
 class BpfBackend : public Backend {
 public:
-    BpfBackend(std::string object_path);
+    explicit BpfBackend(std::string object_path);
     ~BpfBackend() override;
 
     BpfBackend(const BpfBackend&) = delete;
     BpfBackend& operator=(const BpfBackend&) = delete;
 
-    // Enumerate /sys/class/hidraw, attach to every mouse whose descriptor
-    // passes validate_for_bpf. Returns true if at least one device
-    // attached; non-failure when zero devices match (the user might plug
-    // one in later or be running on an idle host).
-    bool start();
+    // Must be set before start() so the backend can report discoveries
+    // back into the agent's profile resolver.
+    void set_listener(DeviceListener& listener);
 
-    // Detach every link and close every bpf_object.
+    // Enumerate /sys/class/hidraw, prepare a slot per accepted mouse, and
+    // notify the listener for each. The struct_ops link is attached lazily
+    // on the first bind_device call per slot.
+    bool start();
     void stop();
 
-    void on_settings_changed(const ra::modifier_settings& s) override;
+    void bind_device(DeviceId,
+                     const ra::modifier_settings&,
+                     const ra::device_config&) override;
+    void unbind_device(DeviceId) override;
 
     std::size_t attached_count() const;
 
 private:
     struct Slot {
-        std::uint64_t id = 0;
+        DeviceId id = 0;
         std::string sysname;
         std::uint32_t hid_id = 0;
         BpfMouseLayout layout{};
-        ra::device_config dev_config{};
         bpf_object* obj = nullptr;
+        bpf_map* ops_map = nullptr;
         bpf_map* config_map = nullptr;
         bpf_map* lut_x_map = nullptr;
         bpf_map* lut_y_map = nullptr;
         bpf_link* link = nullptr;
+        bool attached = false;
     };
 
     bool attach_node(const std::string& sysname);
     void detach_slot(Slot& slot);
-    bool populate_maps(Slot& slot, const ra::modifier_settings& s);
+    bool populate_maps(Slot& slot,
+                       const ra::modifier_settings& s,
+                       const ra::device_config& c);
 
     std::string object_path_;
+    DeviceListener* listener_ = nullptr;
     mutable std::mutex mu_;
-    std::unordered_map<std::uint64_t, std::unique_ptr<Slot>> slots_;
-    ra::modifier_settings current_settings_{};
+    std::unordered_map<DeviceId, std::unique_ptr<Slot>> slots_;
 };
 
-// Helpers exposed for tests: walk /sys/class/hidraw to enumerate hidraw
-// nodes, and decode a hid_device name like "0003:046D:C54D.000A" into
-// the integer hid_id (10 here).
 struct HidrawNode {
     std::string sysname;          // hidrawN
     std::string device_sysname;   // 0003:VVVV:PPPP.IIII
@@ -80,5 +82,12 @@ struct HidrawNode {
 };
 std::vector<HidrawNode> enumerate_hidraw();
 bool parse_hid_device_name(const std::string& name, std::uint32_t& hid_id_out);
+
+struct HidrawIdentity {
+    std::uint32_t vendor_id = 0;
+    std::uint32_t product_id = 0;
+    std::string name;
+};
+HidrawIdentity read_hidraw_identity(const std::string& syspath);
 
 } // namespace rawaccel_agent

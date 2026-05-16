@@ -1,11 +1,10 @@
-// rawaccel-agentd: long-running daemon that owns the active rawaccel modifier
-// state, accepts apply/get/version/status RPCs over an AF_UNIX control socket,
-// and forwards settings changes to the BPF backend.
+// rawaccel-agentd: owns the active modifier state, serves apply/get/version/
+// status RPCs over /run/rawaccel/control.sock, and pushes resolved settings
+// to the BPF backend.
 //
-// Backend choices:
-//   --backend auto  : probe kernel + bpf(); pick bpf if supported, else exit.
-//   --backend bpf   : force HID-BPF (rawaccel.bpf.o, kernel >= 6.11, CAP_BPF).
-//   --backend noop  : no transport; control-plane only. Tests use this.
+// --backend auto: probe kernel + bpf(), pick bpf if supported, else exit.
+// --backend bpf:  force HID-BPF (kernel >= 6.11, CAP_BPF).
+// --backend noop: control plane only; used by tests.
 
 #include "agent.hpp"
 #include "backend.hpp"
@@ -36,10 +35,10 @@ void usage()
         "[--backend {auto,bpf,noop}] [--bpf-object PATH]\n");
 }
 
+// Look beside the executable. Production installs override with
+// --bpf-object pointing at /usr/share/rawaccel/rawaccel.bpf.o.
 std::string default_bpf_object_path(const char* argv0)
 {
-    // Look beside the executable. Production installs override with
-    // --bpf-object pointing at /usr/share/rawaccel/rawaccel.bpf.o.
     std::string p = argv0 ? argv0 : "";
     auto slash = p.find_last_of('/');
     std::string dir = (slash == std::string::npos) ? "." : p.substr(0, slash);
@@ -107,6 +106,10 @@ int main(int argc, char** argv)
 
     rawaccel_agent::Agent agent(*backend);
 
+    if (bpf_ptr) {
+        bpf_ptr->set_listener(agent);
+    }
+
     if (!settings_path.empty()) {
         if (!agent.load_from_file(settings_path)) {
             std::fprintf(stderr,
@@ -115,6 +118,8 @@ int main(int argc, char** argv)
         }
     }
 
+    // start() enumerates hidraw and re-enters the agent via on_device_added,
+    // so the active config loaded above is what each bind sees.
     if (bpf_ptr) {
         if (!bpf_ptr->start()) {
             std::fprintf(stderr, "bpf backend failed to start\n");
@@ -131,6 +136,8 @@ int main(int argc, char** argv)
 
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
+    // A client that disconnects mid-response must not kill the daemon.
+    std::signal(SIGPIPE, SIG_IGN);
 
     server.run();
 

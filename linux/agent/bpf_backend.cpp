@@ -13,29 +13,32 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <sstream>
 #include <vector>
 
 namespace rawaccel_agent {
 
 namespace {
 
+// The kernel caps report_descriptor at HID_MAX_DESCRIPTOR_SIZE (4096); cap
+// here too rather than trust an out-of-process invariant.
 bool read_descriptor(const std::string& syspath, std::vector<std::uint8_t>& out)
 {
-    // sysfs files do not seek; stream-read until EOF.
+    constexpr std::size_t MAX = 8192;
     std::ifstream f(syspath + "/device/report_descriptor", std::ios::binary);
     if (!f) return false;
     out.clear();
     char buf[1024];
     while (f.read(buf, sizeof(buf)) || f.gcount() > 0) {
+        if (out.size() + static_cast<std::size_t>(f.gcount()) > MAX) return false;
         out.insert(out.end(), buf, buf + f.gcount());
     }
     return !out.empty();
 }
 
+// Reads /sys/class/hidraw/hidrawN/device -> "0003:VVVV:PPPP.IIII".
 std::string resolve_device_sysname(const std::string& syspath)
 {
-    // /sys/class/hidraw/hidrawN/device is a symlink; the last path component
-    // of the target is "0003:046D:C54D.000A".
     char buf[PATH_MAX] = {};
     ssize_t n = ::readlink((syspath + "/device").c_str(), buf, sizeof(buf) - 1);
     if (n <= 0) return {};
@@ -44,28 +47,42 @@ std::string resolve_device_sysname(const std::string& syspath)
     return slash ? std::string(slash + 1) : std::string(buf);
 }
 
-std::uint64_t hash_id(const std::string& key)
+DeviceId hash_id(const std::string& key)
 {
-    constexpr std::uint64_t OFFSET = 1469598103934665603ull;
-    constexpr std::uint64_t PRIME  = 1099511628211ull;
-    std::uint64_t h = OFFSET;
+    constexpr DeviceId OFFSET = 1469598103934665603ull;
+    constexpr DeviceId PRIME  = 1099511628211ull;
+    DeviceId h = OFFSET;
     for (unsigned char c : key) { h ^= c; h *= PRIME; }
     return h;
 }
 
-template <typename F>
-int find_map_and_update(bpf_object* obj, const char* name, F&& fill)
+// "0003:046D:C54D.000A" -> 0x046D / 0xC54D.
+bool parse_vid_pid(const std::string& device_sysname,
+                   std::uint32_t& vid, std::uint32_t& pid)
 {
-    bpf_map* m = bpf_object__find_map_by_name(obj, name);
-    if (!m) return -ENOENT;
-    return fill(m);
+    auto first  = device_sysname.find(':');
+    if (first == std::string::npos) return false;
+    auto second = device_sysname.find(':', first + 1);
+    if (second == std::string::npos) return false;
+    auto dot    = device_sysname.find('.', second + 1);
+    if (dot == std::string::npos) return false;
+
+    auto from_hex = [](const std::string& s, std::uint32_t& out) {
+        char* end = nullptr;
+        unsigned long v = std::strtoul(s.c_str(), &end, 16);
+        if (end == s.c_str() || *end != 0) return false;
+        out = static_cast<std::uint32_t>(v);
+        return true;
+    };
+    return from_hex(device_sysname.substr(first + 1, second - first - 1), vid)
+        && from_hex(device_sysname.substr(second + 1, dot - second - 1), pid);
 }
 
 } // namespace
 
+// "0003:046D:C54D.000A" -> trailing ".HHHHHHHH" is hid_id in hex.
 bool parse_hid_device_name(const std::string& name, std::uint32_t& hid_id_out)
 {
-    // "0003:046D:C54D.000A" -> the trailing ".HHHHHHHH" is hid_id in hex.
     auto pos = name.find_last_of('.');
     if (pos == std::string::npos) return false;
     const char* tail = name.c_str() + pos + 1;
@@ -96,6 +113,25 @@ std::vector<HidrawNode> enumerate_hidraw()
     return out;
 }
 
+HidrawIdentity read_hidraw_identity(const std::string& syspath)
+{
+    HidrawIdentity out;
+
+    std::string dev_sysname = resolve_device_sysname(syspath);
+    parse_vid_pid(dev_sysname, out.vendor_id, out.product_id);
+
+    std::ifstream f(syspath + "/device/uevent");
+    std::string line;
+    while (std::getline(f, line)) {
+        constexpr const char* prefix = "HID_NAME=";
+        if (line.rfind(prefix, 0) == 0) {
+            out.name = line.substr(std::strlen(prefix));
+            break;
+        }
+    }
+    return out;
+}
+
 BpfBackend::BpfBackend(std::string object_path)
     : object_path_(std::move(object_path)) {}
 
@@ -104,8 +140,15 @@ BpfBackend::~BpfBackend()
     stop();
 }
 
+void BpfBackend::set_listener(DeviceListener& listener)
+{
+    listener_ = &listener;
+}
+
 bool BpfBackend::start()
 {
+    // Fail-open: zero matches is still a successful start (devices may be
+    // plugged in later). Rejected devices remain pass-through, not broken.
     bool any = false;
     for (const auto& node : enumerate_hidraw()) {
         if (attach_node(node.sysname)) any = true;
@@ -115,7 +158,7 @@ bool BpfBackend::start()
             "bpf backend: no mouse passed validate_for_bpf at start; "
             "use rawaccel-hid-probe to inspect attached devices\n");
     }
-    return true;  // partial start is success: fail-open passthrough.
+    return true;
 }
 
 void BpfBackend::stop()
@@ -155,15 +198,13 @@ bool BpfBackend::attach_node(const std::string& sysname)
         return false;
     }
 
-    // Set hid_id on the struct_ops map BEFORE load. The userspace .data
-    // image of the struct is bpf_map_lookup_elem-able as map index 0.
+    // hid_id must be set on the struct_ops map BEFORE load(); first 4 bytes
+    // of the map value are the hid_id field per hid_bpf_ops in vmlinux.h.
     bpf_map* ops = bpf_object__find_map_by_name(obj, "rawaccel_ops");
     if (!ops) {
         bpf_object__close(obj);
         return false;
     }
-    // The first 4 bytes of the rawaccel_ops value are the hid_id field
-    // (see hid_bpf_ops layout in vmlinux.h).
     bpf_map__set_initial_value(ops, &hid_id, sizeof(hid_id));
 
     if (bpf_object__load(obj) != 0) {
@@ -181,6 +222,7 @@ bool BpfBackend::attach_node(const std::string& sysname)
     slot->hid_id = hid_id;
     slot->layout = *dec.layout;
     slot->obj = obj;
+    slot->ops_map = ops;
     slot->config_map = bpf_object__find_map_by_name(obj, "ra_config");
     slot->lut_x_map = bpf_object__find_map_by_name(obj, "ra_lut_x");
     slot->lut_y_map = bpf_object__find_map_by_name(obj, "ra_lut_y");
@@ -189,22 +231,8 @@ bool BpfBackend::attach_node(const std::string& sysname)
         return false;
     }
 
-    {
-        std::lock_guard<std::mutex> lock(mu_);
-        populate_maps(*slot, current_settings_);
-    }
-
-    slot->link = bpf_map__attach_struct_ops(ops);
-    if (!slot->link) {
-        std::fprintf(stderr,
-            "bpf backend: attach_struct_ops(%s) errno=%d\n",
-            sysname.c_str(), errno);
-        bpf_object__close(obj);
-        return false;
-    }
-
     std::fprintf(stderr,
-        "bpf backend: attached %s (hid_id=0x%x) report_id=%u "
+        "bpf backend: prepared %s (hid_id=0x%x) report_id=%u "
         "dx=byte%u/%uB dy=byte%u/%uB\n",
         sysname.c_str(), unsigned(hid_id),
         unsigned(slot->layout.report_id),
@@ -213,14 +241,31 @@ bool BpfBackend::attach_node(const std::string& sysname)
         unsigned(slot->layout.dy_byte_offset),
         unsigned(slot->layout.dy_byte_size));
 
-    std::lock_guard<std::mutex> lock(mu_);
-    slots_.emplace(slot->id, std::move(slot));
+    DeviceInfo info;
+    info.id = slot->id;
+    info.sysname = sysname;
+    info.device_sysname = dev_sysname;
+    auto ident = read_hidraw_identity(syspath);
+    info.vendor_id = ident.vendor_id;
+    info.product_id = ident.product_id;
+    info.name = std::move(ident.name);
+
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        slots_.emplace(slot->id, std::move(slot));
+    }
+
+    // Notify outside the lock: on_device_added re-enters via bind_device,
+    // which takes mu_.
+    if (listener_) listener_->on_device_added(info);
     return true;
 }
 
-bool BpfBackend::populate_maps(Slot& slot, const ra::modifier_settings& s)
+bool BpfBackend::populate_maps(Slot& slot,
+                               const ra::modifier_settings& s,
+                               const ra::device_config& c)
 {
-    auto lut = build_lut(s, slot.dev_config);
+    auto lut = build_lut(s, c);
 
     ra_bpf_config cfg{};
     cfg.report_id      = slot.layout.report_id;
@@ -260,21 +305,57 @@ void BpfBackend::detach_slot(Slot& slot)
         bpf_object__close(slot.obj);
         slot.obj = nullptr;
     }
+    slot.attached = false;
 }
 
-void BpfBackend::on_settings_changed(const ra::modifier_settings& s)
+void BpfBackend::bind_device(DeviceId id,
+                             const ra::modifier_settings& s,
+                             const ra::device_config& c)
 {
     std::lock_guard<std::mutex> lock(mu_);
-    current_settings_ = s;
-    for (auto& [id, slot] : slots_) {
-        populate_maps(*slot, s);
+    auto it = slots_.find(id);
+    if (it == slots_.end()) return;
+
+    Slot& slot = *it->second;
+    if (!populate_maps(slot, s, c)) {
+        std::fprintf(stderr,
+            "bpf backend: populate_maps failed for %s\n",
+            slot.sysname.c_str());
+        return;
     }
+
+    if (!slot.attached) {
+        slot.link = bpf_map__attach_struct_ops(slot.ops_map);
+        if (!slot.link) {
+            std::fprintf(stderr,
+                "bpf backend: attach_struct_ops(%s) errno=%d\n",
+                slot.sysname.c_str(), errno);
+            return;
+        }
+        slot.attached = true;
+        std::fprintf(stderr,
+            "bpf backend: attached %s (hid_id=0x%x)\n",
+            slot.sysname.c_str(), unsigned(slot.hid_id));
+    }
+}
+
+void BpfBackend::unbind_device(DeviceId id)
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it = slots_.find(id);
+    if (it == slots_.end()) return;
+    detach_slot(*it->second);
+    slots_.erase(it);
 }
 
 std::size_t BpfBackend::attached_count() const
 {
     std::lock_guard<std::mutex> lock(mu_);
-    return slots_.size();
+    std::size_t n = 0;
+    for (const auto& [id, slot] : slots_) {
+        if (slot->attached) ++n;
+    }
+    return n;
 }
 
 } // namespace rawaccel_agent

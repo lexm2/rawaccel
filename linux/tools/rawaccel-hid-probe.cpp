@@ -1,15 +1,9 @@
-// Probe every /sys/class/hidraw/hidrawN device on the system, parse its
-// report descriptor, and report whether the BPF backend would accept it.
-//
-// Diagnostic tool: run on a target machine and confirm the parser handles
-// every connected mouse before flipping the BPF backend on.
+// Probe every /sys/class/hidraw node and report whether the BPF backend
+// would accept it. Run on a target host before enabling the daemon.
 
 #include "hid_descriptor.hpp"
 
 #include <dirent.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -21,26 +15,20 @@ using namespace rawaccel_agent;
 
 namespace {
 
-bool read_file(const std::string& path, std::vector<std::uint8_t>& out)
+// 8 KiB matches read_descriptor()'s cap; sysfs report_descriptor is bounded
+// to HID_MAX_DESCRIPTOR_SIZE = 4096 by the kernel.
+bool read_descriptor(const std::string& path, std::vector<std::uint8_t>& out)
 {
-    // sysfs files report size 4096 but seekg/tellg is unreliable on them.
-    // Stream-read until EOF instead.
+    constexpr std::size_t MAX = 8192;
     std::ifstream f(path, std::ios::binary);
     if (!f) return false;
     out.clear();
     char buf[1024];
     while (f.read(buf, sizeof(buf)) || f.gcount() > 0) {
+        if (out.size() + static_cast<std::size_t>(f.gcount()) > MAX) return false;
         out.insert(out.end(), buf, buf + f.gcount());
     }
     return !out.empty();
-}
-
-std::string read_text(const std::string& path)
-{
-    std::ifstream f(path);
-    std::string out;
-    if (f) std::getline(f, out);
-    return out;
 }
 
 } // namespace
@@ -55,12 +43,11 @@ int main()
     while (auto* e = ::readdir(d)) {
         std::string name = e->d_name;
         if (name == "." || name == "..") continue;
-        std::string syspath = "/sys/class/hidraw/" + name;
-        std::string desc_path = syspath + "/device/report_descriptor";
-        std::string product_path = syspath + "/device/uevent";
+        std::string desc_path =
+            "/sys/class/hidraw/" + name + "/device/report_descriptor";
 
         std::vector<std::uint8_t> desc;
-        if (!read_file(desc_path, desc)) {
+        if (!read_descriptor(desc_path, desc)) {
             std::printf("%s : (cannot read descriptor)\n", name.c_str());
             continue;
         }

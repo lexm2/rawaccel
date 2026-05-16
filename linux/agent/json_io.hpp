@@ -1,12 +1,8 @@
 #pragma once
 
-// Native C++ port of the JSON layer in wrapper/wrapper.cpp.
-//
-// The JsonProperty field names declared in wrapper.cpp are the cross-OS
-// contract for settings.json. This header lifts every name into a
-// constexpr table so a future drift on either side is immediately
-// reviewable. Do NOT rename any *_KEY below without coordinating with
-// the Windows side.
+// Native C++ port of the JSON layer in wrapper/wrapper.cpp. The JSON field
+// names are the cross-OS settings.json contract; do NOT rename any key here
+// without changing the matching JsonProperty on the Windows side.
 
 #include "rawaccel.hpp"
 #include "rawaccel-version.h"
@@ -19,9 +15,6 @@
 namespace rajson {
 
 namespace ra = rawaccel;
-
-
-// ----- JSON field names. Source of truth: wrapper/wrapper.cpp:57-245. -----
 
 namespace key {
 
@@ -99,21 +92,15 @@ inline constexpr const char* Y = "y";
 
 } // namespace key
 
-// String values for the AccelMode enum, mirroring StringEnumConverter output
-// over the CLI enum: classic | jump | natural | synchronous | power | lut | noaccel.
-// Note: "lut" in JSON maps to rawaccel::accel_mode::lookup in common/.
+// "lut" in JSON maps to rawaccel::accel_mode::lookup in common/.
 inline constexpr const char* ACCEL_MODE_NAMES[] = {
     "classic", "jump", "natural", "synchronous", "power", "lut", "noaccel"
 };
 inline constexpr const char* ACCEL_MODES_JOINED =
     "classic | jump | natural | synchronous | power | lut | noaccel";
 
-// String values for the CapMode enum: in_out | input | output.
-// Maps to rawaccel::cap_mode::io | in | out.
 inline constexpr const char* CAP_MODE_NAMES[] = { "in_out", "input", "output" };
 inline constexpr const char* CAP_MODES_JOINED = "in_out | input | output";
-
-// ----- Top-level structure mirroring DriverConfig. -----
 
 struct driver_config {
     std::string version = RA_VER_STRING;
@@ -122,23 +109,18 @@ struct driver_config {
     std::vector<ra::device_settings> devices{};
 };
 
-// ----- Serialization API. -----
-
 nlohmann::json to_jobject(const driver_config& cfg);
 driver_config from_jobject(const nlohmann::json& j);
 
 std::string to_string(const driver_config& cfg, int indent = 2);
 driver_config from_string(const std::string& s);
 
-// Enum-string mappings exposed for tests.
 const char* accel_mode_to_string(ra::accel_mode m);
 ra::accel_mode accel_mode_from_string(const std::string& s);
 const char* cap_mode_to_string(ra::cap_mode m);
 ra::cap_mode cap_mode_from_string(const std::string& s);
 
-// UTF-8 / wchar_t conversion for profile and device name fields. Linux only:
-// assumes wchar_t is 32-bit (UTF-32 code points). Names that need UTF-16
-// surrogate handling are out of scope here. Caller-supplied buffer must
+// Linux assumes wchar_t is 32-bit (UTF-32). Caller-supplied buffer must
 // have room for the trailing null.
 std::string wchar_to_utf8(const wchar_t* s, std::size_t cap);
 void utf8_to_wchar(const std::string& s, wchar_t* out, std::size_t cap);

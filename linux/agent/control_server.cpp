@@ -198,8 +198,6 @@ bool ControlServer::listen()
     listener_fd_ = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (listener_fd_ < 0) return false;
 
-    // Best-effort: remove a stale socket file. Bind would otherwise fail with
-    // EADDRINUSE. We do not unlink anything that is not a socket.
     struct stat st;
     if (::stat(socket_path_.c_str(), &st) == 0 && S_ISSOCK(st.st_mode)) {
         ::unlink(socket_path_.c_str());
@@ -214,28 +212,30 @@ bool ControlServer::listen()
     std::strncpy(addr.sun_path, socket_path_.c_str(),
                  sizeof(addr.sun_path) - 1);
 
-    if (::bind(listener_fd_, reinterpret_cast<sockaddr*>(&addr),
-               sizeof(addr)) < 0) {
-        return false;
-    }
-    // 0660 by default; CAP_BPF service unit should set umask 0117 to restrict
-    // to the rawaccel group. For local testing this is fine.
-    ::chmod(socket_path_.c_str(), 0660);
+    // umask before bind() so the file is created 0600; widened to 0660 after
+    // we have set the owner. Without this, a process that wins the race
+    // between bind() and chmod() could connect with world-write perms.
+    const mode_t prev_umask = ::umask(0177);
+    int bind_rc = ::bind(listener_fd_, reinterpret_cast<sockaddr*>(&addr),
+                         sizeof(addr));
+    ::umask(prev_umask);
+    if (bind_rc < 0) return false;
 
-    // When invoked via sudo (the dev launcher path), chown the socket back
-    // to the calling user so the unprivileged GUI can connect. sudo exports
-    // SUDO_UID / SUDO_GID for exactly this purpose. Production systemd unit
-    // does not set these, so behavior there is unchanged (owner stays as
-    // whatever User= the unit specifies).
+    // When invoked via sudo, hand the socket to SUDO_UID/SUDO_GID so the
+    // unprivileged client can connect; SO_PEERCRED enforces who may speak.
+    expected_uid_ = ::geteuid();
     if (::geteuid() == 0) {
         const char* sudo_uid = std::getenv("SUDO_UID");
         const char* sudo_gid = std::getenv("SUDO_GID");
         if (sudo_uid && sudo_gid) {
             uid_t uid = static_cast<uid_t>(std::strtoul(sudo_uid, nullptr, 10));
             gid_t gid = static_cast<gid_t>(std::strtoul(sudo_gid, nullptr, 10));
-            ::chown(socket_path_.c_str(), uid, gid);
+            if (::chown(socket_path_.c_str(), uid, gid) == 0) {
+                expected_uid_ = uid;
+            }
         }
     }
+    ::chmod(socket_path_.c_str(), 0660);
 
     if (::listen(listener_fd_, 4) < 0) return false;
     return true;
@@ -258,7 +258,7 @@ void ControlServer::run(std::chrono::milliseconds poll_interval)
         if (pfd.revents & POLLIN) {
             int client = ::accept4(listener_fd_, nullptr, nullptr, SOCK_CLOEXEC);
             if (client < 0) continue;
-            handle_client(client);
+            if (peer_allowed(client)) handle_client(client);
             ::close(client);
         }
     }
@@ -269,10 +269,19 @@ void ControlServer::stop()
     stop_.store(true, std::memory_order_relaxed);
 }
 
+bool ControlServer::peer_allowed(int fd) const
+{
+    struct ucred cred{};
+    socklen_t len = sizeof(cred);
+    if (::getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) return false;
+    // root may always talk to itself; otherwise only the owner UID we
+    // chowned the socket to (the sudo invoker, in the dev launcher path).
+    return cred.uid == 0 || cred.uid == expected_uid_;
+}
+
 void ControlServer::handle_client(int fd)
 {
-    // One request per connection. Keeps lifecycle trivial; the CLI client
-    // opens a fresh socket per command anyway.
+    // One request per connection; the CLI opens a fresh socket per command.
     std::string req;
     if (!read_frame(fd, req)) return;
     auto resp = dispatch(agent_, req, clock_type::now());

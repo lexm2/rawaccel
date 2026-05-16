@@ -96,6 +96,13 @@ RA_TEST("Socket: apply then status then get")
 
     NoopBackend backend;
     Agent agent(backend);
+
+    DeviceInfo info;
+    info.id = 1;
+    info.sysname = "hidraw0";
+    info.device_sysname = "0003:046D:C54D.000A";
+    agent.on_device_added(info);
+
     ControlServer server(agent, path);
     RA_CHECK(server.listen());
 
@@ -131,7 +138,7 @@ RA_TEST("Socket: apply then status then get")
     auto r_status_after = send({{"cmd", "status"}});
     RA_CHECK(!r_status_after["has_pending_apply"].get<bool>());
     RA_CHECK(r_status_after["has_active_config"].get<bool>());
-    RA_CHECK_EQ(backend.settings_changes, 1);
+    RA_CHECK_EQ(backend.binds, 1);
 
     auto r_get = send({{"cmd", "get"}});
     RA_CHECK(r_get["ok"].get<bool>());

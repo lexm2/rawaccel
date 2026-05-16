@@ -2,10 +2,7 @@
 
 // Length-prefixed JSON RPC over an AF_UNIX SOCK_STREAM listener.
 // Frame: [uint32 length, network byte order][N bytes UTF-8 JSON].
-// Max frame size: 16 MiB.
-//
-// The server is single-threaded: one client at a time. The control plane is
-// low-volume (apply/get/version/status) so threading would only add bugs.
+// Single-threaded by design; the control plane is low-volume.
 
 #include "agent.hpp"
 
@@ -13,10 +10,15 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <sys/types.h>
 
 namespace rawaccel_agent {
 
-inline constexpr std::uint32_t MAX_FRAME_BYTES = 16u * 1024u * 1024u;
+// 64 KiB is comfortably above the largest legitimate driver_config and small
+// enough that an unauthenticated peer cannot pump the daemon into OOM. A
+// crafted deep-nested JSON within this limit also cannot blow the parser
+// stack (nlohmann::json is recursive, but ~32 KiB depth needs >32 KiB input).
+inline constexpr std::uint32_t MAX_FRAME_BYTES = 64u * 1024u;
 
 // Encode/decode helpers exposed for testing.
 bool read_frame(int fd, std::string& out);
@@ -53,8 +55,10 @@ private:
     Agent& agent_;
     std::string socket_path_;
     int listener_fd_ = -1;
+    uid_t expected_uid_ = 0;
     std::atomic<bool> stop_{false};
 
+    bool peer_allowed(int fd) const;
     void handle_client(int fd);
 };
 

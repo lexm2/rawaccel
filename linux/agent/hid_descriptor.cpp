@@ -6,6 +6,15 @@ namespace rawaccel_agent {
 
 namespace {
 
+// Hard caps. HID descriptors come from untrusted USB peripherals, so the
+// parser must refuse anything that would explode memory or wrap arithmetic.
+// Real mice fit comfortably under all of these.
+constexpr std::uint32_t MAX_REPORT_SIZE   = 64;
+constexpr std::uint32_t MAX_REPORT_COUNT  = 1024;
+constexpr std::uint32_t MAX_REPORT_BITS   = 1u << 16;   // 8 KiB per report.
+constexpr std::size_t   MAX_LOCAL_USAGES  = 1024;
+constexpr std::uint32_t MAX_USAGE_RANGE   = 256;
+
 // HID spec item-prefix decoding.
 constexpr std::uint8_t TYPE_MAIN   = 0;
 constexpr std::uint8_t TYPE_GLOBAL = 1;
@@ -96,12 +105,15 @@ bool is_data(std::uint32_t input_flags)
     return (input_flags & 0x01) == 0;  // bit 0 = Constant when set.
 }
 
-void process_input(const GlobalState& g, std::vector<std::uint32_t>& usages,
+// Returns false on overflow; caller should abandon the descriptor.
+bool process_input(const GlobalState& g, std::vector<std::uint32_t>& usages,
                    std::uint32_t input_flags, PerReport& rep)
 {
+    if (g.report_size > MAX_REPORT_SIZE || g.report_count > MAX_REPORT_COUNT) {
+        return false;
+    }
     // Walk ReportCount fields, each ReportSize bits. Consume one Local
-    // Usage per field; if the local-usage list is shorter than the field
-    // count, repeat the last (per HID 1.11 Section 6.2.2.7).
+    // Usage per field; repeat the last when the list runs out (HID 1.11 6.2.2.7).
     for (std::uint32_t i = 0; i < g.report_count; ++i) {
         std::uint32_t usage = 0;
         if (!usages.empty()) {
@@ -126,8 +138,10 @@ void process_input(const GlobalState& g, std::vector<std::uint32_t>& usages,
             }
         }
 
+        if (rep.bit_offset > MAX_REPORT_BITS - g.report_size) return false;
         rep.bit_offset += g.report_size;
     }
+    return true;
 }
 
 } // namespace
@@ -220,14 +234,24 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
         } else if (btype == TYPE_LOCAL) {
             const std::uint32_t uv = read_unsigned(dp, dsize);
             switch (btag) {
-                case TAG_USAGE:     usages.push_back(uv); break;
+                case TAG_USAGE:
+                    if (usages.size() >= MAX_LOCAL_USAGES) return std::nullopt;
+                    usages.push_back(uv);
+                    break;
                 case TAG_USAGE_MIN: usage_min = uv; usage_min_set = true; break;
                 case TAG_USAGE_MAX:
                     usage_max = uv;
                     usage_max_set = true;
                     if (usage_min_set) {
-                        // Expand the range into individual usages so the
-                        // Input handler can pull one per field.
+                        // Reject malicious / nonsensical ranges before they
+                        // expand into a huge vector.
+                        if (usage_max < usage_min) return std::nullopt;
+                        const std::uint32_t span =
+                            static_cast<std::uint32_t>(usage_max - usage_min);
+                        if (span > MAX_USAGE_RANGE) return std::nullopt;
+                        if (usages.size() + span + 1 > MAX_LOCAL_USAGES) {
+                            return std::nullopt;
+                        }
                         for (std::int32_t u = usage_min; u <= usage_max; ++u) {
                             usages.push_back(static_cast<std::uint32_t>(u));
                         }
@@ -255,10 +279,19 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
                 }
                 flush_locals();
             } else if (btag == TAG_INPUT) {
+                if (g.report_size > MAX_REPORT_SIZE ||
+                    g.report_count > MAX_REPORT_COUNT) {
+                    return std::nullopt;
+                }
                 if (in_mouse_collection) {
-                    process_input(g, usages, flags, rep);
+                    if (!process_input(g, usages, flags, rep)) return std::nullopt;
                 } else {
-                    rep.bit_offset += g.report_size * g.report_count;
+                    const std::uint64_t advance =
+                        static_cast<std::uint64_t>(g.report_size) * g.report_count;
+                    if (advance > MAX_REPORT_BITS - rep.bit_offset) {
+                        return std::nullopt;
+                    }
+                    rep.bit_offset += static_cast<std::uint32_t>(advance);
                 }
                 flush_locals();
             } else {
@@ -288,12 +321,21 @@ BpfDecision validate_for_bpf(const MouseDescriptor& d)
     if (!d.x.is_signed) { reject("X is unsigned"); return out; }
     if (!d.y.is_signed) { reject("Y is unsigned"); return out; }
 
+    // The BPF layout fields are uint8_t; refuse anything whose absolute byte
+    // offset would truncate. 255 bytes is well past any real mouse report.
+    const std::uint32_t prefix = d.has_report_id ? 1u : 0u;
+    const std::uint32_t dx_off = prefix + d.x.bit_offset_in_payload / 8;
+    const std::uint32_t dy_off = prefix + d.y.bit_offset_in_payload / 8;
+    if (dx_off > 255 || dy_off > 255) {
+        reject("X or Y offset exceeds 255 bytes");
+        return out;
+    }
+
     BpfMouseLayout layout{};
-    const std::uint8_t prefix = d.has_report_id ? 1 : 0;
     layout.report_id      = d.has_report_id ? d.report_id : 0;
-    layout.dx_byte_offset = static_cast<std::uint8_t>(prefix + d.x.bit_offset_in_payload / 8);
+    layout.dx_byte_offset = static_cast<std::uint8_t>(dx_off);
     layout.dx_byte_size   = static_cast<std::uint8_t>(d.x.bit_size / 8);
-    layout.dy_byte_offset = static_cast<std::uint8_t>(prefix + d.y.bit_offset_in_payload / 8);
+    layout.dy_byte_offset = static_cast<std::uint8_t>(dy_off);
     layout.dy_byte_size   = static_cast<std::uint8_t>(d.y.bit_size / 8);
     out.layout = layout;
     return out;

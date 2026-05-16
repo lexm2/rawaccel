@@ -69,6 +69,12 @@ RA_TEST("Dispatch: apply schedules pending")
     NoopBackend backend;
     Agent agent(backend);
 
+    DeviceInfo info;
+    info.id = 1;
+    info.sysname = "hidraw0";
+    info.device_sysname = "0003:046D:C54D.000A";
+    agent.on_device_added(info);
+
     rajson::driver_config cfg;
     cfg.profiles.emplace_back();
     json req = {
@@ -81,13 +87,13 @@ RA_TEST("Dispatch: apply schedules pending")
     RA_CHECK_EQ(resp["deferred_ms"].get<int>(), 1000);
 
     // The settings change has not yet reached the backend.
-    RA_CHECK_EQ(backend.settings_changes, 0);
+    RA_CHECK_EQ(backend.binds, 0);
     auto s = agent.status(t0);
     RA_CHECK(s.has_pending_apply);
 
     // Advance past the deadline and tick.
     agent.tick(t0 + WRITE_DELAY);
-    RA_CHECK_EQ(backend.settings_changes, 1);
+    RA_CHECK_EQ(backend.binds, 1);
 }
 
 RA_TEST("Dispatch: get returns active config")
