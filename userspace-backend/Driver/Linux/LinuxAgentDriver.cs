@@ -30,9 +30,33 @@ namespace userspace_backend.Driver.Linux
         public LinuxAgentDriver(ILogger<LinuxAgentDriver>? logger = null)
         {
             this.logger = logger ?? NullLogger<LinuxAgentDriver>.Instance;
-            socketPath = Environment.GetEnvironmentVariable(EnvSocketPath)
-                         ?? AgentClient.DefaultSocketPath;
+            socketPath = ResolveSocketPath();
             client = new AgentClient(socketPath, TimeSpan.FromSeconds(5));
+        }
+
+        // Try RAWACCEL_SOCKET first, then the production system path, then
+        // the dev-launcher path under XDG_RUNTIME_DIR. The first existing
+        // socket wins so the GUI works whether the agent was started by
+        // systemd or by linux/run-dev-agent.sh.
+        private static string ResolveSocketPath()
+        {
+            var envPath = Environment.GetEnvironmentVariable(EnvSocketPath);
+            if (!string.IsNullOrEmpty(envPath)) return envPath;
+
+            if (File.Exists(AgentClient.DefaultSocketPath))
+            {
+                return AgentClient.DefaultSocketPath;
+            }
+
+            var runtimeDir =
+                Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            if (!string.IsNullOrEmpty(runtimeDir))
+            {
+                var devPath = Path.Combine(runtimeDir, "rawaccel.sock");
+                if (File.Exists(devPath)) return devPath;
+            }
+
+            return AgentClient.DefaultSocketPath;
         }
 
         public bool IsAvailable
