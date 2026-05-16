@@ -28,24 +28,8 @@ if [[ ! -d "${SOCKET_DIR}" ]]; then
     exit 1
 fi
 
-cleanup() {
-    if [[ -n "${chown_pid:-}" ]]; then
-        kill "${chown_pid}" 2>/dev/null || true
-    fi
-}
-trap cleanup EXIT
-
-(
-    for _ in {1..50}; do
-        if [[ -S "${SOCKET}" ]]; then
-            sudo chown "${UID_NUM}:${GID_NUM}" "${SOCKET}"
-            echo "[run-dev-agent] socket ready at ${SOCKET} (chowned to $(id -un):$(id -gn))"
-            break
-        fi
-        sleep 0.1
-    done
-) &
-chown_pid=$!
+# The agent chowns the socket to SUDO_UID/SUDO_GID itself after bind, so
+# the GUI (running unprivileged) can connect without a second sudo prompt.
 
 cat <<EOF
 [run-dev-agent] agent backend : ${BACKEND}

@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 
@@ -220,6 +221,21 @@ bool ControlServer::listen()
     // 0660 by default; CAP_BPF service unit should set umask 0117 to restrict
     // to the rawaccel group. For local testing this is fine.
     ::chmod(socket_path_.c_str(), 0660);
+
+    // When invoked via sudo (the dev launcher path), chown the socket back
+    // to the calling user so the unprivileged GUI can connect. sudo exports
+    // SUDO_UID / SUDO_GID for exactly this purpose. Production systemd unit
+    // does not set these, so behavior there is unchanged (owner stays as
+    // whatever User= the unit specifies).
+    if (::geteuid() == 0) {
+        const char* sudo_uid = std::getenv("SUDO_UID");
+        const char* sudo_gid = std::getenv("SUDO_GID");
+        if (sudo_uid && sudo_gid) {
+            uid_t uid = static_cast<uid_t>(std::strtoul(sudo_uid, nullptr, 10));
+            gid_t gid = static_cast<gid_t>(std::strtoul(sudo_gid, nullptr, 10));
+            ::chown(socket_path_.c_str(), uid, gid);
+        }
+    }
 
     if (::listen(listener_fd_, 4) < 0) return false;
     return true;
