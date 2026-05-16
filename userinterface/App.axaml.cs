@@ -104,7 +104,7 @@ public partial class App : Application
 #endif
         });
 
-        string settingsDirectory = System.AppDomain.CurrentDomain.BaseDirectory;
+        string settingsDirectory = ResolveSettingsDirectory();
         services.AddSingleton<IBackEndLoader>(sp =>
         {
             var devicesRW = sp.GetRequiredService<DevicesReaderWriter>();
@@ -415,6 +415,28 @@ public partial class App : Application
         {
             Debug.WriteLine($"[PRELOAD] Preload task failed: {ex.Message}");
         }
+    }
+
+    // On Linux, settings live under $XDG_CONFIG_HOME/rawaccel (or
+    // $HOME/.config/rawaccel when XDG_CONFIG_HOME is unset/empty). On other
+    // OSes we keep the original behavior of writing next to the executable.
+    private static string ResolveSettingsDirectory()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return AppDomain.CurrentDomain.BaseDirectory;
+        }
+
+        var xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        if (string.IsNullOrEmpty(xdg) || !Path.IsPathRooted(xdg))
+        {
+            var home = Environment.GetFolderPath(
+                Environment.SpecialFolder.UserProfile);
+            xdg = Path.Combine(home, ".config");
+        }
+        var dir = Path.Combine(xdg, "rawaccel");
+        Directory.CreateDirectory(dir);
+        return dir;
     }
 
     private void ApplyStartupSettings()
