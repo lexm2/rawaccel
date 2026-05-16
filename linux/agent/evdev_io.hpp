@@ -17,6 +17,12 @@
 
 namespace rawaccel_agent {
 
+// EVIOCGNAME of every uinput mirror this agent creates is prefixed with this
+// literal so the hotplug loop can recognize and skip them. Without this,
+// udev sees the mirror as a fresh REL_X/REL_Y device, the loop grabs it,
+// creates a mirror of the mirror, and the cascade fills the grab registry.
+inline constexpr const char* kMirrorNamePrefix = "rawaccel virtual: ";
+
 // Read one input_event from fd. Returns false on EOF or unrecoverable I/O
 // error. Handles EINTR. Partial reads are an error (the kernel always emits
 // whole events for a clean read on /dev/input/eventN; partial reads only

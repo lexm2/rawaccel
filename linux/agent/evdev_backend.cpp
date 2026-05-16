@@ -189,6 +189,15 @@ bool EvdevBackend::attach(const UdevDevice& node)
         return false;
     }
 
+    // Skip our own uinput mirrors. Without this, the agent's mirror is
+    // visible to udev as a new REL_X/REL_Y device and the hotplug loop
+    // grabs it, creating a mirror of the mirror until the grab registry
+    // overflows.
+    if (caps.name.rfind(kMirrorNamePrefix, 0) == 0) {
+        ::close(src);
+        return false;
+    }
+
     if (!evdev_grab(src)) {
         std::fprintf(stderr,
             "rawaccel: EVIOCGRAB(%s) failed; fail-open passthrough\n",

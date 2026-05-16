@@ -132,7 +132,7 @@ int uinput_create_mirror(const EvdevCapabilities& src, const std::string& name)
         setup.id = src.id;
         // Some kernels treat vendor==0 as "synthetic device" and skip quirks.
         // Keep the source id verbatim so userspace tools see the same VID/PID.
-        std::string virt_name = "rawaccel virtual: " + name;
+        std::string virt_name = std::string(kMirrorNamePrefix) + name;
         std::strncpy(setup.name, virt_name.c_str(), sizeof(setup.name) - 1);
         if (::ioctl(fd, UI_DEV_SETUP, &setup) < 0) goto fail;
     }
