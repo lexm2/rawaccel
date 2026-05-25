@@ -149,6 +149,18 @@ Agent::Status Agent::status(time_point now) const
     return s;
 }
 
+std::optional<std::string> Agent::data_plane_failure() const
+{
+    auto h = backend_.health();
+    if (h.devices > 0 && h.attached == 0) {
+        return h.error.empty()
+            ? std::string("no connected device could be attached to the "
+                          "kernel data plane")
+            : h.error;
+    }
+    return std::nullopt;
+}
+
 bool Agent::load_from_file(const std::string& path)
 {
     std::ifstream f(path);

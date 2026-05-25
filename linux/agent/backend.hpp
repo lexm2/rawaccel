@@ -35,6 +35,16 @@ struct DeviceListener {
     virtual void on_device_removed(DeviceId) = 0;
 };
 
+// Health of the kernel data plane: how many devices the backend prepared and
+// how many it actually engaged (attached). `error` carries the first failure
+// reason. The control plane uses this to fail an apply loudly when nothing is
+// attached, instead of reporting a settings write that has no effect.
+struct DataPlaneHealth {
+    std::size_t devices = 0;
+    std::size_t attached = 0;
+    std::string error;
+};
+
 struct Backend {
     virtual ~Backend() = default;
 
@@ -49,6 +59,10 @@ struct Backend {
 
     // Returns 0 when the backend has no per-packet visibility (e.g. BPF).
     virtual double current_speed() const { return 0.0; }
+
+    // Data-plane attach health. Default: nothing to report (backends without
+    // a kernel data plane, e.g. Noop).
+    virtual DataPlaneHealth health() const { return {}; }
 };
 
 // Test/default backend.

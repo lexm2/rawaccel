@@ -241,6 +241,31 @@ bool BpfBackend::attach_node(const std::string& sysname)
         unsigned(slot->layout.dy_byte_offset),
         unsigned(slot->layout.dy_byte_size));
 
+    // Eager attach: engage the data plane now with a pass-through (identity)
+    // config so the device is live before any apply, and so an attach failure
+    // surfaces here (at discovery) instead of as a silent no-op on a later
+    // apply. bind_device then only refreshes the maps with resolved settings.
+    if (!populate_maps(*slot, ra::modifier_settings{}, ra::device_config{})) {
+        std::fprintf(stderr, "bpf backend: identity populate failed for %s\n",
+                     sysname.c_str());
+        bpf_object__close(obj);
+        return false;
+    }
+    slot->link = bpf_map__attach_struct_ops(slot->ops_map);
+    if (slot->link) {
+        slot->attached = true;
+        std::fprintf(stderr, "bpf backend: attached %s (hid_id=0x%x)\n",
+                     sysname.c_str(), unsigned(hid_id));
+    } else {
+        slot->attached = false;
+        slot->attach_error = std::string(std::strerror(errno)) +
+                             " (errno " + std::to_string(errno) + ")";
+        std::fprintf(stderr,
+            "bpf backend: attach_struct_ops(%s) errno=%d (%s)\n",
+            sysname.c_str(), errno, std::strerror(errno));
+        // Keep the (unattached) slot so health()/apply can report the failure.
+    }
+
     DeviceInfo info;
     info.id = slot->id;
     info.sysname = sysname;
@@ -320,25 +345,13 @@ void BpfBackend::bind_device(DeviceId id,
     if (it == slots_.end()) return;
 
     Slot& slot = *it->second;
+    // The struct_ops link is attached eagerly in attach_node; bind only
+    // refreshes the maps with the resolved settings. If the device never
+    // attached, the settings still land in the maps but stay dormant.
     if (!populate_maps(slot, s, c)) {
         std::fprintf(stderr,
             "bpf backend: populate_maps failed for %s\n",
             slot.sysname.c_str());
-        return;
-    }
-
-    if (!slot.attached) {
-        slot.link = bpf_map__attach_struct_ops(slot.ops_map);
-        if (!slot.link) {
-            std::fprintf(stderr,
-                "bpf backend: attach_struct_ops(%s) errno=%d\n",
-                slot.sysname.c_str(), errno);
-            return;
-        }
-        slot.attached = true;
-        std::fprintf(stderr,
-            "bpf backend: attached %s (hid_id=0x%x)\n",
-            slot.sysname.c_str(), unsigned(slot.hid_id));
     }
 }
 
@@ -359,6 +372,22 @@ std::size_t BpfBackend::attached_count() const
         if (slot->attached) ++n;
     }
     return n;
+}
+
+DataPlaneHealth BpfBackend::health() const
+{
+    std::lock_guard<std::mutex> lock(mu_);
+    DataPlaneHealth h;
+    h.devices = slots_.size();
+    for (const auto& [id, slot] : slots_) {
+        if (slot->attached) {
+            ++h.attached;
+        } else if (h.error.empty()) {
+            h.error = slot->sysname + ": attach failed" +
+                      (slot->attach_error.empty() ? "" : ": " + slot->attach_error);
+        }
+    }
+    return h;
 }
 
 } // namespace rawaccel_agent

@@ -138,6 +138,12 @@ std::string dispatch(Agent& agent, const std::string& request_json,
             return error_response(std::string("apply: invalid config: ") +
                                   e.what()).dump();
         }
+        // Fail loudly if the kernel data plane is dead: devices are present but
+        // nothing is attached, so the write would have no effect. Without this
+        // the apply reports success while mouse movement never changes.
+        if (auto err = agent.data_plane_failure()) {
+            return error_response("apply: " + *err).dump();
+        }
         agent.schedule_apply(cfg, now);
         json resp;
         resp["ok"] = true;

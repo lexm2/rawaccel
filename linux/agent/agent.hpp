@@ -74,6 +74,11 @@ public:
     };
     Status status(time_point now) const;
 
+    // Non-empty when the data plane has devices but none are engaged (an apply
+    // would write settings that have no effect). Surfaced as an apply error so
+    // the GUI/CLI does not report a successful write that does nothing.
+    std::optional<std::string> data_plane_failure() const;
+
     bool load_from_file(const std::string& path);
     void save_to_file(const std::string& path) const;
 

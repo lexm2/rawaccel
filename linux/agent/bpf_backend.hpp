@@ -35,9 +35,10 @@ public:
     // back into the agent's profile resolver.
     void set_listener(DeviceListener& listener);
 
-    // Enumerate /sys/class/hidraw, prepare a slot per accepted mouse, and
-    // notify the listener for each. The struct_ops link is attached lazily
-    // on the first bind_device call per slot.
+    // Enumerate /sys/class/hidraw, prepare a slot per accepted mouse, attach
+    // the struct_ops link eagerly (with a pass-through config), and notify the
+    // listener for each. Attaching at discovery means an attach failure surfaces
+    // immediately rather than as a silent no-op on a later apply.
     bool start();
     void stop();
 
@@ -47,6 +48,9 @@ public:
     void unbind_device(DeviceId) override;
 
     std::size_t attached_count() const;
+
+    // devices = prepared slots; attached = those with a live struct_ops link.
+    DataPlaneHealth health() const override;
 
 private:
     struct Slot {
@@ -61,6 +65,7 @@ private:
         bpf_map* lut_y_map = nullptr;
         bpf_link* link = nullptr;
         bool attached = false;
+        std::string attach_error;  // populated when attach failed
     };
 
     bool attach_node(const std::string& sysname);

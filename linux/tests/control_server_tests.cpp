@@ -96,6 +96,56 @@ RA_TEST("Dispatch: apply schedules pending")
     RA_CHECK_EQ(backend.binds, 1);
 }
 
+RA_TEST("Dispatch: apply fails when the data plane is dead")
+{
+    // A backend with prepared devices but none attached (e.g. struct_ops attach
+    // failed) must make apply fail loudly instead of reporting a write that has
+    // no effect on the mouse.
+    struct DeadBackend : NoopBackend {
+        DataPlaneHealth health() const override {
+            return {1, 0, "hidraw0: attach failed: Invalid argument (errno 22)"};
+        }
+    };
+    DeadBackend backend;
+    Agent agent(backend);
+
+    rajson::driver_config cfg;
+    cfg.profiles.emplace_back();
+    json req = {
+        {"cmd", "apply"},
+        {"config", rajson::to_jobject(cfg)},
+    };
+    auto t0 = clock_type::now();
+    auto resp = json::parse(dispatch(agent, req.dump(), t0));
+
+    RA_CHECK(!resp["ok"].get<bool>());
+    RA_CHECK(resp["error"].get<std::string>().find("attach failed") != std::string::npos);
+    // The dead-plane apply must not even schedule a pending write.
+    RA_CHECK(!agent.status(t0).has_pending_apply);
+}
+
+RA_TEST("Dispatch: apply succeeds when a device is attached")
+{
+    // Mirror of the dead-plane case: with at least one attached device the
+    // apply goes through and schedules as normal.
+    struct LiveBackend : NoopBackend {
+        DataPlaneHealth health() const override { return {1, 1, ""}; }
+    };
+    LiveBackend backend;
+    Agent agent(backend);
+
+    rajson::driver_config cfg;
+    cfg.profiles.emplace_back();
+    json req = {
+        {"cmd", "apply"},
+        {"config", rajson::to_jobject(cfg)},
+    };
+    auto t0 = clock_type::now();
+    auto resp = json::parse(dispatch(agent, req.dump(), t0));
+    RA_CHECK(resp["ok"].get<bool>());
+    RA_CHECK(agent.status(t0).has_pending_apply);
+}
+
 RA_TEST("Dispatch: get returns active config")
 {
     NoopBackend backend;
