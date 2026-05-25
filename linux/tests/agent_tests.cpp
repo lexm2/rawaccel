@@ -44,18 +44,20 @@ ra::modifier_settings named_profile(const wchar_t* name, double output_dpi)
 
 } // namespace
 
-RA_TEST("Agent: current_speed delegates to backend")
+RA_TEST("Agent: current_speed_sample delegates to backend")
 {
     struct SpeedBackend : NoopBackend {
-        double speed = 0.0;
-        double current_speed() const override { return speed; }
+        SpeedSample sample{};
+        SpeedSample current_speed_sample() const override { return sample; }
     };
     SpeedBackend backend;
     Agent agent(backend);
 
-    RA_CHECK_EQ(agent.current_speed(), 0.0);
-    backend.speed = 12.5;
-    RA_CHECK_EQ(agent.current_speed(), 12.5);
+    RA_CHECK_EQ(agent.current_speed_sample().combined, 0.0);
+    backend.sample = SpeedSample{3.0, 4.0, 5.0};
+    RA_CHECK_EQ(agent.current_speed_sample().x, 3.0);
+    RA_CHECK_EQ(agent.current_speed_sample().y, 4.0);
+    RA_CHECK_EQ(agent.current_speed_sample().combined, 5.0);
 }
 
 RA_TEST("Agent: deactivate clears pending and rebinds known devices")

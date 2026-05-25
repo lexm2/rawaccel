@@ -138,9 +138,8 @@ std::string dispatch(Agent& agent, const std::string& request_json,
             return error_response(std::string("apply: invalid config: ") +
                                   e.what()).dump();
         }
-        // Fail loudly if the kernel data plane is dead: devices are present but
-        // nothing is attached, so the write would have no effect. Without this
-        // the apply reports success while mouse movement never changes.
+        // Fail loudly when devices exist but none are attached: the write would
+        // no-op and the apply would otherwise report a false success.
         if (auto err = agent.data_plane_failure()) {
             return error_response("apply: " + *err).dump();
         }
@@ -168,9 +167,12 @@ std::string dispatch(Agent& agent, const std::string& request_json,
     }
 
     if (cmd == "stats") {
+        auto sample = agent.current_speed_sample();
         json resp;
         resp["ok"] = true;
-        resp["current_speed"] = agent.current_speed();
+        resp["current_speed"] = sample.combined;
+        resp["current_speed_x"] = sample.x;
+        resp["current_speed_y"] = sample.y;
         return resp.dump();
     }
 
@@ -218,17 +220,16 @@ bool ControlServer::listen()
     std::strncpy(addr.sun_path, socket_path_.c_str(),
                  sizeof(addr.sun_path) - 1);
 
-    // umask before bind() so the file is created 0600; widened to 0660 after
-    // we have set the owner. Without this, a process that wins the race
-    // between bind() and chmod() could connect with world-write perms.
+    // umask 0600 before bind(), widen to 0660 after chown; closes the
+    // bind()/chmod() race where a peer could connect with world-write perms.
     const mode_t prev_umask = ::umask(0177);
     int bind_rc = ::bind(listener_fd_, reinterpret_cast<sockaddr*>(&addr),
                          sizeof(addr));
     ::umask(prev_umask);
     if (bind_rc < 0) return false;
 
-    // When invoked via sudo, hand the socket to SUDO_UID/SUDO_GID so the
-    // unprivileged client can connect; SO_PEERCRED enforces who may speak.
+    // Under sudo, chown to SUDO_UID/GID so the client can connect;
+    // SO_PEERCRED enforces who may speak.
     expected_uid_ = ::geteuid();
     if (::geteuid() == 0) {
         const char* sudo_uid = std::getenv("SUDO_UID");
@@ -280,14 +281,13 @@ bool ControlServer::peer_allowed(int fd) const
     struct ucred cred{};
     socklen_t len = sizeof(cred);
     if (::getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) return false;
-    // root may always talk to itself; otherwise only the owner UID we
-    // chowned the socket to (the sudo invoker, in the dev launcher path).
+    // root always; else only the chowned owner UID (the sudo invoker)
     return cred.uid == 0 || cred.uid == expected_uid_;
 }
 
 void ControlServer::handle_client(int fd)
 {
-    // One request per connection; the CLI opens a fresh socket per command.
+    // one request per connection (CLI opens a fresh socket per command)
     std::string req;
     if (!read_frame(fd, req)) return;
     auto resp = dispatch(agent_, req, clock_type::now());

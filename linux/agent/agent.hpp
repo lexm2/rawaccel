@@ -1,9 +1,8 @@
 #pragma once
 
 // Userspace counterpart to the driver's DEVICE_EXTENSION: holds the active
-// driver_config, debounces incoming updates by WRITE_DELAY, and resolves each
-// connected device to a (modifier_settings, device_config) pair for the
-// backend. Decoupled from IPC so tests can drive it without sockets.
+// driver_config, debounces updates by WRITE_DELAY, resolves each device to a
+// (modifier_settings, device_config) pair. IPC-free so tests need no sockets.
 
 #include "backend.hpp"
 #include "json_io.hpp"
@@ -33,50 +32,48 @@ inline constexpr auto WRITE_DELAY = std::chrono::milliseconds(
 
 enum class VersionStatus {
     ok,
-    client_too_old,    // mirror of "reinstallation required"
-    client_too_new,    // mirror of "newer driver is installed"
+    client_too_old,    // "reinstallation required"
+    client_too_new,    // "newer driver is installed"
 };
 
 struct VersionCheck {
     VersionStatus status;
     ra::version_t agent_version;
-    std::string message;  // human-readable on failure, empty on ok
+    std::string message;  // empty on ok
 };
 
 class Agent : public DeviceListener {
 public:
     explicit Agent(Backend& backend);
 
-    // Non-throwing parallel to valid_version_or_throw, so the IPC layer can
-    // format an error frame instead of unwinding.
+    // Non-throwing valid_version_or_throw: IPC formats an error frame.
     VersionCheck check_version(const ra::version_t& client) const;
 
-    // Stage a config. Repeated calls within WRITE_DELAY collapse to a single
-    // apply of the most recent one; tick() commits when the timer elapses.
+    // Stage a config; calls within WRITE_DELAY collapse to the latest, tick() commits.
     void schedule_apply(const rajson::driver_config& cfg, time_point now);
 
     bool tick(time_point now);
 
-    // Reset to a noaccel config immediately, bypassing WRITE_DELAY.
+    // Reset to noaccel immediately, bypassing WRITE_DELAY.
     void deactivate();
 
     rajson::driver_config get_active() const;
 
-    // 0 when the backend has no per-packet visibility (e.g. BPF).
-    double current_speed() const;
+    // Per-axis + combined current input speed in chart units (normalized in/s).
+    // All zero when idle or the backend has no per-packet visibility.
+    SpeedSample current_speed_sample() const;
 
     struct Status {
         bool has_active_config;
         bool has_pending_apply;
         std::chrono::milliseconds until_apply;  // 0 if no pending
-        std::int64_t last_apply_unix_ms;        // 0 if never applied
+        std::int64_t last_apply_unix_ms;        // 0 if never
         std::size_t connected_devices;
     };
     Status status(time_point now) const;
 
-    // Non-empty when the data plane has devices but none are engaged (an apply
-    // would write settings that have no effect). Surfaced as an apply error so
-    // the GUI/CLI does not report a successful write that does nothing.
+    // Non-empty when devices exist but none are attached (apply would no-op);
+    // surfaced as an apply error so the GUI/CLI doesn't report a false success.
     std::optional<std::string> data_plane_failure() const;
 
     bool load_from_file(const std::string& path);
@@ -99,9 +96,8 @@ private:
 
     void apply_locked(const rajson::driver_config& cfg);
 
-    // Match priority: device_settings.id == DeviceInfo.device_sysname, then
-    // device_settings.name == DeviceInfo.name. First match wins. Falls back
-    // to the first profile + default_device_config when nothing matches.
+    // Match by id == device_sysname, then name == name; first wins.
+    // No match -> first profile + default_device_config.
     void resolve_locked(const DeviceInfo& info,
                         ra::modifier_settings& out_settings,
                         ra::device_config& out_config) const;

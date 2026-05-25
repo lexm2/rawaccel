@@ -1,9 +1,8 @@
 #pragma once
 
-// HID-BPF backend: loads rawaccel.bpf.o per attached hidraw mouse, fills the
-// config and LUT maps from the agent's bind_device call, and registers the
-// struct_ops link. Rejected descriptors are skipped (devices remain
-// pass-through, not broken). See rawaccel-hid-probe for diagnostics.
+// HID-BPF backend: one rawaccel.bpf.o per hidraw mouse, fills config/LUT maps
+// from bind_device, registers the struct_ops link. Rejected descriptors skip
+// (stay pass-through). See rawaccel-hid-probe for diagnostics.
 
 #include "backend.hpp"
 #include "hid_descriptor.hpp"
@@ -31,14 +30,11 @@ public:
     BpfBackend(const BpfBackend&) = delete;
     BpfBackend& operator=(const BpfBackend&) = delete;
 
-    // Must be set before start() so the backend can report discoveries
-    // back into the agent's profile resolver.
+    // Set before start() so discoveries reach the agent's profile resolver.
     void set_listener(DeviceListener& listener);
 
-    // Enumerate /sys/class/hidraw, prepare a slot per accepted mouse, attach
-    // the struct_ops link eagerly (with a pass-through config), and notify the
-    // listener for each. Attaching at discovery means an attach failure surfaces
-    // immediately rather than as a silent no-op on a later apply.
+    // Enumerate hidraw, slot per accepted mouse, eager attach (pass-through),
+    // notify the listener. Attaching at discovery surfaces failures immediately.
     bool start();
     void stop();
 
@@ -49,8 +45,12 @@ public:
 
     std::size_t attached_count() const;
 
-    // devices = prepared slots; attached = those with a live struct_ops link.
+    // devices = slots; attached = those with a live struct_ops link
     DataPlaneHealth health() const override;
+
+    // Reads the most-recently-active device's ra_state telemetry and converts it
+    // to chart units (normalized in/s). Zero when idle (stale) or none attached.
+    SpeedSample current_speed_sample() const override;
 
 private:
     struct Slot {
@@ -63,9 +63,16 @@ private:
         bpf_map* config_map = nullptr;
         bpf_map* lut_x_map = nullptr;
         bpf_map* lut_y_map = nullptr;
+        bpf_map* state_map = nullptr;  // ra_state, read for the stats RPC
         bpf_link* link = nullptr;
         bool attached = false;
         std::string attach_error;  // populated when attach failed
+
+        // Cached from the last populate_maps so current_speed_sample can convert
+        // the kernel's Q16.16 telemetry into chart units without re-reading config.
+        std::int32_t domain_w_x_q16 = RA_Q16_ONE;
+        std::int32_t domain_w_y_q16 = RA_Q16_ONE;
+        std::uint8_t dist_mode = RA_DIST_EUCLIDEAN;
     };
 
     bool attach_node(const std::string& sysname);

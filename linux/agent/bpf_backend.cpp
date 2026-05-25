@@ -8,10 +8,12 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -20,8 +22,7 @@ namespace rawaccel_agent {
 
 namespace {
 
-// The kernel caps report_descriptor at HID_MAX_DESCRIPTOR_SIZE (4096); cap
-// here too rather than trust an out-of-process invariant.
+// Cap reads; kernel caps report_descriptor at 4096 but don't trust that here.
 bool read_descriptor(const std::string& syspath, std::vector<std::uint8_t>& out)
 {
     constexpr std::size_t MAX = 8192;
@@ -147,8 +148,7 @@ void BpfBackend::set_listener(DeviceListener& listener)
 
 bool BpfBackend::start()
 {
-    // Fail-open: zero matches is still a successful start (devices may be
-    // plugged in later). Rejected devices remain pass-through, not broken.
+    // Fail-open: zero matches still succeeds (hotplug later); rejects pass through.
     bool any = false;
     for (const auto& node : enumerate_hidraw()) {
         if (attach_node(node.sysname)) any = true;
@@ -198,12 +198,9 @@ bool BpfBackend::attach_node(const std::string& sysname)
         return false;
     }
 
-    // hid_id must be set on the struct_ops map BEFORE load(); it is the first
-    // field of struct hid_bpf_ops (offset 0). bpf_map__set_initial_value()
-    // refuses a partial write (it requires size == the whole struct_ops value
-    // size), so patch the field directly in the map's mutable initial value -
-    // the bpf_object equivalent of skel->struct_ops.rawaccel_ops->hid_id = ...
-    // Leaving hid_id at 0 makes attach_struct_ops fail with EINVAL.
+    // hid_id (offset 0 of hid_bpf_ops) must be set before load(), else
+    // attach_struct_ops gives EINVAL. set_initial_value() refuses a partial
+    // write, so patch the field directly in the map's mutable initial value.
     bpf_map* ops = bpf_object__find_map_by_name(obj, "rawaccel_ops");
     if (!ops) {
         bpf_object__close(obj);
@@ -241,7 +238,9 @@ bool BpfBackend::attach_node(const std::string& sysname)
     slot->config_map = bpf_object__find_map_by_name(obj, "ra_config");
     slot->lut_x_map = bpf_object__find_map_by_name(obj, "ra_lut_x");
     slot->lut_y_map = bpf_object__find_map_by_name(obj, "ra_lut_y");
-    if (!slot->config_map || !slot->lut_x_map || !slot->lut_y_map) {
+    slot->state_map = bpf_object__find_map_by_name(obj, "ra_state");
+    if (!slot->config_map || !slot->lut_x_map || !slot->lut_y_map ||
+        !slot->state_map) {
         bpf_object__close(obj);
         return false;
     }
@@ -256,10 +255,8 @@ bool BpfBackend::attach_node(const std::string& sysname)
         unsigned(slot->layout.dy_byte_offset),
         unsigned(slot->layout.dy_byte_size));
 
-    // Eager attach: engage the data plane now with a pass-through (identity)
-    // config so the device is live before any apply, and so an attach failure
-    // surfaces here (at discovery) instead of as a silent no-op on a later
-    // apply. bind_device then only refreshes the maps with resolved settings.
+    // Eager attach with an identity config: device is live before any apply,
+    // and attach failures surface here, not as a silent no-op on a later apply.
     if (!populate_maps(*slot, ra::modifier_settings{}, ra::device_config{})) {
         std::fprintf(stderr, "bpf backend: identity populate failed for %s\n",
                      sysname.c_str());
@@ -278,7 +275,7 @@ bool BpfBackend::attach_node(const std::string& sysname)
         std::fprintf(stderr,
             "bpf backend: attach_struct_ops(%s) errno=%d (%s)\n",
             sysname.c_str(), errno, std::strerror(errno));
-        // Keep the (unattached) slot so health()/apply can report the failure.
+        // keep the unattached slot so health()/apply can report the failure
     }
 
     DeviceInfo info;
@@ -295,8 +292,7 @@ bool BpfBackend::attach_node(const std::string& sysname)
         slots_.emplace(slot->id, std::move(slot));
     }
 
-    // Notify outside the lock: on_device_added re-enters via bind_device,
-    // which takes mu_.
+    // notify outside the lock: on_device_added re-enters bind_device (takes mu_)
     if (listener_) listener_->on_device_added(info);
     return true;
 }
@@ -305,9 +301,7 @@ bool BpfBackend::populate_maps(Slot& slot,
                                const ra::modifier_settings& s,
                                const ra::device_config& c)
 {
-    // build_lut throws when the profile uses a feature not yet ported to the
-    // kernel (rather than silently approximating it). Refuse the bind so the
-    // device stays pass-through and the reason is logged.
+    // build_lut throws on an unported feature; refuse the bind (stay pass-through).
     LutBuildResult lut;
     try {
         lut = build_lut(s, c);
@@ -317,9 +311,13 @@ bool BpfBackend::populate_maps(Slot& slot,
         return false;
     }
 
-    // The raw curve lives in lut_x/lut_y; weighting, output-DPI scaling, and
-    // the HID layout are folded into the config struct by to_bpf_config.
+    // raw curve -> lut_x/lut_y; weighting, output-DPI, HID layout -> config
     ra_bpf_config cfg = to_bpf_config(lut, slot.layout);
+
+    // Cache what current_speed_sample needs to convert the kernel's telemetry.
+    slot.domain_w_x_q16 = cfg.domain_w_x_q16;
+    slot.domain_w_y_q16 = cfg.domain_w_y_q16;
+    slot.dist_mode = cfg.dist_mode;
 
     int cfg_fd = bpf_map__fd(slot.config_map);
     int lutx_fd = bpf_map__fd(slot.lut_x_map);
@@ -360,9 +358,8 @@ void BpfBackend::bind_device(DeviceId id,
     if (it == slots_.end()) return;
 
     Slot& slot = *it->second;
-    // The struct_ops link is attached eagerly in attach_node; bind only
-    // refreshes the maps with the resolved settings. If the device never
-    // attached, the settings still land in the maps but stay dormant.
+    // link is attached in attach_node; bind just refreshes the maps. If never
+    // attached, settings land in the maps but stay dormant.
     if (!populate_maps(slot, s, c)) {
         std::fprintf(stderr,
             "bpf backend: populate_maps failed for %s\n",
@@ -403,6 +400,65 @@ DataPlaneHealth BpfBackend::health() const
         }
     }
     return h;
+}
+
+SpeedSample BpfBackend::current_speed_sample() const
+{
+    // No packet within this window -> the mouse is effectively stopped, so the
+    // GUI's indicator lines fade out. Larger than any inter-packet gap during
+    // continuous motion (>=125 Hz), small enough to feel responsive.
+    constexpr std::uint64_t STALE_NS = 150ull * 1000 * 1000;  // 150 ms
+
+    std::lock_guard<std::mutex> lock(mu_);
+
+    // Most-recently-active device wins: a multi-mouse setup reports the one the
+    // user is actually moving.
+    const Slot* best = nullptr;
+    ra_bpf_state best_state{};
+    std::uint64_t best_ts = 0;
+
+    for (const auto& [id, slot] : slots_) {
+        if (!slot->attached || !slot->state_map) continue;
+        int fd = bpf_map__fd(slot->state_map);
+        if (fd < 0) continue;
+        std::uint32_t zero = 0;
+        ra_bpf_state st{};
+        if (bpf_map_lookup_elem(fd, &zero, &st) != 0) continue;
+        if (st.last_ts_ns > best_ts) {
+            best_ts = st.last_ts_ns;
+            best_state = st;
+            best = slot.get();
+        }
+    }
+
+    if (!best || best_ts == 0) return {};
+
+    // last_ts_ns is bpf_ktime_get_ns() == CLOCK_MONOTONIC, so compare against it.
+    struct timespec now_ts{};
+    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+    std::uint64_t now = static_cast<std::uint64_t>(now_ts.tv_sec) * 1000000000ull +
+                        static_cast<std::uint64_t>(now_ts.tv_nsec);
+    if (now > best_ts && now - best_ts > STALE_NS) return {};
+
+    // Kernel telemetry is Q16.16 in/s, domain-weighted. Chart X is normalized
+    // in/s, so divide out the domain weight: chart_x = awv_q16 / domain_w_q16.
+    const double dw_x = best->domain_w_x_q16 ? static_cast<double>(best->domain_w_x_q16)
+                                             : static_cast<double>(RA_Q16_ONE);
+    const double dw_y = best->domain_w_y_q16 ? static_cast<double>(best->domain_w_y_q16)
+                                             : static_cast<double>(RA_Q16_ONE);
+
+    SpeedSample out;
+    if (best->dist_mode == RA_DIST_SEPARATE) {
+        out.x = static_cast<double>(best_state.tele_speed_x_q16) / dw_x;
+        out.y = static_cast<double>(best_state.tele_speed_y_q16) / dw_y;
+        out.combined = std::hypot(out.x, out.y);
+    } else {
+        // Whole mode: one aggregate indexes the accel_x curve; both lines sit there.
+        out.combined = static_cast<double>(best_state.tele_speed_combined_q16) / dw_x;
+        out.x = out.combined;
+        out.y = out.combined;
+    }
+    return out;
 }
 
 } // namespace rawaccel_agent

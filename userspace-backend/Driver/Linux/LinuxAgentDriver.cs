@@ -8,10 +8,9 @@ using RawAccel.Contracts;
 
 namespace userspace_backend.Driver.Linux
 {
-    // IRawAccelDriver implementation that talks to the rawaccel-agent over
-    // a unix domain socket. Serializes RawAccelConfig with Newtonsoft (the
-    // same library wrapper.cpp uses on Windows) so the on-the-wire JSON
-    // shape is identical to what the agent's nlohmann::json parser expects.
+    // IRawAccelDriver over a unix domain socket. Serializes RawAccelConfig
+    // with Newtonsoft (as wrapper.cpp does on Windows) so the wire JSON matches
+    // what the agent's nlohmann::json parser expects.
     public sealed class LinuxAgentDriver : IRawAccelDriver
     {
         private const string EnvSocketPath = "RAWACCEL_SOCKET";
@@ -34,10 +33,9 @@ namespace userspace_backend.Driver.Linux
             client = new AgentClient(socketPath, TimeSpan.FromSeconds(5));
         }
 
-        // Try RAWACCEL_SOCKET first, then the production system path, then
-        // the dev-launcher path under XDG_RUNTIME_DIR. The first existing
-        // socket wins so the GUI works whether the agent was started by
-        // systemd or by linux/run-dev-agent.sh.
+        // RAWACCEL_SOCKET, then the system path, then the dev-launcher path
+        // under XDG_RUNTIME_DIR; first existing socket wins (works under both
+        // systemd and linux/run-dev-agent.sh).
         private static string ResolveSocketPath()
         {
             var envPath = Environment.GetEnvironmentVariable(EnvSocketPath);
@@ -135,35 +133,15 @@ namespace userspace_backend.Driver.Linux
             }
         }
 
-        // DEBUG AID: when true, GetCurrentMouseSpeedSample returns random speeds
-        // instead of querying the agent, so the chart's current-speed indicator
-        // lines can be verified before the HID-BPF agent exposes real per-axis
-        // telemetry (current_speed_x/current_speed_y from the ra_state map).
-        // Leave false in committed code; flip to true to visually test the lines.
-        private static readonly bool DebugRandomSpeed = false;
-
-        public double GetCurrentMouseSpeed() => GetCurrentMouseSpeedSample().Combined;
-
         public MouseSpeedSample GetCurrentMouseSpeedSample()
         {
-            if (DebugRandomSpeed)
-            {
-                // Random per-axis speeds in a typical mouse-speed range; Combined
-                // is their honest hypot so combined-mode shows a consistent value.
-                double rx = Random.Shared.NextDouble() * 100.0;
-                double ry = Random.Shared.NextDouble() * 100.0;
-                return new MouseSpeedSample(rx, ry, Math.Sqrt(rx * rx + ry * ry));
-            }
-
             try
             {
                 var respJson = client.Call("{\"cmd\":\"stats\"}");
                 var resp = JObject.Parse(respJson);
                 if (!resp.Value<bool>("ok")) return MouseSpeedSample.Zero;
-                // current_speed is the combined magnitude; the agent may also
-                // emit per-axis current_speed_x/current_speed_y. Until it does,
-                // fall back to the combined value so the single-line case keeps
-                // working and the two-line case degrades gracefully.
+                // current_speed is combined; per-axis fields are optional, so
+                // fall back to combined when the agent omits them
                 double combined = resp.Value<double?>("current_speed") ?? 0;
                 double x = resp.Value<double?>("current_speed_x") ?? combined;
                 double y = resp.Value<double?>("current_speed_y") ?? combined;

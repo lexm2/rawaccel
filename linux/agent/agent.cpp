@@ -28,8 +28,7 @@ bool name_matches(const wchar_t* a, std::size_t a_cap,
     return (i == a_cap || a[i] == 0) && (i == b_cap || b[i] == 0);
 }
 
-// Byte-wise compare; sufficient for canonical hidraw IDs ("0003:046D:..")
-// and ASCII device names. Returns false when the wchar field is empty.
+// Byte-wise compare; ok for canonical hidraw IDs + ASCII names. False if empty.
 bool wchar_equals_utf8(const wchar_t* wbuf, std::size_t cap,
                        const std::string& s)
 {
@@ -54,8 +53,7 @@ VersionCheck Agent::check_version(const ra::version_t& client) const
     VersionCheck v;
     v.agent_version = ra::version;
 
-    // The agent plays the driver role: clients below min_driver_version are
-    // asked to upgrade; clients newer than the agent are asked to downgrade.
+    // Agent plays the driver role: too-old clients upgrade, too-new downgrade.
     if (client < ra::min_driver_version) {
         v.status = VersionStatus::client_too_old;
         v.message = "client below minimum supported version";
@@ -91,7 +89,7 @@ bool Agent::tick(time_point now)
         binds = collect_binds_locked();
     }
 
-    // Outside the lock: a slow backend must not stall queued RPCs.
+    // outside the lock: a slow backend must not stall queued RPCs
     for (auto& [id, ms, dc] : binds) {
         backend_.bind_device(id, ms, dc);
     }
@@ -128,9 +126,9 @@ rajson::driver_config Agent::get_active() const
     return active_;
 }
 
-double Agent::current_speed() const
+SpeedSample Agent::current_speed_sample() const
 {
-    return backend_.current_speed();
+    return backend_.current_speed_sample();
 }
 
 Agent::Status Agent::status(time_point now) const
@@ -181,8 +179,7 @@ bool Agent::load_from_file(const std::string& path)
         apply_locked(cfg);
         binds = collect_binds_locked();
     }
-    // Startup load skips WRITE_DELAY; the debounce only guards against
-    // bursts of user-triggered apply RPCs.
+    // startup load skips WRITE_DELAY (debounce only guards apply-RPC bursts)
     for (auto& [id, ms, dc] : binds) {
         backend_.bind_device(id, ms, dc);
     }

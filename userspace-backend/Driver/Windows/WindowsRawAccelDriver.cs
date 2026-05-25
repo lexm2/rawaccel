@@ -78,14 +78,8 @@ namespace userspace_backend.Driver.Windows
             DriverConfig.GetDefault().Deactivate();
         }
 
-        public double GetCurrentMouseSpeed()
-        {
-            // wrapper exposes per-profile speed via SpeedCalculator; the UI
-            // gauge reads from that path directly today, so this telemetry
-            // hook stays a no-op until consolidated.
-            return 0;
-        }
-
+        // No per-packet telemetry from the Windows driver yet, so the GUI's
+        // speed line stays hidden on Windows until a kernel-side path lands.
         public MouseSpeedSample GetCurrentMouseSpeedSample() => MouseSpeedSample.Zero;
     }
 }

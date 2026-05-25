@@ -80,8 +80,6 @@ namespace userspace_backend_tests.ModelTests
 
             public void Deactivate() { }
 
-            public double GetCurrentMouseSpeed() => 0;
-
             public MouseSpeedSample GetCurrentMouseSpeedSample() => MouseSpeedSample.Zero;
         }
 

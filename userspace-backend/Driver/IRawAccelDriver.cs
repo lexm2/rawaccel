@@ -28,14 +28,9 @@ namespace userspace_backend.Driver
         // Reset the backend to a no-op configuration without uninstalling.
         void Deactivate();
 
-        // Optional telemetry: current input speed (counts/ms or in/s,
-        // implementation-defined). Returns 0 when unsupported.
-        double GetCurrentMouseSpeed();
-
         // Optional telemetry: current input speed split into per-axis X/Y plus
-        // the combined (lp-norm / hypot) magnitude. Returns MouseSpeedSample.Zero
-        // when unsupported. Combined mirrors GetCurrentMouseSpeed() where both
-        // are implemented.
+        // the combined (lp-norm / hypot) magnitude, in chart units (normalized
+        // in/s). Returns MouseSpeedSample.Zero when unsupported or idle.
         MouseSpeedSample GetCurrentMouseSpeedSample();
     }
 }

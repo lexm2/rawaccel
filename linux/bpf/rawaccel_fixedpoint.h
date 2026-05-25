@@ -1,35 +1,20 @@
 #ifndef RAWACCEL_FIXEDPOINT_H
 #define RAWACCEL_FIXEDPOINT_H
 
-/* Fixed-point (Q16.16) port of common/rawaccel.hpp's modifier::modify.
- *
- * This header is the single source of the per-packet math. It is compiled
- * BOTH into the BPF program (linux/bpf/rawaccel.bpf.c) and into host unit
- * tests (linux/tests/fixedpoint_tests.cpp), so the exact kernel arithmetic
- * is validated in userspace against the double-precision common/ math with
- * no CAP_BPF or live device required.
- *
- * Rules that keep it BPF-clean (and therefore host-identical):
- *   - no floats/doubles, only __s32 / __s64 / __u32 / __u64
- *   - no libc, no math.h: every primitive is defined here
- *   - no global mutable state: per-device state arrives via ra_bpf_state*
- *   - no dynamic loops, no function pointers
- *
- * The only kernel/host difference is how the LUT is read: the kernel fetches
- * entries with bpf_map_lookup_elem (one element per call, the verifier will
- * not let a map pointer stride), while the host indexes a flat array. The
- * arithmetic helpers are shared; ra_modify_q16_flat documents and tests the
- * exact composition the kernel program mirrors.
- */
+/* Fixed-point (Q16.16) port of common/rawaccel.hpp modifier::modify.
+ * Compiled into both the BPF program and host tests, so kernel arithmetic
+ * is validated against the common/ doubles.
+ * BPF-clean: __s32/__s64/__u32/__u64 only, no libc/math.h, no globals
+ * (state via ra_bpf_state*), no dynamic loops or function pointers.
+ * Kernel vs host differ only in the LUT read (map lookups vs flat array);
+ * ra_modify_q16_flat is the shared composition the kernel mirrors. */
 
 #include "rawaccel_bpf_layout.h"
 
 #ifdef __BPF__
 #define RA_FP_INLINE static __always_inline
-/* Expensive helpers are compiled as BPF-to-BPF subprograms (verified once)
- * instead of inlined into every control-flow path, which would multiply the
- * verifier's processed-instruction count and trip the complexity limit
- * (-E2BIG). On the host they are ordinary inline functions. */
+/* Expensive helpers as BPF subprograms (verified once) instead of inlined
+ * everywhere, which would trip the verifier complexity limit. Plain inline on host. */
 #define RA_FP_NOINLINE static __noinline
 #else
 #include <cstdint>
@@ -37,10 +22,8 @@
 #define RA_FP_NOINLINE static inline
 #endif
 
-/* Optimization barrier. On BPF it forces a value to a register and stops clang
- * from "seeing through" an arithmetic sign-mask and reconstructing it as a
- * conditional branch (which, inside a loop, explodes the verifier's path
- * count). A no-op on the host. */
+/* Optimization barrier: forces a value to a register so clang can't turn a
+ * sign-mask back into a branch (explodes verifier path count). No-op on host. */
 #ifdef __BPF__
 #define RA_BARRIER(x) asm volatile("" : "+r"(x))
 #else
@@ -54,15 +37,13 @@ RA_FP_INLINE __s32 ra_abs_s32(__s32 v)
     return v < 0 ? -v : v;
 }
 
-/* Q16.16 multiply: (a * b) >> 16, with a 64-bit intermediate. */
+/* Q16.16 multiply: (a * b) >> 16, 64-bit intermediate. */
 RA_FP_INLINE __s32 ra_mul_q16(__s32 a, __s32 b)
 {
     return (__s32)(((__s64)a * (__s64)b) >> RA_Q16_SHIFT);
 }
 
-/* Saturate a 64-bit value into signed 32-bit range. Speeds past this are far
- * beyond lut_max and get clamped at index time anyway. (Defined early so the
- * divide can reuse it.) */
+/* Saturate s64 into s32 range. */
 RA_FP_INLINE __s32 ra_sat_s32(__s64 v)
 {
     if (v > 0x7fffffff) return 0x7fffffff;
@@ -70,10 +51,8 @@ RA_FP_INLINE __s32 ra_sat_s32(__s64 v)
     return (__s32)v;
 }
 
-/* Q16.16 divide: (num / den) in Q16.16. The BPF verifier rejects signed
- * division, so the magnitudes are divided as u64 and the sign reapplied.
- * den == 0 returns 0; the result saturates to s32. den == RA_Q16_ONE returns
- * num exactly, so dividing by a unit dt is a no-op. */
+/* Q16.16 divide. Verifier rejects signed division, so divide magnitudes as
+ * u64 and reapply sign. den==0 -> 0; saturates to s32. */
 RA_FP_INLINE __s32 ra_div_q16(__s32 num, __s32 den)
 {
     if (den == 0) return 0;
@@ -84,12 +63,8 @@ RA_FP_INLINE __s32 ra_div_q16(__s32 num, __s32 den)
     return ra_sat_s32(neg ? -(__s64)q : (__s64)q);
 }
 
-/* ---- s64 Q16.16 (extended range) ----------------------------------- *
- * The EMA smoother accumulators are kept as __s64 holding Q16.16 values so the
- * linear smoother's trend*time term cannot overflow s32 (trend can be large and
- * time spans up to ~100 ms). Multiplies keep the product in s64 -- no __int128
- * needed -- and divides reuse the unsigned-magnitude trick (the verifier rejects
- * signed division). */
+/* ---- s64 Q16.16 (extended range) ----------------------------------- */
+/* EMA accumulators are s64 Q16.16 so the trend*time term can't overflow s32. */
 RA_FP_INLINE __s64 ra_mul_q16_s64(__s64 a_q16, __s32 b_q16)
 {
     return (a_q16 * (__s64)b_q16) >> RA_Q16_SHIFT;
@@ -104,13 +79,9 @@ RA_FP_INLINE __s64 ra_div_q16_s64(__s64 num_q16, __s32 den_q16)
     return neg ? -(__s64)q : (__s64)q;
 }
 
-/* 2^x in Q16.16 for x <= 0. The per-packet EMA decay is 2^(dt * log2(coeff))
- * with coeff in (0,1), so the exponent is always <= 0. Splits x into a floor
- * and a fraction: 2^x = 2^frac >> (-floor). 2^frac for frac in [0,1) is a
- * minimax cubic that hits 1 at 0 and 2 at 1 (so there is no jump across integer
- * boundaries), accurate to < 1e-3. A shift past the Q16.16 range underflows to
- * 0, i.e. a long dt drives the coefficient to 0 and the alpha below to 1 (full
- * tracking, the "reset after a pause" behavior). __noinline: verified once. */
+/* 2^x in Q16.16 for x <= 0 (the EMA decay exponent is always <= 0).
+ * 2^x = 2^frac >> (-floor); 2^frac is a minimax cubic, accurate to < 1e-3.
+ * Underflow to 0 -> long dt gives full tracking (reset after a pause). */
 RA_FP_NOINLINE __s32 ra_exp2_q16(__s32 x_q16)
 {
     if (x_q16 >= 0) return RA_Q16_ONE;            /* domain is x <= 0; 2^0 = 1 */
@@ -119,18 +90,16 @@ RA_FP_NOINLINE __s32 ra_exp2_q16(__s32 x_q16)
     int shift = -ipart;                            /* >= 1 right shifts */
     if (shift >= 32) return 0;
 
-    /* p(frac) ~= 2^frac via Horner: 1 + f(a + f(b + f c)), coefficients in
-     * Q16.16 (a=0.696066, b=0.224494, c=0.079442). */
+    /* 2^frac via Horner: 1 + f(a + f(b + fc)), a=0.696066 b=0.224494 c=0.079442 (Q16). */
     __s32 p = 14714 + ra_mul_q16(5206, frac);     /* b + c f */
     p = 45620 + ra_mul_q16(p, frac);              /* a + f(b + c f) */
     p = RA_Q16_ONE + ra_mul_q16(p, frac);         /* 1 + f(...) -> [ONE, 2 ONE) */
     return (__s32)((__u32)p >> shift);
 }
 
-/* Per-packet EMA alpha = 1 - 2^(dt * log2(coeff)), in Q16.16 [0, ONE]. The
- * agent precomputes log2(coeff) (negative) so the kernel never needs log/pow;
- * here dt scales it and ra_exp2_q16 turns it back into the decay. Mirrors the
- * `1 - pow(coeff, time)` in common/rawaccel.hpp's smoothers. */
+/* Per-packet EMA alpha = 1 - 2^(dt * log2(coeff)), Q16.16 [0, ONE].
+ * Agent precomputes log2(coeff) so the kernel needs no log/pow.
+ * Mirrors `1 - pow(coeff, time)` in common/ smoothers. */
 RA_FP_INLINE __s32 ra_ema_alpha_q16(__s32 dt_ms_q16, __s32 log2coeff_q16)
 {
     __s32 x = ra_mul_q16(dt_ms_q16, log2coeff_q16);   /* dt * log2(coeff) <= 0 */
@@ -145,8 +114,7 @@ RA_FP_INLINE __s32 ra_q16_lerp(__s32 a, __s32 b, __s32 frac_q16)
 
 /* ---- pipeline stages ----------------------------------------------- */
 
-/* Rotate a Q16.16 vector by the precomputed direction {cos, sin}. Mirrors
- * common/math-vec2.hpp rotate(): {x*cos - y*sin, x*sin + y*cos}. */
+/* Rotate a Q16.16 vector by {cos, sin}. Mirrors common/math-vec2.hpp rotate(). */
 RA_FP_INLINE void ra_rotate_q16(__s64 *x, __s64 *y, __s32 cos_q16, __s32 sin_q16)
 {
     __s64 rx = (*x * (__s64)cos_q16 - *y * (__s64)sin_q16) >> RA_Q16_SHIFT;
@@ -155,23 +123,10 @@ RA_FP_INLINE void ra_rotate_q16(__s64 *x, __s64 *y, __s32 cos_q16, __s32 sin_q16
     *y = ry;
 }
 
-/* Integer sqrt of a u64, digit-by-digit, fixed 32-iteration loop.
- *
- * BRANCHLESS on purpose: a data-dependent `if` in this loop would fork the
- * verifier at every iteration (~2^32 paths -> the load fails with -E2BIG), so
- * the "n >= trial" decision is turned into an all-ones / all-zero mask via the
- * sign bit and applied arithmetically. Callers must keep n < 2^63 so the
- * signed compare is valid (ra_magnitude_q16 bounds its inputs for this). */
-/* Euclidean magnitude of a Q16.16 vector, in Q16.16. (x*2^16)^2 + (y*2^16)^2
- * is mag^2 << 32, so the integer sqrt of that sum is mag << 16.
- *
- * Computed by Newton's method seeded with max(ax, ay): the true root lies in
- * [max, sqrt(2)*max], so four iterations converge to full Q16.16 precision.
- * Newton's loop is branchless (unsigned division, no comparisons), which keeps
- * it short and keeps the verifier's processed-instruction count flat -- a
- * digit-by-digit sqrt is ~30 iterations and was re-walked per call-site state.
- * Inputs are bounded to 2^30 so ax^2 + ay^2 stays within u64 and anything past
- * lut_max collapses to the same index anyway. __noinline: verified once. */
+/* Euclidean magnitude of a Q16.16 vector, in Q16.16: sqrt((x<<16)^2 + (y<<16)^2).
+ * Newton's method seeded with max(ax, ay); 4 iterations reach full precision.
+ * Branchless (unsigned divide, no compares) to keep the verifier flat.
+ * Inputs bounded to 2^30 so the sum stays in u64. __noinline: verified once. */
 RA_FP_NOINLINE __s32 ra_magnitude_q16(__s64 x_q16, __s64 y_q16)
 {
     __u64 ax = (__u64)(x_q16 < 0 ? -x_q16 : x_q16);
@@ -196,17 +151,10 @@ RA_FP_NOINLINE __s32 ra_magnitude_q16(__s64 x_q16, __s64 y_q16)
 #define RA_PI_4_Q16         51472  /* (pi/4)  * 2^16 */
 #define RA_TWO_OVER_PI_Q16  41721  /* (2/pi)  * 2^16 */
 
-/* atan(|num/den|) in Q16.16 radians, range [0, pi/2]. Mirrors modify's
- * reference_angle: den == 0 (purely vertical) -> pi/2, num == 0 (purely
- * horizontal) -> 0.
- *
- * The unit-interval atan is Rajan's minimax polynomial:
- *   atan(r) ~= (pi/4) r - r (r - 1) (0.2447 + 0.0663 r),   r in [0, 1]
- * accurate to < 0.0015 rad. For r > 1 the identity atan(r) = pi/2 - atan(1/r)
- * folds the argument back into [0, 1], so one branch covers every angle and
- * the polynomial is never evaluated outside its fit range. Operands are made
- * non-negative and ordered lo <= hi, so the ratio division is unsigned (the
- * verifier rejects signed division). __noinline: verified once. */
+/* atan(|num/den|) in Q16.16 radians, [0, pi/2]. Mirrors modify's reference_angle
+ * (den==0 -> pi/2, num==0 -> 0). Rajan's minimax polynomial on r in [0,1]:
+ *   atan(r) ~= (pi/4)r - r(r-1)(0.2447 + 0.0663r),  < 0.0015 rad.
+ * r > 1 folds via atan(r) = pi/2 - atan(1/r). __noinline: verified once. */
 RA_FP_NOINLINE __s32 ra_atan_ratio_q16(__s64 num, __s64 den)
 {
     __u64 a = (__u64)(num < 0 ? -num : num);
@@ -228,11 +176,8 @@ RA_FP_NOINLINE __s32 ra_atan_ratio_q16(__s64 num, __s64 den)
     return swap ? RA_PI_2_Q16 - at : at;
 }
 
-/* Speed clamp (modifier::modify): clamp the working vector's speed
- * (magnitude * eff_dpi_norm, in/s) to [speed_min, speed_max] and rescale the
- * vector by the resulting ratio. eff_dpi_norm already folds in 1/dt, so the
- * clamp threshold is compared in real in/s (modify's magnitude * ips_factor).
- * __noinline: verified once. */
+/* Speed clamp (modify): clamp speed (magnitude * eff_dpi_norm, in/s) to
+ * [speed_min, speed_max] and rescale the vector by the ratio. __noinline. */
 RA_FP_NOINLINE void ra_clamp_speed(const struct ra_bpf_config *cfg,
                                    __s32 eff_dpi_norm_q16,
                                    __s64 *inx, __s64 *iny)
@@ -245,23 +190,17 @@ RA_FP_NOINLINE void ra_clamp_speed(const struct ra_bpf_config *cfg,
     if (clamped < cfg->speed_min_q16) clamped = cfg->speed_min_q16;
     if (clamped > cfg->speed_max_q16) clamped = cfg->speed_max_q16;
 
-    /* ratio = clamped / speed, Q16.16. Both operands are positive, so the
-     * division is unsigned (the verifier rejects signed division). */
+    /* ratio = clamped / speed, unsigned (verifier rejects signed division). */
     __u64 ratio = ((__u64)(__u32)clamped << RA_Q16_SHIFT) / (__u64)(__u32)speed;
     *inx = (*inx * (__s64)ratio) >> RA_Q16_SHIFT;
     *iny = (*iny * (__s64)ratio) >> RA_Q16_SHIFT;
 }
 
-/* Angle snapping (modifier::modify lines 331-342): if the movement's angle to
- * an axis is within degrees_snap, collapse the working vector onto that axis,
- * preserving magnitude. The decision avoids atan by comparing |y|/|x| against
- * precomputed tangents (atan is monotone increasing):
- *   ref_angle < snap         <=> |y| < tan(snap)        * |x|  -> snap to X
- *   ref_angle > pi/2 - snap   <=> |y| > tan(pi/2 - snap) * |x|  -> snap to Y
- * Cross-multiplied to stay in integer math (s64 holds |comp| << 16 vs a Q16
- * tangent times |comp|). y == 0 (already on X) returns early; x == 0 (already
- * on Y) collapses to Y as a no-op, both matching modify. __noinline: verified
- * once. */
+/* Angle snapping (modify): collapse near-axis movement onto the axis, keeping
+ * magnitude. Avoids atan by comparing |y| against precomputed tangents * |x|:
+ *   |y| < tan(snap)*|x|        -> snap to X
+ *   |y| > tan(pi/2 - snap)*|x| -> snap to Y
+ * Cross-multiplied to stay in integers. __noinline: verified once. */
 RA_FP_NOINLINE void ra_snap(const struct ra_bpf_config *cfg,
                             __s64 *inx, __s64 *iny)
 {
@@ -283,8 +222,8 @@ RA_FP_NOINLINE void ra_snap(const struct ra_bpf_config *cfg,
     }
 }
 
-/* Per-axis abs weighted velocity (modify's abs_weighted_vel component):
- * |component| * dpi_norm * domain_weight, in Q16.16 in/s, saturated >= 0. */
+/* Per-axis abs weighted velocity (modify's abs_weighted_vel):
+ * |comp| * dpi_norm * domain_weight, Q16.16 in/s, saturated. */
 RA_FP_NOINLINE __s32 ra_axis_speed_q16(__s64 comp_q16, __s32 dpi_norm_q16,
                                        __s32 domain_w_q16)
 {
@@ -297,15 +236,10 @@ RA_FP_NOINLINE __s32 ra_axis_speed_q16(__s64 comp_q16, __s32 dpi_norm_q16,
 /* Trend dampening 0.75 in Q16.16 (linear_ema_smoother::trendDampening). */
 #define RA_TREND_DAMP_Q16 49152
 
-/* Linear EMA smoother, the fixed-point mirror of common/rawaccel.hpp's
- * linear_ema_smoother::smooth (lines 126-162). Keeps a level and a trend, each
- * as a window/cutoff pair, in __s64 Q16.16 accumulators (win/cut/win_tr/cut_tr).
- * Per packet: dampen the trend, extrapolate the level by trend*dt, pull the
- * level toward the sample by the dt-adaptive alpha, clamp >= 0, then update the
- * trend from the level change. Returns min(window, cutoff) saturated to s32.
- * Used for the input-speed and output-speed stages (their trend halflives, and
- * thus log2 coefficients, differ; the agent supplies the four log2(coeff)s).
- * __noinline: verified once. */
+/* Linear EMA smoother, fixed-point mirror of common/ linear_ema_smoother::smooth.
+ * Level + trend, each a window/cutoff pair. Per packet: dampen trend,
+ * extrapolate level by trend*dt, pull toward sample by dt-adaptive alpha,
+ * clamp >= 0, update trend. Returns min(window, cutoff). __noinline. */
 RA_FP_NOINLINE __s32 ra_linear_ema_step(struct ra_linear_ema_state *s,
                                         const struct ra_linear_ema_coeffs *c,
                                         __s32 sample_q16, __s32 dt_ms_q16)
@@ -318,21 +252,21 @@ RA_FP_NOINLINE __s32 ra_linear_ema_step(struct ra_linear_ema_state *s,
     __s64 old_win = s->win;
     __s64 old_cut = s->cut;
 
-    /* dampen trends, then extrapolate the level along the dampened trend. */
+    /* dampen trends, then extrapolate level along the trend */
     s->win_tr = ra_mul_q16_s64(s->win_tr, RA_TREND_DAMP_Q16);
     s->cut_tr = ra_mul_q16_s64(s->cut_tr, RA_TREND_DAMP_Q16);
     s->win += ra_mul_q16_s64(s->win_tr, dt_ms_q16);
     s->cut += ra_mul_q16_s64(s->cut_tr, dt_ms_q16);
 
-    /* level EMA toward the sample. */
+    /* level EMA toward the sample */
     s->win += ra_mul_q16_s64((__s64)sample_q16 - s->win, a_win);
     s->cut += ra_mul_q16_s64((__s64)sample_q16 - s->cut, a_cut);
 
-    /* don't let the trend carry the level below 0. */
+    /* clamp level >= 0 */
     if (s->win < 0) s->win = 0;
     if (s->cut < 0) s->cut = 0;
 
-    /* update the trend from this packet's level change per unit time. */
+    /* update trend from level change per unit time */
     __s64 new_trw = ra_div_q16_s64(s->win - old_win, dt_ms_q16);
     __s64 new_trc = ra_div_q16_s64(s->cut - old_cut, dt_ms_q16);
     s->win_tr += ra_mul_q16_s64(new_trw - s->win_tr, a_trw);
@@ -342,11 +276,9 @@ RA_FP_NOINLINE __s32 ra_linear_ema_step(struct ra_linear_ema_state *s,
     return ra_sat_s32(m);
 }
 
-/* Simple EMA smoother, the fixed-point mirror of common/rawaccel.hpp's
- * simple_ema_smoother::smooth (lines 79-90). A window/cutoff level pair pulled
- * toward the sample by the dt-adaptive alpha; no trend term and no zero clamp
- * (the smoothed scale stays positive). Returns min(window, cutoff). Used for
- * the scale-smoothing stage. __noinline: verified once. */
+/* Simple EMA smoother, fixed-point mirror of common/ simple_ema_smoother::smooth.
+ * Window/cutoff level pair pulled toward the sample; no trend, no clamp.
+ * Returns min(window, cutoff). __noinline. */
 RA_FP_NOINLINE __s32 ra_simple_ema_step(struct ra_simple_ema_state *s,
                                         const struct ra_simple_ema_coeffs *c,
                                         __s32 sample_q16, __s32 dt_ms_q16)
@@ -359,10 +291,8 @@ RA_FP_NOINLINE __s32 ra_simple_ema_step(struct ra_simple_ema_state *s,
     return ra_sat_s32(m);
 }
 
-/* Map a Q16.16 speed onto a LUT bucket index and fractional weight. Both
- * operands are non-negative so the divisions are unsigned (the BPF verifier
- * rejects signed division). idx is clamped to [0, RA_LUT_SIZE - 2] so idx+1
- * is always in range for the lerp. */
+/* Map a Q16.16 speed to a LUT index + fractional weight. Unsigned divides;
+ * idx clamped to [0, RA_LUT_SIZE - 2] so idx+1 stays in range for the lerp. */
 RA_FP_NOINLINE void ra_lut_index(__s32 speed_q16, __s32 step_q16, __s32 max_q16,
                                  __u32 *idx_out, __s32 *frac_out)
 {
@@ -381,8 +311,7 @@ RA_FP_NOINLINE void ra_lut_index(__s32 speed_q16, __s32 step_q16, __s32 max_q16,
     *frac_out = frac_q16;
 }
 
-/* Flat-array LUT fetch + lerp. Used directly by host tests; the kernel does
- * the equivalent with two bpf_map_lookup_elem calls feeding ra_q16_lerp. */
+/* Flat-array LUT fetch + lerp (host). Kernel does the same via two map lookups. */
 RA_FP_INLINE __s32 ra_lut_sample(const __s32 *lut, __u32 idx, __s32 frac_q16)
 {
     __u32 i0 = idx & (RA_LUT_SIZE - 1);
@@ -390,12 +319,9 @@ RA_FP_INLINE __s32 ra_lut_sample(const __s32 *lut, __u32 idx, __s32 frac_q16)
     return ra_q16_lerp(lut[i0], lut[i1], frac_q16);
 }
 
-/* The pipeline is split around the LUT fetch so the kernel program and the
- * host tests share everything except how the table is read (map lookups vs a
- * flat array). ra_pre_lut and ra_post_lut are the shared, host-tested halves;
- * the working vector (inx/iny, Q16.16) carries the per-packet transforms that
- * later phases add (rotation, snap, speed clamp) from one half to the other.
- *
+/* Pipeline split around the LUT fetch so kernel and host share everything but
+ * the table read. ra_pre_lut/ra_post_lut are the shared halves; the working
+ * vector (inx/iny) carries the per-packet transforms between them.
  * Stage 1: raw counts -> working vector + per-axis curve LUT indices. */
 RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
                              struct ra_bpf_state *st,
@@ -404,38 +330,25 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
                              __u32 *ix, __s32 *fx, __u32 *iy, __s32 *fy,
                              __u8 *single_scale, __s32 *weight_q16)
 {
-    /* Working vector starts as the raw counts in Q16.16, then carries each
-     * per-packet transform (rotation, snap, speed clamp) to the LUT stage. */
+    /* Working vector: raw counts in Q16.16, transformed toward the LUT stage. */
     __s64 inx = (__s64)dx << RA_Q16_SHIFT;
     __s64 iny = (__s64)dy << RA_Q16_SHIFT;
 
-    /* Fold the real per-packet dt into the velocity normalization. modify uses
-     * speed = component * dpi_factor / time (ips_factor); here dpi_norm plays
-     * dpi_factor's role, so eff_dpi_norm = dpi_norm / dt_ms gives in/s at the
-     * actual polling interval. dt_ms_q16 is already clamped by the caller, and
-     * ra_div_q16(x, RA_Q16_ONE) == x, so a 1 ms packet leaves velocity intact
-     * (matching the Phase-1 behavior). The output vector below stays in raw
-     * counts: dt scales only the speed used for indexing and the clamp. */
+    /* Fold per-packet dt into velocity normalization: eff_dpi_norm =
+     * dpi_norm / dt_ms gives in/s at the real polling interval (a 1 ms packet
+     * is a no-op). Output stays in raw counts; dt scales only speed/clamp. */
     __s32 eff_dpi_norm_q16 = ra_div_q16(cfg->dpi_norm_q16, dt_ms_q16);
 
-    /* Rotation is the first transform in modifier::modify. Velocity and the
-     * curve index are derived from the rotated vector. */
+    /* Rotation first (modify); velocity and curve index use the rotated vector. */
     if (cfg->flags & RA_F_APPLY_ROTATE)
         ra_rotate_q16(&inx, &iny, cfg->rot_cos_q16, cfg->rot_sin_q16);
 
-    /* Angle snapping collapses near-axis movement onto the axis before the
-     * reference angle and curve are derived; the directional-weight block below
-     * then reads the snapped vector, yielding weight = range_w_x (snapped to X)
-     * or range_w_y (snapped to Y) for free. */
+    /* Snap near-axis movement onto the axis before deriving angle/curve. */
     if (cfg->flags & RA_F_APPLY_SNAP)
         ra_snap(cfg, &inx, &iny);
 
-    /* Whole-mode directional weighting: the per-vector range weight is blended
-     * between range_weights.x and .y by the movement's reference angle (modify
-     * lines 383-388: weight = range_w_x + (2/pi)*ref_angle*(range_w_y -
-     * range_w_x), a lerp keyed on (2/pi)*ref_angle). Taken from the rotated
-     * vector, before the angle-preserving speed clamp, matching modify's order.
-     * Defaults to range_w_x; only the whole branch consumes it. */
+    /* Whole-mode directional weight: lerp range_w_x..range_w_y by
+     * (2/pi)*ref_angle (modify). Defaults to range_w_x. */
     __s32 weight = cfg->range_w_x_q16;
     if (cfg->flags & RA_F_APPLY_DIR_WEIGHT) {
         __s32 ang = ra_atan_ratio_q16(iny, inx);            /* [0, pi/2] */
@@ -444,21 +357,19 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
     }
     *weight_q16 = weight;
 
-    /* Speed clamp acts on the (rotated) vector before the curve. */
+    /* clamp the rotated vector before the curve */
     if (cfg->flags & RA_F_CLAMP_SPEED)
         ra_clamp_speed(cfg, eff_dpi_norm_q16, &inx, &iny);
 
     *inx_q16 = inx;
     *iny_q16 = iny;
 
-    /* Per-axis abs weighted velocity (modify's abs_weighted_vel), in real in/s
-     * via the dt-folded normalization. */
+    /* Per-axis abs weighted velocity (modify), real in/s via dt-folded norm. */
     __s32 awv_x = ra_axis_speed_q16(inx, eff_dpi_norm_q16, cfg->domain_w_x_q16);
     __s32 awv_y = ra_axis_speed_q16(iny, eff_dpi_norm_q16, cfg->domain_w_y_q16);
 
     if (cfg->dist_mode == RA_DIST_SEPARATE) {
-        /* Separate: each axis indexes its own curve at its own speed, smoothed
-         * by its own input-speed EMA (calc_speed_separate). */
+        /* Separate: each axis indexes its own curve at its own (smoothed) speed. */
         if (cfg->flags & RA_F_SMOOTH_INPUT) {
             awv_x = ra_linear_ema_step(&st->in_x, &cfg->in_coeffs, awv_x, dt_ms_q16);
             awv_y = ra_linear_ema_step(&st->in_y, &cfg->in_coeffs, awv_y, dt_ms_q16);
@@ -466,35 +377,40 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
         ra_lut_index(awv_x, cfg->lut_step_q16, cfg->lut_max_q16, ix, fx);
         ra_lut_index(awv_y, cfg->lut_step_q16, cfg->lut_max_q16, iy, fy);
         *single_scale = 0;
+
+        /* Telemetry: the per-axis speeds that just indexed the curve. */
+        st->tele_speed_x_q16 = awv_x;
+        st->tele_speed_y_q16 = awv_y;
+        st->tele_speed_combined_q16 = ra_magnitude_q16(awv_x, awv_y);
     } else {
-        /* Whole modes: one aggregate speed, one scale (from accel_x) applied
-         * to the whole vector. */
+        /* Whole: one aggregate speed, one accel_x scale for the whole vector. */
         __s32 S;
         if (cfg->dist_mode == RA_DIST_MAX)
             S = awv_x > awv_y ? awv_x : awv_y;
         else
-            /* euclidean. The agent rejects Lp configs, so RA_DIST_LP never
-             * reaches the kernel; this branch only ever sees euclidean. */
+            /* euclidean (agent rejects Lp, so RA_DIST_LP never reaches the kernel) */
             S = ra_magnitude_q16(awv_x, awv_y);
 
-        /* calc_speed_whole smooths the single aggregate speed via smoother_x's
-         * input EMA. With RA_F_SMOOTH_INPUT clear the raw speed indexes
-         * directly (halflife 0 -> no smoothing). */
+        /* smooth the aggregate speed via the input EMA (calc_speed_whole) */
         if (cfg->flags & RA_F_SMOOTH_INPUT)
             S = ra_linear_ema_step(&st->in_x, &cfg->in_coeffs, S, dt_ms_q16);
         ra_lut_index(S, cfg->lut_step_q16, cfg->lut_max_q16, ix, fx);
         *iy = *ix;            /* y reuses the accel_x curve; raw_y is discarded */
         *fy = *fx;
         *single_scale = 1;
+
+        /* Telemetry: the aggregate speed that indexed the curve, plus the
+         * pre-combine components (informational; the agent uses combined here). */
+        st->tele_speed_combined_q16 = S;
+        st->tele_speed_x_q16 = awv_x;
+        st->tele_speed_y_q16 = awv_y;
     }
 }
 
-/* Stage 2: working vector + raw per-axis curve scales -> output vector in
- * Q16.16 (before fractional carry, which the caller owns). Applies range
- * weighting, output-DPI scaling, and the directional output-DPI multipliers.
- * In a whole mode (single_scale) both axes use the accel_x curve and the single
- * blended weight_q16 (range_weights.x when directional weighting is off),
- * matching modify; separate mode uses each axis's own raw curve and weight. */
+/* Stage 2: working vector + raw curve scales -> output vector in Q16.16 (carry
+ * is the caller's). Applies range weighting, output-DPI scaling, and directional
+ * multipliers. Whole mode: both axes use the accel_x scale and weight_q16;
+ * separate mode: each axis its own. */
 RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
                               struct ra_bpf_state *st,
                               __s64 inx_q16, __s64 iny_q16,
@@ -502,11 +418,8 @@ RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
                               __s32 weight_q16, __s32 dt_ms_q16,
                               __s64 *out_x_q16, __s64 *out_y_q16)
 {
-    /* Range-weighted curve scale 1 + (f - 1)*weight (callback_template). This
-     * is the value the scale smoother operates on, BEFORE output-DPI scaling
-     * (modify smooths scale_x/scale_y, then multiplies in by the dpi
-     * adjustment). Whole mode smooths a single scale via sc_x and applies it to
-     * both axes; separate mode smooths each axis with its own state. */
+    /* Range-weighted curve scale 1 + (f-1)*weight, smoothed before output-DPI
+     * scaling (modify). Whole mode smooths one scale via sc_x for both axes. */
     __s32 ws_x, ws_y;
     if (single_scale) {
         __s32 ws = RA_Q16_ONE + ra_mul_q16(raw_x - RA_Q16_ONE, weight_q16);
@@ -523,16 +436,13 @@ RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
         }
     }
 
-    /* Apply the (smoothed) scale to the working vector -> output in count units,
-     * the value the output-speed smoother operates on (modify smooths in AFTER
-     * the scale multiply and BEFORE the output-DPI adjustment). */
+    /* Apply the smoothed scale -> counts, the value the output smoother sees. */
     __s64 sx = (inx_q16 * (__s64)ws_x) >> RA_Q16_SHIFT;
     __s64 sy = (iny_q16 * (__s64)ws_y) >> RA_Q16_SHIFT;
 
     if (cfg->flags & RA_F_SMOOTH_OUTPUT) {
         if (single_scale) {
-            /* Whole mode: smooth the output magnitude and rescale both axes by
-             * smoothed/mag (modify lines 400-409). */
+            /* Whole: smooth the output magnitude, rescale both axes by smoothed/mag. */
             __s32 mag = ra_magnitude_q16(sx, sy);
             if (mag > 0) {
                 __s32 sm = ra_linear_ema_step(&st->out_x, &cfg->out_coeffs,
@@ -542,8 +452,7 @@ RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
                 sy = (sy * (__s64)ratio) >> RA_Q16_SHIFT;
             }
         } else {
-            /* Separate mode: smooth |component| and reapply the sign
-             * (copysign(smooth(fabs(in)), in)). */
+            /* Separate: smooth |component|, reapply sign (copysign). */
             __s32 ax = ra_sat_s32(sx < 0 ? -sx : sx);
             __s32 ay = ra_sat_s32(sy < 0 ? -sy : sy);
             __s32 smx = ra_linear_ema_step(&st->out_x, &cfg->out_coeffs,
@@ -555,15 +464,13 @@ RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
         }
     }
 
-    /* Output-DPI scaling then the per-axis trailing factor (yx_output_dpi_ratio
-     * on Y), following the (smoothed) output, matching modify's order. */
+    /* Output-DPI scaling, then yx_output_dpi_ratio on Y (modify order). */
     __s32 dpi_x = cfg->output_dpi_adj_q16;
     __s32 dpi_y = ra_mul_q16(cfg->output_dpi_adj_q16, cfg->yx_ratio_q16);
     __s64 ox = (sx * (__s64)dpi_x) >> RA_Q16_SHIFT;
     __s64 oy = (sy * (__s64)dpi_y) >> RA_Q16_SHIFT;
 
-    /* Directional output DPI (modifier::modify): scale a component only when
-     * its post-scale output is negative. */
+    /* Directional output DPI: scale a component only when its output is negative. */
     if ((cfg->flags & RA_F_APPLY_DIR_MUL_X) && ox < 0)
         ox = (ox * (__s64)cfg->lr_ratio_q16) >> RA_Q16_SHIFT;
     if ((cfg->flags & RA_F_APPLY_DIR_MUL_Y) && oy < 0)
@@ -573,8 +480,8 @@ RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
     *out_y_q16 = oy;
 }
 
-/* Full per-packet pipeline against a flat LUT (host tests + the reference
- * composition the kernel event handler mirrors with map-based LUT reads). */
+/* Full per-packet pipeline against a flat LUT (host tests; the kernel mirrors
+ * this with map-based LUT reads). */
 RA_FP_INLINE void ra_modify_q16_flat(const struct ra_bpf_config *cfg,
                                      struct ra_bpf_state *st,
                                      const __s32 *lut_x, const __s32 *lut_y,
@@ -596,16 +503,10 @@ RA_FP_INLINE void ra_modify_q16_flat(const struct ra_bpf_config *cfg,
                 out_x_q16, out_y_q16);
 }
 
-/* Carry-accumulated Q16.16 -> integer emission. Adds the retained fractional
- * carry to the post-LUT output, splits off the integer counts to emit, and
- * keeps the new fraction for the next packet. Returns 1 (and writes
- * *out_x / *out_y, updating carry) when the packet should be emitted, or 0 to
- * drop it. The drop is the ValidCarry mirror of driver/driver.cpp:37-42, which
- * refuses a carry outside [-1, 1) rather than emit a surprising spike; the
- * arithmetic >> floors toward -inf so the remainder is always in
- * [0, RA_Q16_ONE) and the bounds check is the defensive guard the driver
- * carries. On a drop, carry is left untouched. Shared so the BPF program and
- * the host sequence tests run the exact same emission. */
+/* Carry-accumulated Q16.16 -> integer emission. Adds the saved carry, splits
+ * off integer counts, keeps the new fraction. Returns 1 and writes out_x/out_y
+ * (updating carry), or 0 to drop the packet. The drop mirrors driver.cpp
+ * ValidCarry: a carry outside [-1, 1) is refused, carry left untouched. */
 RA_FP_INLINE int ra_emit_q16(struct ra_bpf_state *st,
                              __s64 acc_x_q16, __s64 acc_y_q16,
                              __s32 *out_x, __s32 *out_y)
