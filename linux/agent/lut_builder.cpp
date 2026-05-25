@@ -88,6 +88,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     // computed it into data.rot_direction. Flag mirrors modifier_flags.
     out.rot_cos_q16 = q16_round(stateless.data.rot_direction.x);
     out.rot_sin_q16 = q16_round(stateless.data.rot_direction.y);
+    out.speed_min_q16 = q16_round(prof.speed_min);
+    out.speed_max_q16 = q16_round(prof.speed_max);
 
     // Flags fire only when the corresponding setting is non-trivial, matching
     // modifier_flags.
@@ -95,6 +97,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     if (prof.lr_output_dpi_ratio != 1.0) out.flags |= RA_F_APPLY_DIR_MUL_X;
     if (prof.ud_output_dpi_ratio != 1.0) out.flags |= RA_F_APPLY_DIR_MUL_Y;
     if (prof.degrees_rotation != 0.0)    out.flags |= RA_F_APPLY_ROTATE;
+    if (prof.speed_max > 0.0 && prof.speed_min <= prof.speed_max)
+        out.flags |= RA_F_CLAMP_SPEED;
 
     // Distance mode mirrors speed_processor::init.
     const auto& spa = prof.speed_processor_args;
@@ -115,8 +119,6 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         throw std::runtime_error("rawaccel: Lp distance norm not yet supported on Linux");
     if (prof.degrees_snap != 0.0)
         throw std::runtime_error("rawaccel: angle snapping not yet supported on Linux");
-    if (prof.speed_max > 0.0 && prof.speed_min <= prof.speed_max)
-        throw std::runtime_error("rawaccel: speed clamp not yet supported on Linux");
     if (spa.whole && prof.range_weights.x != prof.range_weights.y)
         throw std::runtime_error(
             "rawaccel: whole-mode directional range weighting not yet supported on Linux");
@@ -160,6 +162,8 @@ ra_bpf_config to_bpf_config(const LutBuildResult& lut,
     cfg.ud_ratio_q16      = lut.ud_ratio_q16;
     cfg.rot_cos_q16       = lut.rot_cos_q16;
     cfg.rot_sin_q16       = lut.rot_sin_q16;
+    cfg.speed_min_q16     = lut.speed_min_q16;
+    cfg.speed_max_q16     = lut.speed_max_q16;
 
     return cfg;
 }

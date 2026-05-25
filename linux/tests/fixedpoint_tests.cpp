@@ -188,6 +188,35 @@ RA_TEST("Fixed: separate mode curve matches oracle on diagonals")
     check_axis(s, -90, 120);
 }
 
+RA_TEST("Fixed: speed clamp matches oracle (noaccel, isolates the clamp)")
+{
+    ra::modifier_settings s{};
+    s.prof.speed_min = 10.0;
+    s.prof.speed_max = 50.0;
+    // dpi_norm is 1 (dev.dpi 0), so count == in/s. Below min is boosted to
+    // min, above max is capped to max, in-range passes through.
+    check_axis(s, 5, 0);     // speed 5 -> boosted to 10
+    check_axis(s, 30, 0);    // in range
+    check_axis(s, 100, 0);   // capped to 50
+    check_axis(s, 0, -120);  // capped to 50 on Y
+    check_axis(s, 30, 40);   // |v| 50, at the cap
+    check_axis(s, 60, 80);   // |v| 100 -> capped to 50
+}
+
+RA_TEST("Fixed: speed clamp composes with a curve")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.speed_max = 80.0;  // cap; speed_min stays 0
+
+    check_axis(s, 40, 0);
+    check_axis(s, 200, 0);   // clamped to 80 before the curve
+    check_axis(s, 90, 120);  // |v| 150 -> clamped to 80
+}
+
 RA_TEST("Fixed: max distance mode matches oracle on diagonals")
 {
     ra::modifier_settings s{};

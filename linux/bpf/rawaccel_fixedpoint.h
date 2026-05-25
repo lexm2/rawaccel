@@ -123,6 +123,27 @@ RA_FP_NOINLINE __s32 ra_magnitude_q16(__s64 x_q16, __s64 y_q16)
     return x > 0x7fffffff ? 0x7fffffff : (__s32)x;
 }
 
+/* Speed clamp (modifier::modify): clamp the working vector's speed
+ * (magnitude * dpi_norm, in/s) to [speed_min, speed_max] and rescale the
+ * vector by the resulting ratio. __noinline: verified once. */
+RA_FP_NOINLINE void ra_clamp_speed(const struct ra_bpf_config *cfg,
+                                   __s64 *inx, __s64 *iny)
+{
+    __s32 mag = ra_magnitude_q16(*inx, *iny);          /* Q16 counts */
+    __s32 speed = ra_mul_q16(mag, cfg->dpi_norm_q16);  /* Q16 in/s */
+    if (speed <= 0) return;
+
+    __s32 clamped = speed;
+    if (clamped < cfg->speed_min_q16) clamped = cfg->speed_min_q16;
+    if (clamped > cfg->speed_max_q16) clamped = cfg->speed_max_q16;
+
+    /* ratio = clamped / speed, Q16.16. Both operands are positive, so the
+     * division is unsigned (the verifier rejects signed division). */
+    __u64 ratio = ((__u64)(__u32)clamped << RA_Q16_SHIFT) / (__u64)(__u32)speed;
+    *inx = (*inx * (__s64)ratio) >> RA_Q16_SHIFT;
+    *iny = (*iny * (__s64)ratio) >> RA_Q16_SHIFT;
+}
+
 /* Per-axis abs weighted velocity (modify's abs_weighted_vel component):
  * |component| * dpi_norm * domain_weight, in Q16.16 in/s, saturated >= 0. */
 RA_FP_NOINLINE __s32 ra_axis_speed_q16(__s64 comp_q16, __s32 dpi_norm_q16,
@@ -217,6 +238,10 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
      * curve index are derived from the rotated vector. */
     if (cfg->flags & RA_F_APPLY_ROTATE)
         ra_rotate_q16(&inx, &iny, cfg->rot_cos_q16, cfg->rot_sin_q16);
+
+    /* Speed clamp acts on the (rotated) vector before the curve. */
+    if (cfg->flags & RA_F_CLAMP_SPEED)
+        ra_clamp_speed(cfg, &inx, &iny);
 
     *inx_q16 = inx;
     *iny_q16 = iny;

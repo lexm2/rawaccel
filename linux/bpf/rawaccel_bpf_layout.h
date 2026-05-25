@@ -97,12 +97,17 @@ struct ra_bpf_config {
      * to the working vector before everything else when RA_F_APPLY_ROTATE. */
     __s32 rot_cos_q16;
     __s32 rot_sin_q16;
+
+    /* Speed clamp bounds in Q16.16 in/s. Applied to the working vector's
+     * magnitude before the curve when RA_F_CLAMP_SPEED. */
+    __s32 speed_min_q16;
+    __s32 speed_max_q16;
 };
 
 #ifndef __BPF__
 /* Host side is always C++ (agent + tests); BPF side skips this. Catches
  * accidental padding/layout drift between agent and kernel. */
-static_assert(sizeof(struct ra_bpf_config) == 72,
+static_assert(sizeof(struct ra_bpf_config) == 80,
               "ra_bpf_config layout changed; update kernel + agent in lockstep");
 #endif
 

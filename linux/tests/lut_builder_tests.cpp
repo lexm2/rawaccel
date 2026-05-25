@@ -127,9 +127,6 @@ RA_TEST("Lut: features not yet ported throw instead of silently approximating")
     // Angle snapping.
     { ra::modifier_settings s{}; s.prof.degrees_snap = 5.0;
       RA_CHECK(throws(s)); }
-    // Speed clamp.
-    { ra::modifier_settings s{}; s.prof.speed_min = 1.0; s.prof.speed_max = 10.0;
-      RA_CHECK(throws(s)); }
     // Whole-mode directional (asymmetric) range weighting.
     { ra::modifier_settings s{}; s.prof.range_weights = vec2d{1.0, 0.5};
       RA_CHECK(throws(s)); }
