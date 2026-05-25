@@ -39,8 +39,8 @@ double raw_curve_at(ra::modifier_settings& s, double v, bool along_x)
 LutBuildResult build_lut(const ra::modifier_settings& settings,
                          const ra::device_config& dev_config)
 {
-    // The BPF program runs its own EMA via smooth_alpha_q16; zero the
-    // userspace smoother halflives so the LUT reflects only the curve.
+    // The BPF program layers its own dt-adaptive smoothers in-kernel; zero the
+    // userspace smoother halflives so the LUT reflects only the raw curve.
     ra::modifier_settings stateless = settings;
     stateless.prof.speed_processor_args.input_speed_smooth_halflife = 0;
     stateless.prof.speed_processor_args.scale_smooth_halflife = 0;
@@ -54,13 +54,16 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.lut_max_q16  = static_cast<std::int32_t>(
         static_cast<std::int64_t>(RA_LUT_SIZE) * RA_Q16_ONE - 1);
 
-    // dpi=0 -> the BPF program treats raw counts as already normalized.
-    if (dev_config.dpi > 0) {
-        out.dpi_norm_q16 = q16_round(
-            ra::NORMALIZED_DPI / static_cast<double>(dev_config.dpi));
-    } else {
-        out.dpi_norm_q16 = RA_Q16_ONE;
-    }
+    // dpi_factor = NORMALIZED_DPI/device_dpi is the value Windows passes to
+    // modify(): it scales raw counts -> in/s for the curve domain (ips_factor =
+    // dpi_factor/time, rawaccel.hpp:320) AND scales the output (modify multiplies
+    // the result by output_dpi_adjustment_factor * dpi_factor, rawaccel.hpp:412).
+    // Capture it once and fold it into both dpi_norm and output_dpi_adj below.
+    // dpi=0 -> dpi_factor 1: the BPF program treats raw counts as normalized.
+    double dpi_factor = 1.0;
+    if (dev_config.dpi > 0)
+        dpi_factor = ra::NORMALIZED_DPI / static_cast<double>(dev_config.dpi);
+    out.dpi_norm_q16 = q16_round(dpi_factor);
 
     // input_speed_smoother coefficients (linear_ema_smoother::init): the kernel
     // applies a real dt-adaptive EMA, so the agent precomputes log2(coeff) for
@@ -117,7 +120,11 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.range_w_y_q16      = q16_round(prof.range_weights.y);
     out.domain_w_x_q16     = q16_round(prof.domain_weights.x);
     out.domain_w_y_q16     = q16_round(prof.domain_weights.y);
-    out.output_dpi_adj_q16 = q16_round(prof.output_dpi / ra::NORMALIZED_DPI);
+    // output_dpi_adjustment_factor * dpi_factor (rawaccel.hpp:412): folding
+    // dpi_factor in here is what makes Linux output match Windows when a device
+    // DPI is configured. With dpi=0 (dpi_factor 1) it collapses to the old
+    // output_dpi / NORMALIZED_DPI.
+    out.output_dpi_adj_q16 = q16_round(prof.output_dpi / ra::NORMALIZED_DPI * dpi_factor);
     out.yx_ratio_q16       = q16_round(prof.yx_output_dpi_ratio);
     out.lr_ratio_q16       = q16_round(prof.lr_output_dpi_ratio);
     out.ud_ratio_q16       = q16_round(prof.ud_output_dpi_ratio);

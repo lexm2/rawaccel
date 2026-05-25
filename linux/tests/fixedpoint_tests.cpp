@@ -29,7 +29,8 @@ namespace {
 // (dpi_factor 1, dt_ms slice -> ips_factor 1/dt_ms). dt_ms defaults to 1 so the
 // single-EMA/1 ms cases are unchanged; the dt-aware cases pass the real slice.
 double oracle_axis(const ra::modifier_settings& s,
-                   double in_x, double in_y, bool want_x, double dt_ms = 1.0)
+                   double in_x, double in_y, bool want_x, double dt_ms = 1.0,
+                   double dpi_factor = 1.0)
 {
     ra::modifier_settings ms = s;
     ms.prof.speed_processor_args.input_speed_smooth_halflife = 0;
@@ -42,7 +43,7 @@ double oracle_axis(const ra::modifier_settings& s,
     sp.init(ms.prof.speed_processor_args);
 
     vec2d v{in_x, in_y};
-    mod.modify(v, sp, ms, 1.0, dt_ms);
+    mod.modify(v, sp, ms, dpi_factor, dt_ms);
     return want_x ? v.x : v.y;
 }
 
@@ -51,7 +52,8 @@ double oracle_axis(const ra::modifier_settings& s,
 // velocity equals the raw count in in/s, matching modify's ips_factor of 1.
 void check_with(const ra::modifier_settings& s, const LutBuildResult& lut,
                 const ra_bpf_config& cfg, std::int32_t dx, std::int32_t dy,
-                double abs_tol, double rel_tol, double dt_ms = 1.0)
+                double abs_tol, double rel_tol, double dt_ms = 1.0,
+                double dpi_factor = 1.0)
 {
     ra_bpf_state st{};  // fresh: smoothed_v and carry both zero
 
@@ -70,8 +72,8 @@ void check_with(const ra::modifier_settings& s, const LutBuildResult& lut,
 
     double kx = static_cast<double>(ox_q16) / RA_Q16_ONE;
     double ky = static_cast<double>(oy_q16) / RA_Q16_ONE;
-    double ex = oracle_axis(s, dx, dy, true, dt_exact);
-    double ey = oracle_axis(s, dx, dy, false, dt_exact);
+    double ex = oracle_axis(s, dx, dy, true, dt_exact, dpi_factor);
+    double ey = oracle_axis(s, dx, dy, false, dt_exact, dpi_factor);
 
     RA_CHECK_NEAR(kx, ex, abs_tol + std::fabs(ex) * rel_tol);
     RA_CHECK_NEAR(ky, ey, abs_tol + std::fabs(ey) * rel_tol);
@@ -354,6 +356,42 @@ RA_TEST("Fixed: speed clamp tracks the dt-scaled velocity")
         check_with(s, lut, cfg, 30, 0, 1e-2, 2e-3, dt);
         check_with(s, lut, cfg, 100, 0, 1e-2, 2e-3, dt);
         check_with(s, lut, cfg, 30, 40, 1e-2, 2e-3, dt);
+    }
+}
+
+RA_TEST("Fixed: device DPI scales the output to match Windows (dpi_factor)")
+{
+    // Windows multiplies the output by output_dpi_adjustment_factor * dpi_factor
+    // (rawaccel.hpp:412), where dpi_factor = NORMALIZED_DPI/device_dpi. The agent
+    // folds dpi_factor into output_dpi_adj_q16, so a configured device DPI must
+    // make the kernel output track the oracle driven with the same dpi_factor.
+    // dev.dpi != 0 here, unlike every other parity test (which use dpi 0 ->
+    // dpi_factor 1 and so never exercised this multiply).
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.output_dpi = 1500;  // output_dpi_adjustment_factor 1.5
+
+    BpfMouseLayout layout{};
+    // dpi_factor = 1000/dpi, all exactly representable in Q16.16 so the parity
+    // tolerance stays tight: 0.625, 1.25, 2.0.
+    for (int dpi : {1600, 800, 500}) {
+        ra::device_config dev{};
+        dev.dpi = dpi;
+        double dpi_factor = ra::NORMALIZED_DPI / static_cast<double>(dpi);
+        LutBuildResult lut = build_lut(s, dev);
+        ra_bpf_config cfg = to_bpf_config(lut, layout);
+
+        // Across magnitudes and a couple of poll rates: the speed domain folds
+        // dpi_factor/dt, while the output folds dpi_factor (no dt). Both must
+        // compose correctly.
+        for (double dt : {0.5, 1.0, 2.0}) {
+            check_with(s, lut, cfg, 40, 0, 1e-2, 3e-3, dt, dpi_factor);
+            check_with(s, lut, cfg, 0, 90, 1e-2, 3e-3, dt, dpi_factor);
+            check_with(s, lut, cfg, 60, 80, 1e-2, 3e-3, dt, dpi_factor);
+        }
     }
 }
 
