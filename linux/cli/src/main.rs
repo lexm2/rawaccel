@@ -1,4 +1,5 @@
 mod client;
+mod daemon;
 
 use std::env;
 use std::fs;
@@ -38,14 +39,9 @@ const fn parse_env_int(s: &str) -> i32 {
     about = "rawaccel: launch the GUI (no command), or control rawaccel-agentd"
 )]
 struct Cli {
-    /// Path to the agent's control socket
-    #[arg(
-        long,
-        global = true,
-        env = "RAWACCEL_SOCKET",
-        default_value = "/run/rawaccel/control.sock"
-    )]
-    socket: PathBuf,
+    /// Path to the agent's control socket (overrides autodetection)
+    #[arg(long, global = true, env = "RAWACCEL_SOCKET")]
+    socket: Option<PathBuf>,
 
     /// Socket I/O timeout in seconds
     #[arg(long, global = true, default_value_t = 5)]
@@ -57,8 +53,16 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Launch the graphical interface (the default when no command is given)
+    /// Launch the graphical interface (the default when no command is given).
+    /// Starts rawaccel-agentd first if it is not already running.
     Gui,
+    /// Start rawaccel-agentd if it is not already running (uses sudo when the
+    /// daemon needs root)
+    Start,
+    /// Stop rawaccel-agentd (uses sudo)
+    Stop,
+    /// Restart rawaccel-agentd (uses sudo)
+    Restart,
     /// Push a settings.json to the agent (debounced 1s by the agent's WriteDelay)
     Apply {
         /// Path to a settings.json
@@ -88,23 +92,59 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    // No subcommand (or an explicit `gui`) launches the GUI, which connects to
-    // the agent itself -- so we must not open the control socket in that path.
-    let command = cli.command.unwrap_or(Command::Gui);
-    if matches!(command, Command::Gui) {
-        return launch_gui();
-    }
-
     let timeout = Duration::from_secs(cli.timeout);
-    let mut client = Client::connect(&cli.socket, timeout)?;
+    // No subcommand defaults to launching the GUI.
+    let command = cli.command.unwrap_or(Command::Gui);
 
     match command {
-        Command::Apply { file } => cmd_apply(&mut client, &file),
-        Command::Get { output } => cmd_get(&mut client, output.as_deref()),
-        Command::Version => cmd_version(&mut client),
-        Command::Status => cmd_status(&mut client),
-        Command::Gui => unreachable!("handled before connecting"),
+        // Plain `rawaccel` (and explicit `gui`) == start the daemon, then
+        // launch the GUI. A privilege failure here aborts before the GUI
+        // starts, surfacing the same hint as `rawaccel start` (the GUI is
+        // useless without a running agent).
+        Command::Gui => launch_gui_with_daemon(&cli.socket),
+        Command::Start => {
+            let socket = daemon::start(&cli.socket)?;
+            println!("rawaccel-agentd is running ({})", socket.display());
+            Ok(())
+        }
+        Command::Stop => {
+            if daemon::stop(&cli.socket)? {
+                println!("rawaccel-agentd stopped");
+            } else {
+                println!("rawaccel-agentd is not running");
+            }
+            Ok(())
+        }
+        Command::Restart => {
+            let socket = daemon::restart(&cli.socket)?;
+            println!("rawaccel-agentd restarted ({})", socket.display());
+            Ok(())
+        }
+        // Client RPCs connect to whichever socket is live.
+        other => {
+            let socket = daemon::connect_socket(&cli.socket);
+            let mut client = Client::connect(&socket, timeout)?;
+            match other {
+                Command::Apply { file } => cmd_apply(&mut client, &file),
+                Command::Get { output } => cmd_get(&mut client, output.as_deref()),
+                Command::Version => cmd_version(&mut client),
+                Command::Status => cmd_status(&mut client),
+                Command::Gui | Command::Start | Command::Stop | Command::Restart => {
+                    unreachable!("handled above")
+                }
+            }
+        }
     }
+}
+
+// Start rawaccel-agentd (no-op if already up), pin RAWACCEL_SOCKET to the
+// socket it serves so the GUI and its .NET backend connect to that exact
+// agent, then hand off to the GUI.
+fn launch_gui_with_daemon(socket: &Option<PathBuf>) -> Result<()> {
+    let resolved = daemon::start(socket)
+        .context("could not start rawaccel-agentd; the GUI needs it to apply settings")?;
+    env::set_var("RAWACCEL_SOCKET", &resolved);
+    launch_gui()
 }
 
 // Replace this process with the rawaccel GUI. Resolution order: an explicit
@@ -183,8 +223,9 @@ fn find_gui_binary() -> Option<PathBuf> {
 }
 
 // Walk up from the executable, then the cwd, looking for the source tree
-// (userinterface/userinterface.csproj) so the dev fallback can `dotnet run`.
-fn find_repo_root() -> Option<PathBuf> {
+// (userinterface/userinterface.csproj) so the dev fallback can `dotnet run`
+// and the daemon module can locate linux/build/rawaccel-agentd.
+pub(crate) fn find_repo_root() -> Option<PathBuf> {
     fn search(start: &Path) -> Option<PathBuf> {
         let mut dir = Some(start);
         while let Some(d) = dir {
