@@ -81,6 +81,8 @@ namespace userspace_backend_tests.ModelTests
             public void Deactivate() { }
 
             public double GetCurrentMouseSpeed() => 0;
+
+            public MouseSpeedSample GetCurrentMouseSpeedSample() => MouseSpeedSample.Zero;
         }
 
         private static (IBackEnd backEnd, CapturingDriver driver) BuildBackEndWithDefaults(
@@ -359,6 +361,53 @@ namespace userspace_backend_tests.ModelTests
                 "DriverConfig should reflect the tweaked Classic.Acceleration coefficient. " +
                 "If this fails with the default coefficient, EditableSettingsSelector is not " +
                 "propagating nested sub-model changes up to ProfileModel.");
+        }
+
+        [TestMethod]
+        public void Apply_SingleCurve_PopulatesBothAxes()
+        {
+            // Regression: MapProfileModelToDriver used to set only argsX, leaving argsY
+            // at its noaccel default. With the default by-component anisotropy mode
+            // (CombineXYComponents == false) the native math indexes Y through argsY,
+            // so vertical acceleration was silently dead while horizontal worked and
+            // the flat sens multipliers still applied. The single model curve must
+            // drive BOTH argsX and argsY.
+            var (backEnd, driver) = BuildBackEndWithDefaults();
+            var profile = backEnd.Profiles.Elements[0];
+
+            Assert.IsTrue(
+                profile.Acceleration.DefinitionType.TryUpdateModelDirectly(
+                    Acceleration.AccelerationDefinitionType.Formula),
+                "Flipping DefinitionType to Formula should succeed.");
+
+            var formulaAccel = (FormulaAccelModel)profile.Acceleration.GetSelectable(
+                Acceleration.AccelerationDefinitionType.Formula);
+
+            Assert.IsTrue(
+                formulaAccel.FormulaType.TryUpdateModelDirectly(
+                    FormulaAccel.AccelerationFormulaType.Classic),
+                "Flipping FormulaType to Classic should succeed.");
+
+            var classic = (ClassicAccelerationDefinitionModel)formulaAccel.GetSelectable(
+                FormulaAccel.AccelerationFormulaType.Classic);
+
+            const double expectedAcceleration = 0.123;
+            Assert.IsTrue(
+                classic.Acceleration.TryUpdateModelDirectly(expectedAcceleration),
+                "Classic.Acceleration update should succeed.");
+
+            var cfg = ApplyAndCapture(backEnd, driver);
+
+            // X is the historically-tested axis; Y is the regression guard.
+            Assert.AreEqual(AccelMode.classic, cfg.profiles[0].argsY.mode,
+                "argsY must carry the same accel mode as argsX, or vertical acceleration " +
+                "is dead in by-component mode (argsY left at the noaccel default).");
+            Assert.AreEqual(expectedAcceleration, cfg.profiles[0].argsY.acceleration,
+                "argsY must carry the same curve coefficient as argsX.");
+            Assert.AreEqual(cfg.profiles[0].argsX.mode, cfg.profiles[0].argsY.mode,
+                "The single model curve must drive both axes identically.");
+            Assert.AreEqual(cfg.profiles[0].argsX.acceleration, cfg.profiles[0].argsY.acceleration,
+                "The single model curve must drive both axes identically.");
         }
 
         // Regression: a saved ClassicAccel used to StackOverflow on Load via
