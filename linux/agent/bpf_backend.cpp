@@ -265,7 +265,17 @@ bool BpfBackend::populate_maps(Slot& slot,
                                const ra::modifier_settings& s,
                                const ra::device_config& c)
 {
-    auto lut = build_lut(s, c);
+    // build_lut throws when the profile uses a feature not yet ported to the
+    // kernel (rather than silently approximating it). Refuse the bind so the
+    // device stays pass-through and the reason is logged.
+    LutBuildResult lut;
+    try {
+        lut = build_lut(s, c);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "bpf backend: %s (%s left unaccelerated)\n",
+                     e.what(), slot.sysname.c_str());
+        return false;
+    }
 
     // The raw curve lives in lut_x/lut_y; weighting, output-DPI scaling, and
     // the HID layout are folded into the config struct by to_bpf_config.

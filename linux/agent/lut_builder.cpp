@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <stdexcept>
 
 namespace rawaccel_agent {
 
@@ -80,8 +81,45 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.domain_w_y_q16     = q16_round(prof.domain_weights.y);
     out.output_dpi_adj_q16 = q16_round(prof.output_dpi / ra::NORMALIZED_DPI);
     out.yx_ratio_q16       = q16_round(prof.yx_output_dpi_ratio);
+    out.lr_ratio_q16       = q16_round(prof.lr_output_dpi_ratio);
+    out.ud_ratio_q16       = q16_round(prof.ud_output_dpi_ratio);
 
-    // flags / dist_mode are reserved for Phase 1; left at 0 for now.
+    // Rotation direction = {cos, sin}(degrees_rotation); init_data already
+    // computed it into data.rot_direction. Flag mirrors modifier_flags.
+    out.rot_cos_q16 = q16_round(stateless.data.rot_direction.x);
+    out.rot_sin_q16 = q16_round(stateless.data.rot_direction.y);
+
+    // Flags fire only when the corresponding setting is non-trivial, matching
+    // modifier_flags.
+    out.flags = 0;
+    if (prof.lr_output_dpi_ratio != 1.0) out.flags |= RA_F_APPLY_DIR_MUL_X;
+    if (prof.ud_output_dpi_ratio != 1.0) out.flags |= RA_F_APPLY_DIR_MUL_Y;
+    if (prof.degrees_rotation != 0.0)    out.flags |= RA_F_APPLY_ROTATE;
+
+    // Distance mode mirrors speed_processor::init.
+    const auto& spa = prof.speed_processor_args;
+    if (!spa.whole)
+        out.dist_mode = RA_DIST_SEPARATE;
+    else if (spa.lp_norm >= ra::MAX_NORM || spa.lp_norm <= 0)
+        out.dist_mode = RA_DIST_MAX;
+    else if (spa.lp_norm != 2)
+        out.dist_mode = RA_DIST_LP;
+    else
+        out.dist_mode = RA_DIST_EUCLIDEAN;
+
+    // Phase 1 in progress: refuse profiles whose features are not yet ported
+    // to the kernel rather than silently approximating them. Each guard is
+    // removed as the matching step lands (Lp pow, P1.4 clamp, P1.5 directional
+    // weighting, P1.6 snap).
+    if (out.dist_mode == RA_DIST_LP)
+        throw std::runtime_error("rawaccel: Lp distance norm not yet supported on Linux");
+    if (prof.degrees_snap != 0.0)
+        throw std::runtime_error("rawaccel: angle snapping not yet supported on Linux");
+    if (prof.speed_max > 0.0 && prof.speed_min <= prof.speed_max)
+        throw std::runtime_error("rawaccel: speed clamp not yet supported on Linux");
+    if (spa.whole && prof.range_weights.x != prof.range_weights.y)
+        throw std::runtime_error(
+            "rawaccel: whole-mode directional range weighting not yet supported on Linux");
 
     for (int i = 0; i < RA_LUT_SIZE; ++i) {
         double v = static_cast<double>(i);
@@ -118,6 +156,10 @@ ra_bpf_config to_bpf_config(const LutBuildResult& lut,
     cfg.domain_w_y_q16    = lut.domain_w_y_q16;
     cfg.output_dpi_adj_q16 = lut.output_dpi_adj_q16;
     cfg.yx_ratio_q16      = lut.yx_ratio_q16;
+    cfg.lr_ratio_q16      = lut.lr_ratio_q16;
+    cfg.ud_ratio_q16      = lut.ud_ratio_q16;
+    cfg.rot_cos_q16       = lut.rot_cos_q16;
+    cfg.rot_sin_q16       = lut.rot_sin_q16;
 
     return cfg;
 }

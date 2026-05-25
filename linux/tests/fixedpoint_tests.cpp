@@ -77,9 +77,27 @@ void check_axis(const ra::modifier_settings& s, std::int32_t dx, std::int32_t dy
 RA_TEST("Fixed: noaccel passes pure-axis input through unchanged")
 {
     ra::modifier_settings s{};
+    // Both signs: exercises the Q16.16 working-vector representation.
     for (std::int32_t v : {1, 5, 20, 100, 800}) {
         check_axis(s, v, 0);
         check_axis(s, 0, v);
+        check_axis(s, -v, 0);
+        check_axis(s, 0, -v);
+    }
+}
+
+RA_TEST("Fixed: directional output DPI scales only the negative direction")
+{
+    ra::modifier_settings s{};
+    s.prof.lr_output_dpi_ratio = 1.25;  // X, leftward (output < 0)
+    s.prof.ud_output_dpi_ratio = 0.8;   // Y, downward (output < 0)
+
+    for (std::int32_t v : {10, 50, 300}) {
+        // Positive direction is untouched; negative direction is scaled.
+        check_axis(s, v, 0);
+        check_axis(s, -v, 0);
+        check_axis(s, 0, v);
+        check_axis(s, 0, -v);
     }
 }
 
@@ -89,6 +107,21 @@ RA_TEST("Fixed: output_dpi 2000 doubles both axes")
     s.prof.output_dpi = 2000;
     check_axis(s, 50, 0);
     check_axis(s, 0, 50);
+}
+
+RA_TEST("Fixed: rotation matches the oracle (noaccel, speed-independent)")
+{
+    // noaccel scale is 1 at every speed, so the Phase 0 max() speed metric is
+    // irrelevant here and rotation parity holds for arbitrary (incl diagonal)
+    // input. Rotated-vector + accel-curve parity arrives with P1.3 magnitude.
+    for (double deg : {15.0, 45.0, -30.0, 90.0}) {
+        ra::modifier_settings s{};
+        s.prof.degrees_rotation = deg;
+        check_axis(s, 100, 0);
+        check_axis(s, 0, 100);
+        check_axis(s, 60, 80);
+        check_axis(s, -50, 40);
+    }
 }
 
 RA_TEST("Fixed: classic curve matches the oracle on each axis")
@@ -105,7 +138,7 @@ RA_TEST("Fixed: classic curve matches the oracle on each axis")
     }
 }
 
-RA_TEST("Fixed: asymmetric range_weights dampen Y but not X")
+RA_TEST("Fixed: separate mode applies asymmetric range_weights per axis")
 {
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
@@ -113,11 +146,61 @@ RA_TEST("Fixed: asymmetric range_weights dampen Y but not X")
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y = s.prof.accel_x;
     s.prof.range_weights = vec2d{1.0, 0.5};
+    // Separate (by-component) mode: per-axis weight, no directional blend.
+    // (Whole-mode asymmetric weighting needs directional weighting, P1.5.)
+    s.prof.speed_processor_args.whole = false;
 
     for (std::int32_t v : {5, 20, 100, 400}) {
         check_axis(s, v, 0);
         check_axis(s, 0, v);
+        check_axis(s, v, v);
     }
+}
+
+RA_TEST("Fixed: whole euclidean curve matches oracle on diagonals")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;  // whole mode uses accel_x for both axes
+    // default speed_processor_args: whole, lp_norm 2 -> euclidean magnitude
+
+    check_axis(s, 30, 40);     // |v| = 50
+    check_axis(s, 60, 80);     // |v| = 100
+    check_axis(s, -90, 120);   // |v| = 150
+    check_axis(s, 200, 200);
+}
+
+RA_TEST("Fixed: separate mode curve matches oracle on diagonals")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y.mode = ra::accel_mode::classic;
+    s.prof.accel_y.acceleration = 0.02;   // different Y curve
+    s.prof.accel_y.exponent_classic = 2.0;
+    s.prof.speed_processor_args.whole = false;
+
+    check_axis(s, 30, 40);
+    check_axis(s, 60, 80);
+    check_axis(s, -90, 120);
+}
+
+RA_TEST("Fixed: max distance mode matches oracle on diagonals")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    // lp_norm >= MAX_NORM -> distance_mode::max
+    s.prof.speed_processor_args.lp_norm = 16.0;
+
+    check_axis(s, 30, 40);
+    check_axis(s, 80, 60);
+    check_axis(s, -120, 90);
 }
 
 RA_TEST("Fixed: yx_output_dpi_ratio scales the Y axis")

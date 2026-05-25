@@ -43,6 +43,10 @@ struct LutBuildResult {
     std::int32_t domain_w_y_q16    = 0;
     std::int32_t output_dpi_adj_q16 = 0;
     std::int32_t yx_ratio_q16      = 0;
+    std::int32_t lr_ratio_q16      = 0;
+    std::int32_t ud_ratio_q16      = 0;
+    std::int32_t rot_cos_q16       = 0;
+    std::int32_t rot_sin_q16       = 0;
 
     // modifier_flags bitfield + distance mode (RA_F_* / RA_DIST_*). Reserved
     // for Phase 1; emitted now so the config layout is stable.

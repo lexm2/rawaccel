@@ -152,36 +152,35 @@ int BPF_PROG(rawaccel_hid_device_event,
         return 0;  /* idle packet, no carry update */
     }
 
-    /* Per-packet pipeline, mirroring ra_modify_q16_flat in
-     * rawaccel_fixedpoint.h step for step. The only divergence is the LUT
-     * read: a BPF array-map pointer cannot stride, so each entry is fetched
-     * on its own and fed into the shared ra_q16_lerp. Keeping the arithmetic
-     * in shared helpers lets the host parity tests validate this exact path. */
-    __s32 v  = ra_velocity_q16(dx, dy, cfg->dpi_norm_q16);
-    __s32 sv = ra_ema_step(&st->smoothed_v_q16, v, cfg->smooth_alpha_q16);
+    /* read_signed's 8- vs 16-bit branch leaves dx/dy with different value
+     * ranges; without this the two ranges never merge and double the verifier
+     * state count through every downstream branch. The barrier collapses them
+     * to one unbounded-scalar state (dx/dy are only scaled, never used as
+     * pointer offsets, so losing the range bound is safe). */
+    RA_BARRIER(dx);
+    RA_BARRIER(dy);
 
-    /* Per-axis domain weighting folds into the LUT-index speed. */
-    __s32 sx = ra_mul_q16(sv, cfg->domain_w_x_q16);
-    __s32 sy = ra_mul_q16(sv, cfg->domain_w_y_q16);
-
+    /* Per-packet pipeline. ra_pre_lut / ra_post_lut (rawaccel_fixedpoint.h)
+     * are shared with the host parity tests; the only kernel-specific step is
+     * the LUT read, since a BPF array-map pointer cannot stride past one
+     * element. Each entry is fetched on its own and fed into ra_q16_lerp. */
+    __s64 inx, iny;
     __u32 ix, iy;
     __s32 fx, fy;
-    ra_lut_index(sx, cfg->lut_step_q16, cfg->lut_max_q16, &ix, &fx);
-    ra_lut_index(sy, cfg->lut_step_q16, cfg->lut_max_q16, &iy, &fy);
+    __u8 single_scale;
+    ra_pre_lut(cfg, st, dx, dy, &inx, &iny, &ix, &fx, &iy, &fy, &single_scale);
 
     __s32 raw_x = ra_q16_lerp(q16_lookup(&ra_lut_x, ix),
                               q16_lookup(&ra_lut_x, ix + 1), fx);
     __s32 raw_y = ra_q16_lerp(q16_lookup(&ra_lut_y, iy),
                               q16_lookup(&ra_lut_y, iy + 1), fy);
 
-    __s32 eff_x = ra_axis_eff_scale(raw_x, cfg->range_w_x_q16,
-                                    cfg->output_dpi_adj_q16, RA_Q16_ONE);
-    __s32 eff_y = ra_axis_eff_scale(raw_y, cfg->range_w_y_q16,
-                                    cfg->output_dpi_adj_q16, cfg->yx_ratio_q16);
+    __s64 acc_x, acc_y;
+    ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, &acc_x, &acc_y);
 
-    /* Scaled, carry-accumulated output in Q16.16. */
-    __s64 out_x_q16 = (__s64)dx * eff_x + (__s64)st->carry_x_q16;
-    __s64 out_y_q16 = (__s64)dy * eff_y + (__s64)st->carry_y_q16;
+    /* Carry-accumulated output in Q16.16. */
+    __s64 out_x_q16 = acc_x + (__s64)st->carry_x_q16;
+    __s64 out_y_q16 = acc_y + (__s64)st->carry_y_q16;
 
     __s32 out_x = (__s32)(out_x_q16 >> RA_Q16_SHIFT);
     __s32 out_y = (__s32)(out_y_q16 >> RA_Q16_SHIFT);

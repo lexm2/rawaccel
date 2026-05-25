@@ -86,12 +86,23 @@ struct ra_bpf_config {
     __s32 domain_w_y_q16;   /* domain_weights.y */
     __s32 output_dpi_adj_q16; /* output_dpi / NORMALIZED_DPI */
     __s32 yx_ratio_q16;     /* yx_output_dpi_ratio (applied to Y) */
+
+    /* Directional output-DPI multipliers, applied to a component only when
+     * the post-scale output for that axis is negative (modifier::modify). */
+    __s32 lr_ratio_q16;     /* lr_output_dpi_ratio (X when output < 0) */
+    __s32 ud_ratio_q16;     /* ud_output_dpi_ratio (Y when output < 0) */
+
+    /* Rotation direction vector = {cos, sin}(degrees_rotation), precomputed
+     * by the agent (mirrors modifier_settings::data::rot_direction). Applied
+     * to the working vector before everything else when RA_F_APPLY_ROTATE. */
+    __s32 rot_cos_q16;
+    __s32 rot_sin_q16;
 };
 
 #ifndef __BPF__
 /* Host side is always C++ (agent + tests); BPF side skips this. Catches
  * accidental padding/layout drift between agent and kernel. */
-static_assert(sizeof(struct ra_bpf_config) == 56,
+static_assert(sizeof(struct ra_bpf_config) == 72,
               "ra_bpf_config layout changed; update kernel + agent in lockstep");
 #endif
 

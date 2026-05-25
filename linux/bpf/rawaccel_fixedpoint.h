@@ -26,9 +26,25 @@
 
 #ifdef __BPF__
 #define RA_FP_INLINE static __always_inline
+/* Expensive helpers are compiled as BPF-to-BPF subprograms (verified once)
+ * instead of inlined into every control-flow path, which would multiply the
+ * verifier's processed-instruction count and trip the complexity limit
+ * (-E2BIG). On the host they are ordinary inline functions. */
+#define RA_FP_NOINLINE static __noinline
 #else
 #include <cstdint>
 #define RA_FP_INLINE static inline
+#define RA_FP_NOINLINE static inline
+#endif
+
+/* Optimization barrier. On BPF it forces a value to a register and stops clang
+ * from "seeing through" an arithmetic sign-mask and reconstructing it as a
+ * conditional branch (which, inside a loop, explodes the verifier's path
+ * count). A no-op on the host. */
+#ifdef __BPF__
+#define RA_BARRIER(x) asm volatile("" : "+r"(x))
+#else
+#define RA_BARRIER(x) ((void)0)
 #endif
 
 /* ---- scalar primitives --------------------------------------------- */
@@ -52,24 +68,78 @@ RA_FP_INLINE __s32 ra_q16_lerp(__s32 a, __s32 b, __s32 frac_q16)
 
 /* ---- pipeline stages ----------------------------------------------- */
 
-/* Phase 0 velocity metric: max(|dx|,|dy|) scaled by the DPI normalization
- * factor, producing Q16.16 in/s. (Phase 1 replaces this with true magnitude
- * and the configured distance mode.) */
-RA_FP_INLINE __s32 ra_velocity_q16(__s32 dx, __s32 dy, __s32 dpi_norm_q16)
+/* Rotate a Q16.16 vector by the precomputed direction {cos, sin}. Mirrors
+ * common/math-vec2.hpp rotate(): {x*cos - y*sin, x*sin + y*cos}. */
+RA_FP_INLINE void ra_rotate_q16(__s64 *x, __s64 *y, __s32 cos_q16, __s32 sin_q16)
 {
-    __s32 ax = ra_abs_s32(dx);
-    __s32 ay = ra_abs_s32(dy);
-    __s32 v_counts = ax > ay ? ax : ay;
-    /* counts(integer) * Q16 == Q16 */
-    return (__s32)((__s64)v_counts * (__s64)dpi_norm_q16);
+    __s64 rx = (*x * (__s64)cos_q16 - *y * (__s64)sin_q16) >> RA_Q16_SHIFT;
+    __s64 ry = (*x * (__s64)sin_q16 + *y * (__s64)cos_q16) >> RA_Q16_SHIFT;
+    *x = rx;
+    *y = ry;
+}
+
+/* Saturate a 64-bit value into signed 32-bit range. Speeds past this are far
+ * beyond lut_max and get clamped at index time anyway. */
+RA_FP_INLINE __s32 ra_sat_s32(__s64 v)
+{
+    if (v > 0x7fffffff) return 0x7fffffff;
+    if (v < -0x7fffffff) return -0x7fffffff;
+    return (__s32)v;
+}
+
+/* Integer sqrt of a u64, digit-by-digit, fixed 32-iteration loop.
+ *
+ * BRANCHLESS on purpose: a data-dependent `if` in this loop would fork the
+ * verifier at every iteration (~2^32 paths -> the load fails with -E2BIG), so
+ * the "n >= trial" decision is turned into an all-ones / all-zero mask via the
+ * sign bit and applied arithmetically. Callers must keep n < 2^63 so the
+ * signed compare is valid (ra_magnitude_q16 bounds its inputs for this). */
+/* Euclidean magnitude of a Q16.16 vector, in Q16.16. (x*2^16)^2 + (y*2^16)^2
+ * is mag^2 << 32, so the integer sqrt of that sum is mag << 16.
+ *
+ * Computed by Newton's method seeded with max(ax, ay): the true root lies in
+ * [max, sqrt(2)*max], so four iterations converge to full Q16.16 precision.
+ * Newton's loop is branchless (unsigned division, no comparisons), which keeps
+ * it short and keeps the verifier's processed-instruction count flat -- a
+ * digit-by-digit sqrt is ~30 iterations and was re-walked per call-site state.
+ * Inputs are bounded to 2^30 so ax^2 + ay^2 stays within u64 and anything past
+ * lut_max collapses to the same index anyway. __noinline: verified once. */
+RA_FP_NOINLINE __s32 ra_magnitude_q16(__s64 x_q16, __s64 y_q16)
+{
+    __u64 ax = (__u64)(x_q16 < 0 ? -x_q16 : x_q16);
+    __u64 ay = (__u64)(y_q16 < 0 ? -y_q16 : y_q16);
+    if (ax > 0x40000000ULL) ax = 0x40000000ULL;
+    if (ay > 0x40000000ULL) ay = 0x40000000ULL;
+
+    __u64 n = ax * ax + ay * ay;           /* mag^2 << 32 */
+    __u64 x = ax > ay ? ax : ay;           /* seed in [mag/sqrt2, mag] */
+    if (x == 0) return 0;                  /* n == 0 */
+
+    x = (x + n / x) >> 1;
+    x = (x + n / x) >> 1;
+    x = (x + n / x) >> 1;
+    x = (x + n / x) >> 1;
+
+    return x > 0x7fffffff ? 0x7fffffff : (__s32)x;
+}
+
+/* Per-axis abs weighted velocity (modify's abs_weighted_vel component):
+ * |component| * dpi_norm * domain_weight, in Q16.16 in/s, saturated >= 0. */
+RA_FP_NOINLINE __s32 ra_axis_speed_q16(__s64 comp_q16, __s32 dpi_norm_q16,
+                                       __s32 domain_w_q16)
+{
+    __s64 a = comp_q16 < 0 ? -comp_q16 : comp_q16;        /* |comp| Q16 counts */
+    __s64 v = (a * (__s64)dpi_norm_q16) >> RA_Q16_SHIFT;  /* Q16 in/s */
+    v = (v * (__s64)domain_w_q16) >> RA_Q16_SHIFT;        /* weighted */
+    return ra_sat_s32(v);
 }
 
 /* Single exponential moving average on the velocity. Mutates *smoothed_q16
  * and returns the new value (clamped >= 0). alpha in [0, RA_Q16_ONE];
  * alpha == RA_Q16_ONE (the no-smoothing default) makes this an identity that
  * just latches the sample, matching the halflife-zeroed common/ path. */
-RA_FP_INLINE __s32 ra_ema_step(__s32 *smoothed_q16, __s32 sample_q16,
-                               __s32 alpha_q16)
+RA_FP_NOINLINE __s32 ra_ema_step(__s32 *smoothed_q16, __s32 sample_q16,
+                                 __s32 alpha_q16)
 {
     if (alpha_q16 < 0) alpha_q16 = 0;
     if (alpha_q16 > RA_Q16_ONE) alpha_q16 = RA_Q16_ONE;
@@ -83,8 +153,8 @@ RA_FP_INLINE __s32 ra_ema_step(__s32 *smoothed_q16, __s32 sample_q16,
  * operands are non-negative so the divisions are unsigned (the BPF verifier
  * rejects signed division). idx is clamped to [0, RA_LUT_SIZE - 2] so idx+1
  * is always in range for the lerp. */
-RA_FP_INLINE void ra_lut_index(__s32 speed_q16, __s32 step_q16, __s32 max_q16,
-                               __u32 *idx_out, __s32 *frac_out)
+RA_FP_NOINLINE void ra_lut_index(__s32 speed_q16, __s32 step_q16, __s32 max_q16,
+                                 __u32 *idx_out, __s32 *frac_out)
 {
     if (speed_q16 < 0) speed_q16 = 0;
     if (max_q16 > 0 && speed_q16 >= max_q16) speed_q16 = max_q16 - 1;
@@ -124,39 +194,113 @@ RA_FP_INLINE __s32 ra_axis_eff_scale(__s32 raw_q16, __s32 range_w_q16,
     return scale;
 }
 
-/* Full per-packet pipeline against a flat LUT, producing the post-
- * acceleration output vector in Q16.16 (before fractional carry, which the
- * caller owns). The kernel event handler mirrors these exact steps with
- * map-based LUT reads. */
+/* The pipeline is split around the LUT fetch so the kernel program and the
+ * host tests share everything except how the table is read (map lookups vs a
+ * flat array). ra_pre_lut and ra_post_lut are the shared, host-tested halves;
+ * the working vector (inx/iny, Q16.16) carries the per-packet transforms that
+ * later phases add (rotation, snap, speed clamp) from one half to the other.
+ *
+ * Stage 1: raw counts -> working vector + per-axis curve LUT indices. */
+RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
+                             struct ra_bpf_state *st,
+                             __s32 dx, __s32 dy,
+                             __s64 *inx_q16, __s64 *iny_q16,
+                             __u32 *ix, __s32 *fx, __u32 *iy, __s32 *fy,
+                             __u8 *single_scale)
+{
+    /* Working vector starts as the raw counts in Q16.16. Snap and speed clamp
+     * (later Phase 1 steps) will also transform (inx, iny) here. */
+    __s64 inx = (__s64)dx << RA_Q16_SHIFT;
+    __s64 iny = (__s64)dy << RA_Q16_SHIFT;
+
+    /* Rotation is the first transform in modifier::modify. Velocity and the
+     * curve index are derived from the rotated vector. */
+    if (cfg->flags & RA_F_APPLY_ROTATE)
+        ra_rotate_q16(&inx, &iny, cfg->rot_cos_q16, cfg->rot_sin_q16);
+
+    *inx_q16 = inx;
+    *iny_q16 = iny;
+
+    /* Per-axis abs weighted velocity (modify's abs_weighted_vel). */
+    __s32 awv_x = ra_axis_speed_q16(inx, cfg->dpi_norm_q16, cfg->domain_w_x_q16);
+    __s32 awv_y = ra_axis_speed_q16(iny, cfg->dpi_norm_q16, cfg->domain_w_y_q16);
+
+    if (cfg->dist_mode == RA_DIST_SEPARATE) {
+        /* Separate: each axis indexes its own curve at its own speed. Per-axis
+         * input smoothing is a Phase 2 addition; with halflife 0 the EMA is an
+         * identity so it is omitted here. */
+        ra_lut_index(awv_x, cfg->lut_step_q16, cfg->lut_max_q16, ix, fx);
+        ra_lut_index(awv_y, cfg->lut_step_q16, cfg->lut_max_q16, iy, fy);
+        *single_scale = 0;
+    } else {
+        /* Whole modes: one aggregate speed, one scale (from accel_x) applied
+         * to the whole vector. */
+        __s32 S;
+        if (cfg->dist_mode == RA_DIST_MAX)
+            S = awv_x > awv_y ? awv_x : awv_y;
+        else
+            /* euclidean. The agent rejects Lp configs, so RA_DIST_LP never
+             * reaches the kernel; this branch only ever sees euclidean. */
+            S = ra_magnitude_q16(awv_x, awv_y);
+
+        __s32 sv = ra_ema_step(&st->smoothed_v_q16, S, cfg->smooth_alpha_q16);
+        ra_lut_index(sv, cfg->lut_step_q16, cfg->lut_max_q16, ix, fx);
+        *iy = *ix;            /* y reuses the accel_x curve; raw_y is discarded */
+        *fy = *fx;
+        *single_scale = 1;
+    }
+}
+
+/* Stage 2: working vector + raw per-axis curve scales -> output vector in
+ * Q16.16 (before fractional carry, which the caller owns). Applies range
+ * weighting, output-DPI scaling, and the directional output-DPI multipliers.
+ * In a whole mode (single_scale) both axes use the accel_x curve and
+ * range_weights.x, matching modify; separate mode uses each axis's own. */
+RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
+                              __s64 inx_q16, __s64 iny_q16,
+                              __s32 raw_x, __s32 raw_y, __u8 single_scale,
+                              __s64 *out_x_q16, __s64 *out_y_q16)
+{
+    __s32 ry = single_scale ? raw_x : raw_y;
+    __s32 wy = single_scale ? cfg->range_w_x_q16 : cfg->range_w_y_q16;
+
+    __s32 eff_x = ra_axis_eff_scale(raw_x, cfg->range_w_x_q16,
+                                    cfg->output_dpi_adj_q16, RA_Q16_ONE);
+    __s32 eff_y = ra_axis_eff_scale(ry, wy,
+                                    cfg->output_dpi_adj_q16, cfg->yx_ratio_q16);
+
+    __s64 ox = (inx_q16 * (__s64)eff_x) >> RA_Q16_SHIFT;
+    __s64 oy = (iny_q16 * (__s64)eff_y) >> RA_Q16_SHIFT;
+
+    /* Directional output DPI (modifier::modify): scale a component only when
+     * its post-scale output is negative. */
+    if ((cfg->flags & RA_F_APPLY_DIR_MUL_X) && ox < 0)
+        ox = (ox * (__s64)cfg->lr_ratio_q16) >> RA_Q16_SHIFT;
+    if ((cfg->flags & RA_F_APPLY_DIR_MUL_Y) && oy < 0)
+        oy = (oy * (__s64)cfg->ud_ratio_q16) >> RA_Q16_SHIFT;
+
+    *out_x_q16 = ox;
+    *out_y_q16 = oy;
+}
+
+/* Full per-packet pipeline against a flat LUT (host tests + the reference
+ * composition the kernel event handler mirrors with map-based LUT reads). */
 RA_FP_INLINE void ra_modify_q16_flat(const struct ra_bpf_config *cfg,
                                      struct ra_bpf_state *st,
                                      const __s32 *lut_x, const __s32 *lut_y,
                                      __s32 dx, __s32 dy,
                                      __s64 *out_x_q16, __s64 *out_y_q16)
 {
-    __s32 v  = ra_velocity_q16(dx, dy, cfg->dpi_norm_q16);
-    __s32 sv = ra_ema_step(&st->smoothed_v_q16, v, cfg->smooth_alpha_q16);
-
-    /* Per-axis domain weighting folds into the LUT-index speed, reproducing
-     * how the old baked LUT sampled the curve at speed * domain_weight. */
-    __s32 sx = ra_mul_q16(sv, cfg->domain_w_x_q16);
-    __s32 sy = ra_mul_q16(sv, cfg->domain_w_y_q16);
-
+    __s64 inx, iny;
     __u32 ix, iy;
     __s32 fx, fy;
-    ra_lut_index(sx, cfg->lut_step_q16, cfg->lut_max_q16, &ix, &fx);
-    ra_lut_index(sy, cfg->lut_step_q16, cfg->lut_max_q16, &iy, &fy);
+    __u8 single_scale;
+    ra_pre_lut(cfg, st, dx, dy, &inx, &iny, &ix, &fx, &iy, &fy, &single_scale);
 
     __s32 raw_x = ra_lut_sample(lut_x, ix, fx);
     __s32 raw_y = ra_lut_sample(lut_y, iy, fy);
 
-    __s32 eff_x = ra_axis_eff_scale(raw_x, cfg->range_w_x_q16,
-                                    cfg->output_dpi_adj_q16, RA_Q16_ONE);
-    __s32 eff_y = ra_axis_eff_scale(raw_y, cfg->range_w_y_q16,
-                                    cfg->output_dpi_adj_q16, cfg->yx_ratio_q16);
-
-    *out_x_q16 = (__s64)dx * (__s64)eff_x;
-    *out_y_q16 = (__s64)dy * (__s64)eff_y;
+    ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, out_x_q16, out_y_q16);
 }
 
 #endif /* RAWACCEL_FIXEDPOINT_H */

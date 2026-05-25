@@ -97,8 +97,10 @@ RA_TEST("Lut: anisotropic range_weights live in config, not the raw LUT")
     // Same curve on both axes; only the range weight differs. Weighting is
     // applied in-kernel now, so the raw per-axis LUTs are identical and the
     // asymmetry lives in range_w_*_q16. (fixedpoint_tests confirms the kernel
-    // math then diverges X vs Y.)
+    // math then diverges X vs Y.) Use separate mode: whole-mode asymmetric
+    // weights need directional weighting (P1.5), which build_lut still rejects.
     s.prof.range_weights = vec2d{1.0, 0.5};
+    s.prof.speed_processor_args.whole = false;
 
     ra::device_config dev{};
     auto r = build_lut(s, dev);
@@ -109,6 +111,31 @@ RA_TEST("Lut: anisotropic range_weights live in config, not the raw LUT")
     RA_CHECK(q16_near(r.range_w_x_q16, 1.0, 1e-9));
     RA_CHECK(q16_near(r.range_w_y_q16, 0.5, 1e-9));
     RA_CHECK(r.range_w_x_q16 != r.range_w_y_q16);
+}
+
+RA_TEST("Lut: features not yet ported throw instead of silently approximating")
+{
+    auto throws = [](const ra::modifier_settings& s) {
+        ra::device_config dev{};
+        try { (void)build_lut(s, dev); return false; }
+        catch (...) { return true; }
+    };
+
+    // Lp distance norm (lp_norm in (0,16), != 2, whole mode).
+    { ra::modifier_settings s{}; s.prof.speed_processor_args.lp_norm = 3.0;
+      RA_CHECK(throws(s)); }
+    // Angle snapping.
+    { ra::modifier_settings s{}; s.prof.degrees_snap = 5.0;
+      RA_CHECK(throws(s)); }
+    // Speed clamp.
+    { ra::modifier_settings s{}; s.prof.speed_min = 1.0; s.prof.speed_max = 10.0;
+      RA_CHECK(throws(s)); }
+    // Whole-mode directional (asymmetric) range weighting.
+    { ra::modifier_settings s{}; s.prof.range_weights = vec2d{1.0, 0.5};
+      RA_CHECK(throws(s)); }
+
+    // A plain supported profile still builds.
+    { ra::modifier_settings s{}; RA_CHECK(!throws(s)); }
 }
 
 RA_TEST("Lut: dpi_norm is NORMALIZED_DPI/dev_dpi when dpi is set")
