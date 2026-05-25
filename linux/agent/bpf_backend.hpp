@@ -72,7 +72,6 @@ private:
         // the kernel's Q16.16 telemetry into chart units without re-reading config.
         std::int32_t domain_w_x_q16 = RA_Q16_ONE;
         std::int32_t domain_w_y_q16 = RA_Q16_ONE;
-        std::uint8_t dist_mode = RA_DIST_EUCLIDEAN;
     };
 
     bool attach_node(const std::string& sysname);

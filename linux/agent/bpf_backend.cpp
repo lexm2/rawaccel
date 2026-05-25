@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #include <cerrno>
-#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -317,7 +316,6 @@ bool BpfBackend::populate_maps(Slot& slot,
     // Cache what current_speed_sample needs to convert the kernel's telemetry.
     slot.domain_w_x_q16 = cfg.domain_w_x_q16;
     slot.domain_w_y_q16 = cfg.domain_w_y_q16;
-    slot.dist_mode = cfg.dist_mode;
 
     int cfg_fd = bpf_map__fd(slot.config_map);
     int lutx_fd = bpf_map__fd(slot.lut_x_map);
@@ -447,17 +445,15 @@ SpeedSample BpfBackend::current_speed_sample() const
     const double dw_y = best->domain_w_y_q16 ? static_cast<double>(best->domain_w_y_q16)
                                              : static_cast<double>(RA_Q16_ONE);
 
+    // Always report the genuinely-distinct per-axis speeds (the BPF writes
+    // awv_x/awv_y separately in both whole and separate mode) plus the combined
+    // aggregate. The GUI decides which to show: x/y for the two per-axis lines,
+    // combined for the single line. Never force x == y - that coupled the two
+    // lines whenever the device ran in whole mode (the default).
     SpeedSample out;
-    if (best->dist_mode == RA_DIST_SEPARATE) {
-        out.x = static_cast<double>(best_state.tele_speed_x_q16) / dw_x;
-        out.y = static_cast<double>(best_state.tele_speed_y_q16) / dw_y;
-        out.combined = std::hypot(out.x, out.y);
-    } else {
-        // Whole mode: one aggregate indexes the accel_x curve; both lines sit there.
-        out.combined = static_cast<double>(best_state.tele_speed_combined_q16) / dw_x;
-        out.x = out.combined;
-        out.y = out.combined;
-    }
+    out.x = static_cast<double>(best_state.tele_speed_x_q16) / dw_x;
+    out.y = static_cast<double>(best_state.tele_speed_y_q16) / dw_y;
+    out.combined = static_cast<double>(best_state.tele_speed_combined_q16) / dw_x;
     return out;
 }
 
