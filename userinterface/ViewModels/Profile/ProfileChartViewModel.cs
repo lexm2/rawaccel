@@ -87,6 +87,10 @@ namespace userinterface.ViewModels.Profile
         private double targetSpeedX, targetSpeedY, targetSpeedCombined;
         private double dispSpeedX, dispSpeedY, dispSpeedCombined;
 
+        // DEBUG (temporary): prints rendered speed-line positions, throttled.
+        private const bool DebugSpeedLines = true;
+        private DateTime lastSpeedDebug = DateTime.MinValue;
+
         // Cached paint objects to avoid recreation
         private SolidColorPaint? cachedXStroke;
         private SolidColorPaint? cachedYStroke;
@@ -612,6 +616,15 @@ namespace userinterface.ViewModels.Profile
             }
 
             bool combined = CombineXY?.CurrentValidatedValue ?? true;
+
+            // DEBUG (temporary): the exact line positions being rendered.
+            if (DebugSpeedLines && (DateTime.UtcNow - lastSpeedDebug).TotalMilliseconds > 200)
+            {
+                lastSpeedDebug = DateTime.UtcNow;
+                Console.WriteLine(
+                    $"[speedline] render mode={(combined ? "combined" : "separate")} " +
+                    $"X={sample.X:F2} Y={sample.Y:F2} C={sample.Combined:F2}");
+            }
 
             // X/Y lines match the curve colors; combined uses a neutral theme color.
             Sections = combined

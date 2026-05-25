@@ -26,6 +26,10 @@ namespace userspace_backend.Driver.Linux
         private readonly string socketPath;
         private readonly ILogger<LinuxAgentDriver> logger;
 
+        // DEBUG (temporary): prints the agent's per-axis stats reply, throttled.
+        private const bool DebugSpeedLines = true;
+        private DateTime lastSpeedDebug = DateTime.MinValue;
+
         public LinuxAgentDriver(ILogger<LinuxAgentDriver>? logger = null)
         {
             this.logger = logger ?? NullLogger<LinuxAgentDriver>.Instance;
@@ -149,6 +153,14 @@ namespace userspace_backend.Driver.Linux
                 double combined = resp.Value<double?>("current_speed") ?? 0;
                 double x = resp.Value<double?>("current_speed_x") ?? 0;
                 double y = resp.Value<double?>("current_speed_y") ?? 0;
+
+                // DEBUG (temporary): show exactly what the agent sent, throttled.
+                if (DebugSpeedLines && (DateTime.UtcNow - lastSpeedDebug).TotalMilliseconds > 200)
+                {
+                    lastSpeedDebug = DateTime.UtcNow;
+                    Console.WriteLine($"[speedline] agent x={x:F2} y={y:F2} combined={combined:F2} raw={respJson}");
+                }
+
                 return new MouseSpeedSample(x, y, combined);
             }
             catch (Exception ex)
