@@ -13,7 +13,10 @@ SHIM="${BUILD_DIR}/librawaccel_common.so"
 
 SOCKET_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 SOCKET="${SOCKET_DIR}/rawaccel.sock"
-BACKEND="${1:-evdev}"
+# Backend: auto (probe kernel, pick bpf if >= 6.11 else exit), bpf (force
+# HID-BPF), or noop (control plane only, for tests). The old evdev backend
+# was removed; HID-BPF is the only data-plane transport.
+BACKEND="${1:-auto}"
 UID_NUM="$(id -u)"
 GID_NUM="$(id -g)"
 
@@ -36,10 +39,15 @@ cat <<EOF
 [run-dev-agent] socket path   : ${SOCKET}
 [run-dev-agent] shim path     : ${SHIM}
 
-For the GUI in another terminal:
-    RAWACCEL_SOCKET=${SOCKET} \\
-    LD_LIBRARY_PATH=${BUILD_DIR} \\
-    dotnet run --project userinterface
+The rawaccel binary launches the GUI and runs CLI commands; build it once with
+\`cargo build --release --manifest-path ${LINUX_DIR}/cli/Cargo.toml\`.
+
+For the GUI in another terminal (no args -> launches the GUI, finds the source
+tree and sets LD_LIBRARY_PATH itself):
+    RAWACCEL_SOCKET=${SOCKET} ${LINUX_DIR}/cli/target/release/rawaccel
+
+To check the agent from the CLI:
+    RAWACCEL_SOCKET=${SOCKET} ${LINUX_DIR}/cli/target/release/rawaccel status
 
 EOF
 

@@ -7,7 +7,7 @@ description = "Command-line client for the rawaccel-agentd unix-socket control p
 license = "MIT"
 
 [[bin]]
-name = "rawaccel-cli"
+name = "rawaccel"
 path = "src/main.rs"
 
 [dependencies]

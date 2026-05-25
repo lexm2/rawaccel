@@ -1,8 +1,9 @@
 mod client;
 
+use std::env;
 use std::fs;
-use std::path::PathBuf;
-use std::process::ExitCode;
+use std::path::{Path, PathBuf};
+use std::process::{Command as SysCommand, ExitCode};
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
@@ -32,9 +33,9 @@ const fn parse_env_int(s: &str) -> i32 {
 
 #[derive(Parser)]
 #[command(
-    name = "rawaccel-cli",
+    name = "rawaccel",
     version = concat!(env!("RA_VER_MAJOR"), ".", env!("RA_VER_MINOR"), ".", env!("RA_VER_PATCH")),
-    about = "Control client for rawaccel-agentd"
+    about = "rawaccel: launch the GUI (no command), or control rawaccel-agentd"
 )]
 struct Cli {
     /// Path to the agent's control socket
@@ -51,11 +52,13 @@ struct Cli {
     timeout: u64,
 
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
 enum Command {
+    /// Launch the graphical interface (the default when no command is given)
+    Gui,
     /// Push a settings.json to the agent (debounced 1s by the agent's WriteDelay)
     Apply {
         /// Path to a settings.json
@@ -78,22 +81,126 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("rawaccel-cli: {e:#}");
+            eprintln!("rawaccel: {e:#}");
             ExitCode::from(1)
         }
     }
 }
 
 fn run(cli: Cli) -> Result<()> {
+    // No subcommand (or an explicit `gui`) launches the GUI, which connects to
+    // the agent itself -- so we must not open the control socket in that path.
+    let command = cli.command.unwrap_or(Command::Gui);
+    if matches!(command, Command::Gui) {
+        return launch_gui();
+    }
+
     let timeout = Duration::from_secs(cli.timeout);
     let mut client = Client::connect(&cli.socket, timeout)?;
 
-    match cli.command {
+    match command {
         Command::Apply { file } => cmd_apply(&mut client, &file),
         Command::Get { output } => cmd_get(&mut client, output.as_deref()),
         Command::Version => cmd_version(&mut client),
         Command::Status => cmd_status(&mut client),
+        Command::Gui => unreachable!("handled before connecting"),
     }
+}
+
+// Replace this process with the rawaccel GUI. Resolution order: an explicit
+// RAWACCEL_GUI command, then a `rawaccel-gui` binary (beside this exe or on
+// PATH), then a dev fallback to `dotnet run --project userinterface` when run
+// from the source tree. The GUI talks to the agent on its own, so this path
+// never touches the control socket.
+fn launch_gui() -> Result<()> {
+    // 1. Explicit override: RAWACCEL_GUI holds the command line to run.
+    if let Some(raw) = env::var_os("RAWACCEL_GUI") {
+        let cow = raw.to_string_lossy();
+        let cmd = cow.trim();
+        if !cmd.is_empty() {
+            let mut parts = cmd.split_whitespace();
+            let prog = parts.next().unwrap(); // non-empty after trim
+            let mut c = SysCommand::new(prog);
+            c.args(parts);
+            eprintln!("rawaccel: launching GUI via $RAWACCEL_GUI ({cmd})");
+            return exec_or_err(&mut c);
+        }
+    }
+
+    // 2. A published GUI binary, beside this executable or on PATH.
+    if let Some(gui) = find_gui_binary() {
+        eprintln!("rawaccel: launching GUI ({})", gui.display());
+        return exec_or_err(&mut SysCommand::new(gui));
+    }
+
+    // 3. Dev fallback: run the source project with dotnet.
+    if let Some(repo) = find_repo_root() {
+        let project = repo.join("userinterface");
+        let mut c = SysCommand::new("dotnet");
+        c.arg("run").arg("--project").arg(&project);
+
+        // Let the preview P/Invoke find librawaccel_common.so in the build dir.
+        let shim_dir = repo.join("linux").join("build");
+        if shim_dir.is_dir() {
+            let mut ld = shim_dir.into_os_string();
+            if let Some(existing) = env::var_os("LD_LIBRARY_PATH") {
+                ld.push(":");
+                ld.push(existing);
+            }
+            c.env("LD_LIBRARY_PATH", ld);
+        }
+        eprintln!("rawaccel: launching GUI via dotnet ({})", project.display());
+        return exec_or_err(&mut c);
+    }
+
+    Err(anyhow!(
+        "could not locate the rawaccel GUI. Set RAWACCEL_GUI to the GUI command \
+         (for an installed build), or run from the source tree so `dotnet run \
+         --project userinterface` can be used."
+    ))
+}
+
+// exec() replaces the current process image and only returns on failure.
+fn exec_or_err(cmd: &mut SysCommand) -> Result<()> {
+    use std::os::unix::process::CommandExt;
+    Err(cmd.exec()).context("failed to launch the GUI")
+}
+
+// `rawaccel-gui` beside the current executable (installed layout) or on PATH.
+fn find_gui_binary() -> Option<PathBuf> {
+    if let Ok(exe) = env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let cand = dir.join("rawaccel-gui");
+            if cand.is_file() {
+                return Some(cand);
+            }
+        }
+    }
+    let paths = env::var_os("PATH")?;
+    env::split_paths(&paths)
+        .map(|d| d.join("rawaccel-gui"))
+        .find(|c| c.is_file())
+}
+
+// Walk up from the executable, then the cwd, looking for the source tree
+// (userinterface/userinterface.csproj) so the dev fallback can `dotnet run`.
+fn find_repo_root() -> Option<PathBuf> {
+    fn search(start: &Path) -> Option<PathBuf> {
+        let mut dir = Some(start);
+        while let Some(d) = dir {
+            if d.join("userinterface").join("userinterface.csproj").is_file() {
+                return Some(d.to_path_buf());
+            }
+            dir = d.parent();
+        }
+        None
+    }
+    if let Ok(exe) = env::current_exe() {
+        if let Some(found) = exe.parent().and_then(search) {
+            return Some(found);
+        }
+    }
+    env::current_dir().ok().and_then(|c| search(&c))
 }
 
 fn cmd_apply(client: &mut Client, file: &std::path::Path) -> Result<()> {
