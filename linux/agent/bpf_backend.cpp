@@ -255,7 +255,7 @@ bool BpfBackend::attach_node(const std::string& sysname)
         unsigned(slot->layout.dy_byte_size));
 
     // Eager attach with an identity config: device is live before any apply,
-    // and attach failures surface here, not as a silent no-op on a later apply.
+    // and attach failures surface here.
     if (!populate_maps(*slot, ra::modifier_settings{}, ra::device_config{})) {
         std::fprintf(stderr, "bpf backend: identity populate failed for %s\n",
                      sysname.c_str());
@@ -300,7 +300,7 @@ bool BpfBackend::populate_maps(Slot& slot,
                                const ra::modifier_settings& s,
                                const ra::device_config& c)
 {
-    // build_lut throws on an unported feature; refuse the bind (stay pass-through).
+    // build_lut throws on an unported feature; refuse the bind.
     LutBuildResult lut;
     try {
         lut = build_lut(s, c);
