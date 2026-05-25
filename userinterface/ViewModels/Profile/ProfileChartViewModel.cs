@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.Immutable;
+using Avalonia.Threading;
 using LiveChartsCore;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
@@ -46,6 +47,15 @@ namespace userinterface.ViewModels.Profile
         private const int StandardStrokeThickness = 1;
         private const float SubStrokeThickness = 0.5f;
 
+        // Speed-line smoothing: the poller delivers ~30 Hz targets; a UI-thread
+        // timer eases the displayed line position toward the latest target so it
+        // glides instead of teleporting. TimeConstant sets the glide speed (a
+        // larger value is smoother/laggier); Settle is the chart-unit threshold
+        // at which a line is treated as arrived (and a fading line snaps to 0).
+        private const int TweenIntervalMs = 16;            // ~60 Hz
+        private const double TweenTimeConstantMs = 60.0;
+        private const double SpeedSettleEpsilon = 0.05;
+
         // Color transparency values
         private const byte SubSeparatorAlpha = 100;
 
@@ -68,6 +78,14 @@ namespace userinterface.ViewModels.Profile
         private readonly PreviewChartRenderer previewRenderer;
         private readonly MouseSpeedPollingService speedPoller;
         private BE.IProfileModel currentProfileModel = null!;
+
+        // Speed-line tween state. target* is the latest poller sample; disp* is the
+        // eased position actually rendered. The tweenTimer pumps disp -> target and
+        // self-stops once settled (restarted by ApplySpeedSample on a new target).
+        private DispatcherTimer? tweenTimer;
+        private DateTime lastTweenTick;
+        private double targetSpeedX, targetSpeedY, targetSpeedCombined;
+        private double dispSpeedX, dispSpeedY, dispSpeedCombined;
 
         // Cached paint objects to avoid recreation
         private SolidColorPaint? cachedXStroke;
@@ -115,8 +133,18 @@ namespace userinterface.ViewModels.Profile
                 showSpeedLines = value;
                 OnPropertyChanged(nameof(ShowSpeedLines));
                 OnPropertyChanged(nameof(SpeedLinesIconOpacity));
-                // Reflect immediately; the poller refreshes positions on its next tick.
-                RebuildSpeedSections();
+                if (showSpeedLines)
+                {
+                    // Reflect current positions immediately, then ease toward target.
+                    RebuildSpeedSections();
+                    EnsureTweenRunning();
+                }
+                else
+                {
+                    StopTween();
+                    Sections = Array.Empty<RectangularSection>();
+                    OnPropertyChanged(nameof(Sections));
+                }
             }
         }
 
@@ -439,8 +467,14 @@ namespace userinterface.ViewModels.Profile
             if (CombineXY != null)
                 CombineXY.PropertyChanged -= OnCombineXYChanged;
 
-            // Stop and release the live-speed poller for this chart.
+            // Stop and release the live-speed poller and its tween pump.
             speedPoller.Dispose();
+            if (tweenTimer != null)
+            {
+                tweenTimer.Stop();
+                tweenTimer.Tick -= OnTweenTick;
+                tweenTimer = null;
+            }
 
             // Dispose cached paint objects
             if (cachedXStroke != null)
@@ -590,12 +624,87 @@ namespace userinterface.ViewModels.Profile
             OnPropertyChanged(nameof(Sections));
         }
 
-        // Rebuilds the section(s) for the current mode with no data yet (hidden).
-        // Called on init and when the combine-X/Y mode or the show toggle changes.
-        private void RebuildSpeedSections() => PublishSpeedSections(MouseSpeedSample.Zero);
+        // Republishes the section(s) for the current mode at the current displayed
+        // (eased) positions. Called on init (disp* are 0, so hidden) and when the
+        // combine-X/Y mode or the show toggle changes, so the switch is seamless.
+        private void RebuildSpeedSections() =>
+            PublishSpeedSections(new MouseSpeedSample(dispSpeedX, dispSpeedY, dispSpeedCombined));
 
-        // Called on the UI thread by the poller.
-        private void ApplySpeedSample(MouseSpeedSample sample) => PublishSpeedSections(sample);
+        // Called on the UI thread by the poller: record the new target and let the
+        // tween timer ease the displayed line(s) toward it (no direct publish).
+        private void ApplySpeedSample(MouseSpeedSample sample)
+        {
+            targetSpeedX = sample.X;
+            targetSpeedY = sample.Y;
+            targetSpeedCombined = sample.Combined;
+            EnsureTweenRunning();
+        }
+
+        // Starts the tween pump if there is anything to animate and the lines are
+        // visible/interactive. Cheap to call every poll: a no-op once settled.
+        private void EnsureTweenRunning()
+        {
+            if (!IsInteractiveMode || !ShowSpeedLines) return;
+            if (IsSpeedSettled()) return;
+
+            if (tweenTimer == null)
+            {
+                tweenTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(TweenIntervalMs) };
+                tweenTimer.Tick += OnTweenTick;
+            }
+            if (!tweenTimer.IsEnabled)
+            {
+                lastTweenTick = DateTime.UtcNow;
+                tweenTimer.Start();
+            }
+        }
+
+        private void StopTween() => tweenTimer?.Stop();
+
+        // True when every axis' displayed position has effectively reached its target.
+        private bool IsSpeedSettled() =>
+            SpeedAxisSettled(dispSpeedX, targetSpeedX) &&
+            SpeedAxisSettled(dispSpeedY, targetSpeedY) &&
+            SpeedAxisSettled(dispSpeedCombined, targetSpeedCombined);
+
+        private static bool SpeedAxisSettled(double disp, double target) =>
+            Math.Abs(disp - target) < SpeedSettleEpsilon;
+
+        // Frame-rate-independent exponential ease toward the target. A line fading
+        // out (target <= 0) snaps to 0 once close so MakeSpeedLine hides it cleanly.
+        private static double EaseSpeedAxis(double disp, double target, double alpha)
+        {
+            double next = disp + (target - disp) * alpha;
+            if (target <= 0 && next < SpeedSettleEpsilon) next = 0;
+            return next;
+        }
+
+        private void OnTweenTick(object? sender, EventArgs e)
+        {
+            var now = DateTime.UtcNow;
+            double dtMs = (now - lastTweenTick).TotalMilliseconds;
+            lastTweenTick = now;
+            if (dtMs <= 0) dtMs = TweenIntervalMs;
+
+            double alpha = 1.0 - Math.Exp(-dtMs / TweenTimeConstantMs);
+            if (alpha < 0) alpha = 0;
+            else if (alpha > 1) alpha = 1;
+
+            dispSpeedX = EaseSpeedAxis(dispSpeedX, targetSpeedX, alpha);
+            dispSpeedY = EaseSpeedAxis(dispSpeedY, targetSpeedY, alpha);
+            dispSpeedCombined = EaseSpeedAxis(dispSpeedCombined, targetSpeedCombined, alpha);
+
+            PublishSpeedSections(new MouseSpeedSample(dispSpeedX, dispSpeedY, dispSpeedCombined));
+
+            if (IsSpeedSettled())
+            {
+                // Snap off residual sub-epsilon error, then idle until the next target.
+                dispSpeedX = targetSpeedX;
+                dispSpeedY = targetSpeedY;
+                dispSpeedCombined = targetSpeedCombined;
+                StopTween();
+            }
+        }
 
         private void StartSpeedPollingIfPossible()
         {
