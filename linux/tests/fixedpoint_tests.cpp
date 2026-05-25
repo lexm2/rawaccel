@@ -238,6 +238,49 @@ RA_TEST("Fixed: speed clamp composes with a curve")
     check_axis(s, 90, 120);  // |v| 150 -> clamped to 80
 }
 
+RA_TEST("Fixed: angle snapping collapses near-axis input onto the axis")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.degrees_snap = 15.0;  // snap within 15 deg of either axis
+
+    // Within 15 deg of X (atan(20/150)=7.6 deg): collapses to pure X, the Y
+    // output must vanish and X must carry the full magnitude through the curve.
+    check_axis(s, 150, 20);
+    check_axis(s, -150, 20);
+    // Within 15 deg of Y (atan(20/150) from vertical): collapses to pure Y.
+    check_axis(s, 20, 150);
+    check_axis(s, 20, -150);
+    // Comfortably diagonal (45 deg): untouched by snapping.
+    check_axis(s, 100, 100);
+    // Just outside the snap cone (atan(50/150)=18.4 deg > 15): not snapped.
+    check_axis(s, 150, 50);
+    // Pure-axis input is a no-op either way.
+    check_axis(s, 200, 0);
+    check_axis(s, 0, 200);
+}
+
+RA_TEST("Fixed: angle snapping composes with directional weighting")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.degrees_snap = 15.0;
+    s.prof.range_weights = vec2d{0.5, 1.5};  // whole-mode angular blend
+
+    // Snapped to X -> reference angle 0 -> weight range_w_x (0.5).
+    check_axis(s, 150, 20);
+    // Snapped to Y -> reference angle pi/2 -> weight range_w_y (1.5).
+    check_axis(s, 20, 150);
+    // Unsnapped diagonal -> blended weight from the true angle.
+    check_axis(s, 150, 80);
+}
+
 RA_TEST("Fixed: max distance mode matches oracle on diagonals")
 {
     ra::modifier_settings s{};

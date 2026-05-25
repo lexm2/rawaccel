@@ -121,15 +121,38 @@ RA_TEST("Lut: features not yet ported throw instead of silently approximating")
         catch (...) { return true; }
     };
 
-    // Lp distance norm (lp_norm in (0,16), != 2, whole mode).
+    // Lp distance norm (lp_norm in (0,16), != 2, whole mode) still needs
+    // fixed-point pow; it is the only remaining unsupported feature.
     { ra::modifier_settings s{}; s.prof.speed_processor_args.lp_norm = 3.0;
-      RA_CHECK(throws(s)); }
-    // Angle snapping.
-    { ra::modifier_settings s{}; s.prof.degrees_snap = 5.0;
       RA_CHECK(throws(s)); }
 
     // A plain supported profile still builds.
     { ra::modifier_settings s{}; RA_CHECK(!throws(s)); }
+    // Angle snapping now builds (no longer a throw case).
+    { ra::modifier_settings s{}; s.prof.degrees_snap = 5.0;
+      RA_CHECK(!throws(s)); }
+}
+
+RA_TEST("Lut: angle snapping sets APPLY_SNAP and emits the threshold tangents")
+{
+    ra::device_config dev{};
+
+    // No snap: flag clear, thresholds left at zero.
+    {
+        ra::modifier_settings s{};
+        auto r = build_lut(s, dev);
+        RA_CHECK((r.flags & RA_F_APPLY_SNAP) == 0);
+    }
+    // 15 deg snap: flag set; tan(15) ~= 0.2679, tan(75) ~= 3.7321.
+    {
+        ra::modifier_settings s{};
+        s.prof.degrees_snap = 15.0;
+        auto r = build_lut(s, dev);
+        RA_CHECK((r.flags & RA_F_APPLY_SNAP) != 0);
+        RA_CHECK(q16_near(r.snap_lo_tan_q16, std::tan(15.0 * M_PI / 180.0), 1e-4));
+        RA_CHECK(q16_near(r.snap_hi_tan_q16, std::tan(75.0 * M_PI / 180.0), 1e-4));
+        RA_CHECK(r.snap_lo_tan_q16 < r.snap_hi_tan_q16);
+    }
 }
 
 RA_TEST("Lut: whole-mode anisotropic range weights set APPLY_DIR_WEIGHT")

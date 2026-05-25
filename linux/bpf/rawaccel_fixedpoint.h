@@ -181,6 +181,37 @@ RA_FP_NOINLINE void ra_clamp_speed(const struct ra_bpf_config *cfg,
     *iny = (*iny * (__s64)ratio) >> RA_Q16_SHIFT;
 }
 
+/* Angle snapping (modifier::modify lines 331-342): if the movement's angle to
+ * an axis is within degrees_snap, collapse the working vector onto that axis,
+ * preserving magnitude. The decision avoids atan by comparing |y|/|x| against
+ * precomputed tangents (atan is monotone increasing):
+ *   ref_angle < snap         <=> |y| < tan(snap)        * |x|  -> snap to X
+ *   ref_angle > pi/2 - snap   <=> |y| > tan(pi/2 - snap) * |x|  -> snap to Y
+ * Cross-multiplied to stay in integer math (s64 holds |comp| << 16 vs a Q16
+ * tangent times |comp|). y == 0 (already on X) returns early; x == 0 (already
+ * on Y) collapses to Y as a no-op, both matching modify. __noinline: verified
+ * once. */
+RA_FP_NOINLINE void ra_snap(const struct ra_bpf_config *cfg,
+                            __s64 *inx, __s64 *iny)
+{
+    __s64 x = *inx, y = *iny;
+    if (y == 0) return;                          /* on the X axis already */
+
+    __s64 ax = x < 0 ? -x : x;
+    __s64 ay = y < 0 ? -y : y;
+    __s64 lhs = ay << RA_Q16_SHIFT;              /* |y| as Q16 of a Q16 count */
+
+    if (lhs < (__s64)cfg->snap_lo_tan_q16 * ax) {
+        __s32 mag = ra_magnitude_q16(x, y);
+        *inx = x < 0 ? -(__s64)mag : (__s64)mag;
+        *iny = 0;
+    } else if (lhs > (__s64)cfg->snap_hi_tan_q16 * ax) {
+        __s32 mag = ra_magnitude_q16(x, y);
+        *iny = y < 0 ? -(__s64)mag : (__s64)mag;
+        *inx = 0;
+    }
+}
+
 /* Per-axis abs weighted velocity (modify's abs_weighted_vel component):
  * |component| * dpi_norm * domain_weight, in Q16.16 in/s, saturated >= 0. */
 RA_FP_NOINLINE __s32 ra_axis_speed_q16(__s64 comp_q16, __s32 dpi_norm_q16,
@@ -266,8 +297,8 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
                              __u32 *ix, __s32 *fx, __u32 *iy, __s32 *fy,
                              __u8 *single_scale, __s32 *weight_q16)
 {
-    /* Working vector starts as the raw counts in Q16.16. Snap (a later Phase 1
-     * step) will also transform (inx, iny) here. */
+    /* Working vector starts as the raw counts in Q16.16, then carries each
+     * per-packet transform (rotation, snap, speed clamp) to the LUT stage. */
     __s64 inx = (__s64)dx << RA_Q16_SHIFT;
     __s64 iny = (__s64)dy << RA_Q16_SHIFT;
 
@@ -275,6 +306,13 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
      * curve index are derived from the rotated vector. */
     if (cfg->flags & RA_F_APPLY_ROTATE)
         ra_rotate_q16(&inx, &iny, cfg->rot_cos_q16, cfg->rot_sin_q16);
+
+    /* Angle snapping collapses near-axis movement onto the axis before the
+     * reference angle and curve are derived; the directional-weight block below
+     * then reads the snapped vector, yielding weight = range_w_x (snapped to X)
+     * or range_w_y (snapped to Y) for free. */
+    if (cfg->flags & RA_F_APPLY_SNAP)
+        ra_snap(cfg, &inx, &iny);
 
     /* Whole-mode directional weighting: the per-vector range weight is blended
      * between range_weights.x and .y by the movement's reference angle (modify

@@ -29,7 +29,7 @@
 
 /* Bumped whenever ra_bpf_config / ra_bpf_state layout or semantics change so
  * a stale agent and a freshly built object cannot silently disagree. */
-#define RA_CONFIG_VERSION 1
+#define RA_CONFIG_VERSION 2
 
 /* modifier_flags / speed_processor_flags mirror (see common/rawaccel.hpp).
  * Reserved bits are emitted as 0 by the agent until the matching kernel path
@@ -102,12 +102,20 @@ struct ra_bpf_config {
      * magnitude before the curve when RA_F_CLAMP_SPEED. */
     __s32 speed_min_q16;
     __s32 speed_max_q16;
+
+    /* Angle-snap thresholds as tangents (Q16.16), precomputed by the agent so
+     * the kernel decides snapping with a multiply instead of an atan:
+     *   snap_lo = tan(degrees_snap)         -> collapse onto X below this
+     *   snap_hi = tan(pi/2 - degrees_snap)  -> collapse onto Y above this
+     * Applied to the rotated vector before the curve when RA_F_APPLY_SNAP. */
+    __s32 snap_lo_tan_q16;
+    __s32 snap_hi_tan_q16;
 };
 
 #ifndef __BPF__
 /* Host side is always C++ (agent + tests); BPF side skips this. Catches
  * accidental padding/layout drift between agent and kernel. */
-static_assert(sizeof(struct ra_bpf_config) == 80,
+static_assert(sizeof(struct ra_bpf_config) == 88,
               "ra_bpf_config layout changed; update kernel + agent in lockstep");
 #endif
 

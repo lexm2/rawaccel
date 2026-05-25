@@ -91,6 +91,17 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.speed_min_q16 = q16_round(prof.speed_min);
     out.speed_max_q16 = q16_round(prof.speed_max);
 
+    // Angle-snap thresholds as tangents so the kernel decides with a multiply
+    // (mirrors modify's atan(|y/x|) vs snap / (pi/2 - snap)). tan(pi/2 - snap)
+    // grows without bound as snap -> 0; q16_round saturates it to INT32_MAX,
+    // which the kernel's s64 cross-product handles.
+    {
+        const double kPi = 3.14159265358979323846;
+        double snap_rad = prof.degrees_snap * kPi / 180.0;
+        out.snap_lo_tan_q16 = q16_round(std::tan(snap_rad));
+        out.snap_hi_tan_q16 = q16_round(std::tan(kPi / 2.0 - snap_rad));
+    }
+
     // Flags fire only when the corresponding setting is non-trivial, matching
     // modifier_flags.
     out.flags = 0;
@@ -104,6 +115,7 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     if (prof.speed_processor_args.whole &&
         prof.range_weights.x != prof.range_weights.y)
         out.flags |= RA_F_APPLY_DIR_WEIGHT;
+    if (prof.degrees_snap != 0.0) out.flags |= RA_F_APPLY_SNAP;
 
     // Distance mode mirrors speed_processor::init.
     const auto& spa = prof.speed_processor_args;
@@ -117,12 +129,11 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         out.dist_mode = RA_DIST_EUCLIDEAN;
 
     // Phase 1 in progress: refuse profiles whose features are not yet ported
-    // to the kernel rather than silently approximating them. Each guard is
-    // removed as the matching step lands (Lp pow, P1.6 snap).
+    // to the kernel rather than silently approximating them. The Lp distance
+    // norm needs fixed-point pow (deferred); every other modifier feature is
+    // now handled in-kernel.
     if (out.dist_mode == RA_DIST_LP)
         throw std::runtime_error("rawaccel: Lp distance norm not yet supported on Linux");
-    if (prof.degrees_snap != 0.0)
-        throw std::runtime_error("rawaccel: angle snapping not yet supported on Linux");
 
     for (int i = 0; i < RA_LUT_SIZE; ++i) {
         double v = static_cast<double>(i);
@@ -165,6 +176,8 @@ ra_bpf_config to_bpf_config(const LutBuildResult& lut,
     cfg.rot_sin_q16       = lut.rot_sin_q16;
     cfg.speed_min_q16     = lut.speed_min_q16;
     cfg.speed_max_q16     = lut.speed_max_q16;
+    cfg.snap_lo_tan_q16   = lut.snap_lo_tan_q16;
+    cfg.snap_hi_tan_q16   = lut.snap_hi_tan_q16;
 
     return cfg;
 }
