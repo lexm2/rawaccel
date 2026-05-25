@@ -140,11 +140,15 @@ namespace userspace_backend.Driver.Linux
                 var respJson = client.Call("{\"cmd\":\"stats\"}");
                 var resp = JObject.Parse(respJson);
                 if (!resp.Value<bool>("ok")) return MouseSpeedSample.Zero;
-                // current_speed is combined; per-axis fields are optional, so
-                // fall back to combined when the agent omits them
+                // current_speed is the combined (hypot) magnitude for the single
+                // line; current_speed_x/_y are the genuine per-axis speeds for the
+                // two lines. Do NOT fall back x/y to combined: that would draw both
+                // per-axis lines on top of the same hypot value (coupled). If a
+                // (stale) agent omits the per-axis fields, leave them 0 so the
+                // per-axis lines simply hide rather than masquerade as the hypot.
                 double combined = resp.Value<double?>("current_speed") ?? 0;
-                double x = resp.Value<double?>("current_speed_x") ?? combined;
-                double y = resp.Value<double?>("current_speed_y") ?? combined;
+                double x = resp.Value<double?>("current_speed_x") ?? 0;
+                double y = resp.Value<double?>("current_speed_y") ?? 0;
                 return new MouseSpeedSample(x, y, combined);
             }
             catch (Exception ex)
