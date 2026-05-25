@@ -34,7 +34,6 @@ struct LutBuildResult {
     std::int32_t lut_step_q16     = 0;
     std::int32_t lut_max_q16      = 0;
     std::int32_t dpi_norm_q16     = 0;
-    std::int32_t smooth_alpha_q16 = 0;
 
     // Weighting / output scaling moved out of the LUT and applied in-kernel.
     std::int32_t range_w_x_q16     = 0;
@@ -53,6 +52,13 @@ struct LutBuildResult {
     std::int32_t snap_hi_tan_q16   = 0;
     std::int32_t time_min_q16      = 0;
     std::int32_t time_max_q16      = 0;
+
+    // input_speed_smoother (linear EMA) log2 coefficients (negative); applied
+    // in-kernel via ra_exp2_q16 when RA_F_SMOOTH_INPUT is set.
+    std::int32_t in_log2_win_q16   = 0;
+    std::int32_t in_log2_cut_q16   = 0;
+    std::int32_t in_log2_trw_q16   = 0;
+    std::int32_t in_log2_trc_q16   = 0;
 
     // modifier_flags bitfield + distance mode (RA_F_* / RA_DIST_*). Reserved
     // for Phase 1; emitted now so the config layout is stable.

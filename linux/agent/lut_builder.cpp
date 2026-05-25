@@ -62,16 +62,24 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         out.dpi_norm_q16 = RA_Q16_ONE;
     }
 
-    // Derived assuming a 1 ms packet; exact at 1 kHz polling, approximate
-    // otherwise. halflife=0 -> alpha=1.0 (no smoothing).
-    double halflife = settings.prof.speed_processor_args.input_speed_smooth_halflife;
-    if (halflife > 0.0) {
-        double alpha = 1.0 - std::pow(0.5, 1.0 / halflife);
-        if (alpha < 0.0) alpha = 0.0;
-        if (alpha > 1.0) alpha = 1.0;
-        out.smooth_alpha_q16 = q16_round(alpha);
-    } else {
-        out.smooth_alpha_q16 = RA_Q16_ONE;
+    // input_speed_smoother coefficients (linear_ema_smoother::init): the kernel
+    // applies a real dt-adaptive EMA, so the agent precomputes log2(coeff) for
+    // the window/cutoff level pair and the window/cutoff trend pair. The trend
+    // halflife is the fixed speed_processor::input_trend_halflife (1.25). The
+    // RA_F_SMOOTH_INPUT flag below gates whether the kernel applies them.
+    {
+        double hl = settings.prof.speed_processor_args.input_speed_smooth_halflife;
+        if (hl > 0.0) {
+            constexpr double kInputTrendHalflife = 1.25;  // speed_processor::input_trend_halflife
+            double win = std::pow(0.5, 1.0 / hl);
+            double cut = 1.0 - std::sqrt(1.0 - win);
+            double trw = std::pow(0.5, 1.0 / kInputTrendHalflife);
+            double trc = 1.0 - std::sqrt(1.0 - trw);
+            out.in_log2_win_q16 = q16_round(std::log2(win));
+            out.in_log2_cut_q16 = q16_round(std::log2(cut));
+            out.in_log2_trw_q16 = q16_round(std::log2(trw));
+            out.in_log2_trc_q16 = q16_round(std::log2(trc));
+        }
     }
 
     // Weighting / output scaling, applied in-kernel around the raw curve.
@@ -122,6 +130,10 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         prof.range_weights.x != prof.range_weights.y)
         out.flags |= RA_F_APPLY_DIR_WEIGHT;
     if (prof.degrees_snap != 0.0) out.flags |= RA_F_APPLY_SNAP;
+    // Input-speed smoothing (speed_processor::should_smooth_input). The curve
+    // LUT is always built stateless above; the EMA is layered in-kernel.
+    if (settings.prof.speed_processor_args.input_speed_smooth_halflife > 0.0)
+        out.flags |= RA_F_SMOOTH_INPUT;
 
     // Distance mode mirrors speed_processor::init.
     const auto& spa = prof.speed_processor_args;
@@ -162,7 +174,6 @@ ra_bpf_config to_bpf_config(const LutBuildResult& lut,
     cfg.dy_byte_size   = layout.dy_byte_size;
 
     cfg.dpi_norm_q16     = lut.dpi_norm_q16;
-    cfg.smooth_alpha_q16 = lut.smooth_alpha_q16;
     cfg.lut_step_q16     = lut.lut_step_q16;
     cfg.lut_max_q16      = lut.lut_max_q16;
 
@@ -186,6 +197,10 @@ ra_bpf_config to_bpf_config(const LutBuildResult& lut,
     cfg.snap_hi_tan_q16   = lut.snap_hi_tan_q16;
     cfg.time_min_q16      = lut.time_min_q16;
     cfg.time_max_q16      = lut.time_max_q16;
+    cfg.in_coeffs.log2_win = lut.in_log2_win_q16;
+    cfg.in_coeffs.log2_cut = lut.in_log2_cut_q16;
+    cfg.in_coeffs.log2_trw = lut.in_log2_trw_q16;
+    cfg.in_coeffs.log2_trc = lut.in_log2_trc_q16;
 
     return cfg;
 }

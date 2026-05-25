@@ -51,6 +51,18 @@
 #define RA_DIST_MAX       2
 #define RA_DIST_LP        3
 
+/* Linear EMA smoother coefficients: log2(coeff) in Q16.16 (negative) for the
+ * window/cutoff level pair and the window/cutoff trend pair. The kernel forms
+ * the per-packet decay 2^(dt * log2coeff) via ra_exp2_q16, so it needs no
+ * log/pow. Bundled into a struct so it can be passed to the smoother subprogram
+ * by pointer (the BPF target allows at most 5 register arguments). */
+struct ra_linear_ema_coeffs {
+    __s32 log2_win;
+    __s32 log2_cut;
+    __s32 log2_trw;
+    __s32 log2_trc;
+};
+
 /* The two per-axis lookup tables (anisotropy) store the RAW curve scale
  * f(speed) in Q16.16. Range/domain weighting, output-DPI scaling, and the
  * directional multipliers live in ra_bpf_config and are applied in-kernel
@@ -67,7 +79,6 @@ struct ra_bpf_config {
 
     /* Velocity-domain configuration in Q16.16. */
     __s32 dpi_norm_q16;     /* counts/ms -> in/s normalization factor */
-    __s32 smooth_alpha_q16; /* per-packet EMA coefficient, 0..RA_Q16_ONE */
     __s32 lut_step_q16;     /* velocity per LUT step, in/s in Q16.16 */
     __s32 lut_max_q16;      /* clamp velocities at or above this value */
 
@@ -116,21 +127,47 @@ struct ra_bpf_config {
      * and clamps it to this window before folding 1/dt into the velocity. */
     __s32 time_min_q16;
     __s32 time_max_q16;
+
+    /* input_speed_smoother (linear EMA) coefficients, from
+     * input_speed_smooth_halflife and the fixed input trend halflife (1.25).
+     * Used only when RA_F_SMOOTH_INPUT is set. */
+    struct ra_linear_ema_coeffs in_coeffs;
 };
 
 #ifndef __BPF__
 /* Host side is always C++ (agent + tests); BPF side skips this. Catches
  * accidental padding/layout drift between agent and kernel. */
-static_assert(sizeof(struct ra_bpf_config) == 96,
+static_assert(sizeof(struct ra_bpf_config) == 108,
               "ra_bpf_config layout changed; update kernel + agent in lockstep");
 #endif
+
+/* Linear EMA smoother accumulators: level and trend, each a window/cutoff pair,
+ * as __s64 Q16.16 (extended range) so the trend*time term cannot overflow s32
+ * (trend can be large and time spans up to ~100 ms). See ra_linear_ema_step in
+ * rawaccel_fixedpoint.h. */
+struct ra_linear_ema_state {
+    __s64 win;
+    __s64 cut;
+    __s64 win_tr;
+    __s64 cut_tr;
+};
 
 /* Per-device runtime state. One instance per BPF object load. */
 struct ra_bpf_state {
     __u64 last_ts_ns;       /* bpf_ktime_get_ns() at the last packet */
-    __s32 smoothed_v_q16;   /* smoothed |velocity| in Q16.16 in/s */
     __s32 carry_x_q16;      /* fractional carry that did not emit yet */
     __s32 carry_y_q16;
+
+    /* input_speed_smoother state, per axis. Whole mode uses in_x for the single
+     * aggregate speed; separate mode uses in_x for X and in_y for Y
+     * (calc_speed_separate). */
+    struct ra_linear_ema_state in_x;
+    struct ra_linear_ema_state in_y;
 };
+
+#ifndef __BPF__
+static_assert(sizeof(struct ra_bpf_state) == 80,
+              "ra_bpf_state layout changed; update kernel + agent in lockstep");
+#endif
 
 #endif /* RAWACCEL_BPF_LAYOUT_H */

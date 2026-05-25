@@ -111,6 +111,21 @@ void sweep_grid(const ra::modifier_settings& s,
 
 } // namespace
 
+RA_TEST("Fixed: ra_exp2_q16 approximates 2^x for x <= 0")
+{
+    // The smoother decay 2^(dt*log2coeff) feeds this with x in roughly
+    // [-200, 0]; check the cubic against libc across the meaningful range.
+    for (double x = 0.0; x >= -30.0; x -= 0.011) {
+        __s32 xq = static_cast<__s32>(std::lround(x * RA_Q16_ONE));
+        double got = static_cast<double>(ra_exp2_q16(xq)) / RA_Q16_ONE;
+        double want = std::exp2(x);
+        RA_CHECK_NEAR(got, want, 1e-3 + want * 2e-3);
+    }
+    RA_CHECK_EQ(ra_exp2_q16(0), RA_Q16_ONE);                     // 2^0 = 1
+    // Deep underflow saturates to 0 (alpha -> 1, full tracking after a pause).
+    RA_CHECK_EQ(ra_exp2_q16(static_cast<__s32>(-60 * RA_Q16_ONE)), 0);
+}
+
 RA_TEST("Fixed: noaccel passes pure-axis input through unchanged")
 {
     ra::modifier_settings s{};

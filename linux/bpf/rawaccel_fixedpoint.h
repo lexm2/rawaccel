@@ -84,6 +84,59 @@ RA_FP_INLINE __s32 ra_div_q16(__s32 num, __s32 den)
     return ra_sat_s32(neg ? -(__s64)q : (__s64)q);
 }
 
+/* ---- s64 Q16.16 (extended range) ----------------------------------- *
+ * The EMA smoother accumulators are kept as __s64 holding Q16.16 values so the
+ * linear smoother's trend*time term cannot overflow s32 (trend can be large and
+ * time spans up to ~100 ms). Multiplies keep the product in s64 -- no __int128
+ * needed -- and divides reuse the unsigned-magnitude trick (the verifier rejects
+ * signed division). */
+RA_FP_INLINE __s64 ra_mul_q16_s64(__s64 a_q16, __s32 b_q16)
+{
+    return (a_q16 * (__s64)b_q16) >> RA_Q16_SHIFT;
+}
+
+RA_FP_INLINE __s64 ra_div_q16_s64(__s64 num_q16, __s32 den_q16)
+{
+    if (den_q16 <= 0) return 0;                 /* dt is always > 0 here */
+    int neg = num_q16 < 0;
+    __u64 n = (__u64)(neg ? -num_q16 : num_q16);
+    __u64 q = (n << RA_Q16_SHIFT) / (__u64)(__u32)den_q16;
+    return neg ? -(__s64)q : (__s64)q;
+}
+
+/* 2^x in Q16.16 for x <= 0. The per-packet EMA decay is 2^(dt * log2(coeff))
+ * with coeff in (0,1), so the exponent is always <= 0. Splits x into a floor
+ * and a fraction: 2^x = 2^frac >> (-floor). 2^frac for frac in [0,1) is a
+ * minimax cubic that hits 1 at 0 and 2 at 1 (so there is no jump across integer
+ * boundaries), accurate to < 1e-3. A shift past the Q16.16 range underflows to
+ * 0, i.e. a long dt drives the coefficient to 0 and the alpha below to 1 (full
+ * tracking, the "reset after a pause" behavior). __noinline: verified once. */
+RA_FP_NOINLINE __s32 ra_exp2_q16(__s32 x_q16)
+{
+    if (x_q16 >= 0) return RA_Q16_ONE;            /* domain is x <= 0; 2^0 = 1 */
+    __s32 ipart = x_q16 >> RA_Q16_SHIFT;          /* floor toward -inf, <= -1 */
+    __s32 frac  = x_q16 - (ipart << RA_Q16_SHIFT);/* in [0, RA_Q16_ONE) */
+    int shift = -ipart;                            /* >= 1 right shifts */
+    if (shift >= 32) return 0;
+
+    /* p(frac) ~= 2^frac via Horner: 1 + f(a + f(b + f c)), coefficients in
+     * Q16.16 (a=0.696066, b=0.224494, c=0.079442). */
+    __s32 p = 14714 + ra_mul_q16(5206, frac);     /* b + c f */
+    p = 45620 + ra_mul_q16(p, frac);              /* a + f(b + c f) */
+    p = RA_Q16_ONE + ra_mul_q16(p, frac);         /* 1 + f(...) -> [ONE, 2 ONE) */
+    return (__s32)((__u32)p >> shift);
+}
+
+/* Per-packet EMA alpha = 1 - 2^(dt * log2(coeff)), in Q16.16 [0, ONE]. The
+ * agent precomputes log2(coeff) (negative) so the kernel never needs log/pow;
+ * here dt scales it and ra_exp2_q16 turns it back into the decay. Mirrors the
+ * `1 - pow(coeff, time)` in common/rawaccel.hpp's smoothers. */
+RA_FP_INLINE __s32 ra_ema_alpha_q16(__s32 dt_ms_q16, __s32 log2coeff_q16)
+{
+    __s32 x = ra_mul_q16(dt_ms_q16, log2coeff_q16);   /* dt * log2(coeff) <= 0 */
+    return RA_Q16_ONE - ra_exp2_q16(x);
+}
+
 /* Linear interpolation between two Q16.16 values; frac in [0, RA_Q16_ONE). */
 RA_FP_INLINE __s32 ra_q16_lerp(__s32 a, __s32 b, __s32 frac_q16)
 {
@@ -241,19 +294,52 @@ RA_FP_NOINLINE __s32 ra_axis_speed_q16(__s64 comp_q16, __s32 dpi_norm_q16,
     return ra_sat_s32(v);
 }
 
-/* Single exponential moving average on the velocity. Mutates *smoothed_q16
- * and returns the new value (clamped >= 0). alpha in [0, RA_Q16_ONE];
- * alpha == RA_Q16_ONE (the no-smoothing default) makes this an identity that
- * just latches the sample, matching the halflife-zeroed common/ path. */
-RA_FP_NOINLINE __s32 ra_ema_step(__s32 *smoothed_q16, __s32 sample_q16,
-                                 __s32 alpha_q16)
+/* Trend dampening 0.75 in Q16.16 (linear_ema_smoother::trendDampening). */
+#define RA_TREND_DAMP_Q16 49152
+
+/* Linear EMA smoother, the fixed-point mirror of common/rawaccel.hpp's
+ * linear_ema_smoother::smooth (lines 126-162). Keeps a level and a trend, each
+ * as a window/cutoff pair, in __s64 Q16.16 accumulators (win/cut/win_tr/cut_tr).
+ * Per packet: dampen the trend, extrapolate the level by trend*dt, pull the
+ * level toward the sample by the dt-adaptive alpha, clamp >= 0, then update the
+ * trend from the level change. Returns min(window, cutoff) saturated to s32.
+ * Used for the input-speed and output-speed stages (their trend halflives, and
+ * thus log2 coefficients, differ; the agent supplies the four log2(coeff)s).
+ * __noinline: verified once. */
+RA_FP_NOINLINE __s32 ra_linear_ema_step(struct ra_linear_ema_state *s,
+                                        const struct ra_linear_ema_coeffs *c,
+                                        __s32 sample_q16, __s32 dt_ms_q16)
 {
-    if (alpha_q16 < 0) alpha_q16 = 0;
-    if (alpha_q16 > RA_Q16_ONE) alpha_q16 = RA_Q16_ONE;
-    __s64 diff = (__s64)sample_q16 - (__s64)*smoothed_q16;
-    *smoothed_q16 += (__s32)((diff * (__s64)alpha_q16) >> RA_Q16_SHIFT);
-    if (*smoothed_q16 < 0) *smoothed_q16 = 0;
-    return *smoothed_q16;
+    __s32 a_win = ra_ema_alpha_q16(dt_ms_q16, c->log2_win);
+    __s32 a_cut = ra_ema_alpha_q16(dt_ms_q16, c->log2_cut);
+    __s32 a_trw = ra_ema_alpha_q16(dt_ms_q16, c->log2_trw);
+    __s32 a_trc = ra_ema_alpha_q16(dt_ms_q16, c->log2_trc);
+
+    __s64 old_win = s->win;
+    __s64 old_cut = s->cut;
+
+    /* dampen trends, then extrapolate the level along the dampened trend. */
+    s->win_tr = ra_mul_q16_s64(s->win_tr, RA_TREND_DAMP_Q16);
+    s->cut_tr = ra_mul_q16_s64(s->cut_tr, RA_TREND_DAMP_Q16);
+    s->win += ra_mul_q16_s64(s->win_tr, dt_ms_q16);
+    s->cut += ra_mul_q16_s64(s->cut_tr, dt_ms_q16);
+
+    /* level EMA toward the sample. */
+    s->win += ra_mul_q16_s64((__s64)sample_q16 - s->win, a_win);
+    s->cut += ra_mul_q16_s64((__s64)sample_q16 - s->cut, a_cut);
+
+    /* don't let the trend carry the level below 0. */
+    if (s->win < 0) s->win = 0;
+    if (s->cut < 0) s->cut = 0;
+
+    /* update the trend from this packet's level change per unit time. */
+    __s64 new_trw = ra_div_q16_s64(s->win - old_win, dt_ms_q16);
+    __s64 new_trc = ra_div_q16_s64(s->cut - old_cut, dt_ms_q16);
+    s->win_tr += ra_mul_q16_s64(new_trw - s->win_tr, a_trw);
+    s->cut_tr += ra_mul_q16_s64(new_trc - s->cut_tr, a_trc);
+
+    __s64 m = s->win < s->cut ? s->win : s->cut;
+    return ra_sat_s32(m);
 }
 
 /* Map a Q16.16 speed onto a LUT bucket index and fractional weight. Both
@@ -368,9 +454,12 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
     __s32 awv_y = ra_axis_speed_q16(iny, eff_dpi_norm_q16, cfg->domain_w_y_q16);
 
     if (cfg->dist_mode == RA_DIST_SEPARATE) {
-        /* Separate: each axis indexes its own curve at its own speed. Per-axis
-         * input smoothing is a Phase 2 addition; with halflife 0 the EMA is an
-         * identity so it is omitted here. */
+        /* Separate: each axis indexes its own curve at its own speed, smoothed
+         * by its own input-speed EMA (calc_speed_separate). */
+        if (cfg->flags & RA_F_SMOOTH_INPUT) {
+            awv_x = ra_linear_ema_step(&st->in_x, &cfg->in_coeffs, awv_x, dt_ms_q16);
+            awv_y = ra_linear_ema_step(&st->in_y, &cfg->in_coeffs, awv_y, dt_ms_q16);
+        }
         ra_lut_index(awv_x, cfg->lut_step_q16, cfg->lut_max_q16, ix, fx);
         ra_lut_index(awv_y, cfg->lut_step_q16, cfg->lut_max_q16, iy, fy);
         *single_scale = 0;
@@ -385,8 +474,12 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
              * reaches the kernel; this branch only ever sees euclidean. */
             S = ra_magnitude_q16(awv_x, awv_y);
 
-        __s32 sv = ra_ema_step(&st->smoothed_v_q16, S, cfg->smooth_alpha_q16);
-        ra_lut_index(sv, cfg->lut_step_q16, cfg->lut_max_q16, ix, fx);
+        /* calc_speed_whole smooths the single aggregate speed via smoother_x's
+         * input EMA. With RA_F_SMOOTH_INPUT clear the raw speed indexes
+         * directly (halflife 0 -> no smoothing). */
+        if (cfg->flags & RA_F_SMOOTH_INPUT)
+            S = ra_linear_ema_step(&st->in_x, &cfg->in_coeffs, S, dt_ms_q16);
+        ra_lut_index(S, cfg->lut_step_q16, cfg->lut_max_q16, ix, fx);
         *iy = *ix;            /* y reuses the accel_x curve; raw_y is discarded */
         *fy = *fx;
         *single_scale = 1;

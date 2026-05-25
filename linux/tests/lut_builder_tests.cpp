@@ -200,22 +200,35 @@ RA_TEST("Lut: dpi_norm defaults to 1.0 when dev_dpi is 0")
     RA_CHECK_EQ(r.dpi_norm_q16, RA_Q16_ONE);
 }
 
-RA_TEST("Lut: smooth_alpha derives from input_speed_smooth_halflife")
+RA_TEST("Lut: input smoothing sets RA_F_SMOOTH_INPUT and emits log2 coefficients")
 {
-    ra::modifier_settings s{};
     ra::device_config dev{};
 
-    // halflife=0 -> no smoothing, alpha=1.0
+    // halflife 0 -> no input smoothing: flag clear, coefficients left at 0. The
+    // kernel then indexes the raw speed directly.
     {
+        ra::modifier_settings s{};
         auto r = build_lut(s, dev);
-        RA_CHECK_EQ(r.smooth_alpha_q16, RA_Q16_ONE);
+        RA_CHECK((r.flags & RA_F_SMOOTH_INPUT) == 0);
+        RA_CHECK_EQ(r.in_log2_win_q16, 0);
     }
-    // halflife=50ms -> alpha = 1 - 2^(-1/50) ~= 0.01376
+    // halflife 50 ms -> flag set; log2(coeff) values match linear_ema_smoother
+    // init with input_trend_halflife = 1.25.
     {
+        ra::modifier_settings s{};
         s.prof.speed_processor_args.input_speed_smooth_halflife = 50;
         auto r = build_lut(s, dev);
-        double expected = 1.0 - std::pow(0.5, 1.0 / 50.0);
-        RA_CHECK(q16_near(r.smooth_alpha_q16, expected, 1e-3));
+        RA_CHECK((r.flags & RA_F_SMOOTH_INPUT) != 0);
+
+        double win = std::pow(0.5, 1.0 / 50.0);
+        double cut = 1.0 - std::sqrt(1.0 - win);
+        double trw = std::pow(0.5, 1.0 / 1.25);
+        double trc = 1.0 - std::sqrt(1.0 - trw);
+        RA_CHECK(q16_near(r.in_log2_win_q16, std::log2(win), 1e-3));
+        RA_CHECK(q16_near(r.in_log2_cut_q16, std::log2(cut), 1e-3));
+        RA_CHECK(q16_near(r.in_log2_trw_q16, std::log2(trw), 1e-3));
+        RA_CHECK(q16_near(r.in_log2_trc_q16, std::log2(trc), 1e-3));
+        RA_CHECK(r.in_log2_win_q16 < 0);  // coeff in (0,1) -> log2 < 0
     }
 }
 
