@@ -181,25 +181,13 @@ int BPF_PROG(rawaccel_hid_device_event,
     ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, weight,
                 &acc_x, &acc_y);
 
-    /* Carry-accumulated output in Q16.16. */
-    __s64 out_x_q16 = acc_x + (__s64)st->carry_x_q16;
-    __s64 out_y_q16 = acc_y + (__s64)st->carry_y_q16;
-
-    __s32 out_x = (__s32)(out_x_q16 >> RA_Q16_SHIFT);
-    __s32 out_y = (__s32)(out_y_q16 >> RA_Q16_SHIFT);
-
-    __s32 new_carry_x = (__s32)(out_x_q16 - ((__s64)out_x << RA_Q16_SHIFT));
-    __s32 new_carry_y = (__s32)(out_y_q16 - ((__s64)out_y << RA_Q16_SHIFT));
-
-    /* ValidCarry mirror (driver/driver.cpp:37-42): if the carry would land
-     * outside the [-1, 1) interval, drop the packet rather than emit a
-     * surprising spike. NaN cannot exist in Q16.16 so the check reduces to
-     * the magnitude bounds. */
-    if (new_carry_x >= RA_Q16_ONE || new_carry_x <= -RA_Q16_ONE) return 0;
-    if (new_carry_y >= RA_Q16_ONE || new_carry_y <= -RA_Q16_ONE) return 0;
-
-    st->carry_x_q16 = new_carry_x;
-    st->carry_y_q16 = new_carry_y;
+    /* Carry-accumulate and split off the integer counts to emit. ra_emit_q16
+     * (rawaccel_fixedpoint.h) owns the fractional carry and the ValidCarry
+     * drop (driver/driver.cpp:37-42); it returns 0 to skip a packet whose carry
+     * would land outside [-1, 1), leaving the saved carry untouched. Shared
+     * with the host sequence tests so emission is exercised, not duplicated. */
+    __s32 out_x, out_y;
+    if (!ra_emit_q16(st, acc_x, acc_y, &out_x, &out_y)) return 0;
 
     write_signed(rpt + dx_off, cfg->dx_byte_size, out_x);
     write_signed(rpt + dy_off, cfg->dy_byte_size, out_y);

@@ -423,4 +423,37 @@ RA_FP_INLINE void ra_modify_q16_flat(const struct ra_bpf_config *cfg,
                 out_x_q16, out_y_q16);
 }
 
+/* Carry-accumulated Q16.16 -> integer emission. Adds the retained fractional
+ * carry to the post-LUT output, splits off the integer counts to emit, and
+ * keeps the new fraction for the next packet. Returns 1 (and writes
+ * *out_x / *out_y, updating carry) when the packet should be emitted, or 0 to
+ * drop it. The drop is the ValidCarry mirror of driver/driver.cpp:37-42, which
+ * refuses a carry outside [-1, 1) rather than emit a surprising spike; the
+ * arithmetic >> floors toward -inf so the remainder is always in
+ * [0, RA_Q16_ONE) and the bounds check is the defensive guard the driver
+ * carries. On a drop, carry is left untouched. Shared so the BPF program and
+ * the host sequence tests run the exact same emission. */
+RA_FP_INLINE int ra_emit_q16(struct ra_bpf_state *st,
+                             __s64 acc_x_q16, __s64 acc_y_q16,
+                             __s32 *out_x, __s32 *out_y)
+{
+    __s64 out_x_q16 = acc_x_q16 + (__s64)st->carry_x_q16;
+    __s64 out_y_q16 = acc_y_q16 + (__s64)st->carry_y_q16;
+
+    __s32 ix = (__s32)(out_x_q16 >> RA_Q16_SHIFT);
+    __s32 iy = (__s32)(out_y_q16 >> RA_Q16_SHIFT);
+
+    __s32 new_carry_x = (__s32)(out_x_q16 - ((__s64)ix << RA_Q16_SHIFT));
+    __s32 new_carry_y = (__s32)(out_y_q16 - ((__s64)iy << RA_Q16_SHIFT));
+
+    if (new_carry_x >= RA_Q16_ONE || new_carry_x <= -RA_Q16_ONE) return 0;
+    if (new_carry_y >= RA_Q16_ONE || new_carry_y <= -RA_Q16_ONE) return 0;
+
+    st->carry_x_q16 = new_carry_x;
+    st->carry_y_q16 = new_carry_y;
+    *out_x = ix;
+    *out_y = iy;
+    return 1;
+}
+
 #endif /* RAWACCEL_FIXEDPOINT_H */

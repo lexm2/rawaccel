@@ -232,3 +232,14 @@ add_executable(fixedpoint_tests
 )
 target_link_libraries(fixedpoint_tests PRIVATE rawaccel_agent)
 add_test(NAME fixedpoint_tests COMMAND fixedpoint_tests)
+
+# BPF scenario tests: build a config, push a SEQUENCE of fake packets through
+# the shared fixed-point pipeline + ra_emit_q16 (the exact in-kernel emission),
+# and check carry accumulation, speed clamp, directional output DPI, smoothing
+# warmup, and idle pass-through against the common/ oracle plus invariants.
+add_executable(sequence_tests
+    tests/test_main.cpp
+    tests/sequence_tests.cpp
+)
+target_link_libraries(sequence_tests PRIVATE rawaccel_agent)
+add_test(NAME sequence_tests COMMAND sequence_tests)
