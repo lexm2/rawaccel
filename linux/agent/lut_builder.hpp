@@ -60,6 +60,10 @@ struct LutBuildResult {
     std::int32_t in_log2_trw_q16   = 0;
     std::int32_t in_log2_trc_q16   = 0;
 
+    // scale_smoother (simple EMA) log2 coefficients; RA_F_SMOOTH_SCALE.
+    std::int32_t sc_log2_win_q16   = 0;
+    std::int32_t sc_log2_cut_q16   = 0;
+
     // modifier_flags bitfield + distance mode (RA_F_* / RA_DIST_*). Reserved
     // for Phase 1; emitted now so the config layout is stable.
     std::uint32_t flags    = 0;

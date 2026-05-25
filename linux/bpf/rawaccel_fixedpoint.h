@@ -342,6 +342,23 @@ RA_FP_NOINLINE __s32 ra_linear_ema_step(struct ra_linear_ema_state *s,
     return ra_sat_s32(m);
 }
 
+/* Simple EMA smoother, the fixed-point mirror of common/rawaccel.hpp's
+ * simple_ema_smoother::smooth (lines 79-90). A window/cutoff level pair pulled
+ * toward the sample by the dt-adaptive alpha; no trend term and no zero clamp
+ * (the smoothed scale stays positive). Returns min(window, cutoff). Used for
+ * the scale-smoothing stage. __noinline: verified once. */
+RA_FP_NOINLINE __s32 ra_simple_ema_step(struct ra_simple_ema_state *s,
+                                        const struct ra_simple_ema_coeffs *c,
+                                        __s32 sample_q16, __s32 dt_ms_q16)
+{
+    __s32 a_win = ra_ema_alpha_q16(dt_ms_q16, c->log2_win);
+    __s32 a_cut = ra_ema_alpha_q16(dt_ms_q16, c->log2_cut);
+    s->win += ra_mul_q16_s64((__s64)sample_q16 - s->win, a_win);
+    s->cut += ra_mul_q16_s64((__s64)sample_q16 - s->cut, a_cut);
+    __s64 m = s->win < s->cut ? s->win : s->cut;
+    return ra_sat_s32(m);
+}
+
 /* Map a Q16.16 speed onto a LUT bucket index and fractional weight. Both
  * operands are non-negative so the divisions are unsigned (the BPF verifier
  * rejects signed division). idx is clamped to [0, RA_LUT_SIZE - 2] so idx+1
@@ -371,20 +388,6 @@ RA_FP_INLINE __s32 ra_lut_sample(const __s32 *lut, __u32 idx, __s32 frac_q16)
     __u32 i0 = idx & (RA_LUT_SIZE - 1);
     __u32 i1 = (idx + 1) & (RA_LUT_SIZE - 1);
     return ra_q16_lerp(lut[i0], lut[i1], frac_q16);
-}
-
-/* Apply range weighting then output-DPI scaling to a raw curve scale.
- * Mirrors callback_template (1 + (f-1)*weight) followed by the output_dpi
- * adjustment in modify. dir_extra_q16 is the per-axis trailing factor
- * (yx_output_dpi_ratio for Y, RA_Q16_ONE for X). */
-RA_FP_INLINE __s32 ra_axis_eff_scale(__s32 raw_q16, __s32 range_w_q16,
-                                     __s32 output_dpi_adj_q16,
-                                     __s32 dir_extra_q16)
-{
-    __s32 scale = RA_Q16_ONE + ra_mul_q16(raw_q16 - RA_Q16_ONE, range_w_q16);
-    scale = ra_mul_q16(scale, output_dpi_adj_q16);
-    scale = ra_mul_q16(scale, dir_extra_q16);
-    return scale;
 }
 
 /* The pipeline is split around the LUT fetch so the kernel program and the
@@ -493,19 +496,38 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
  * blended weight_q16 (range_weights.x when directional weighting is off),
  * matching modify; separate mode uses each axis's own raw curve and weight. */
 RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
+                              struct ra_bpf_state *st,
                               __s64 inx_q16, __s64 iny_q16,
                               __s32 raw_x, __s32 raw_y, __u8 single_scale,
-                              __s32 weight_q16,
+                              __s32 weight_q16, __s32 dt_ms_q16,
                               __s64 *out_x_q16, __s64 *out_y_q16)
 {
-    __s32 ry = single_scale ? raw_x : raw_y;
-    __s32 wx = single_scale ? weight_q16 : cfg->range_w_x_q16;
-    __s32 wy = single_scale ? weight_q16 : cfg->range_w_y_q16;
+    /* Range-weighted curve scale 1 + (f - 1)*weight (callback_template). This
+     * is the value the scale smoother operates on, BEFORE output-DPI scaling
+     * (modify smooths scale_x/scale_y, then multiplies in by the dpi
+     * adjustment). Whole mode smooths a single scale via sc_x and applies it to
+     * both axes; separate mode smooths each axis with its own state. */
+    __s32 ws_x, ws_y;
+    if (single_scale) {
+        __s32 ws = RA_Q16_ONE + ra_mul_q16(raw_x - RA_Q16_ONE, weight_q16);
+        if (cfg->flags & RA_F_SMOOTH_SCALE)
+            ws = ra_simple_ema_step(&st->sc_x, &cfg->scale_coeffs, ws, dt_ms_q16);
+        ws_x = ws;
+        ws_y = ws;
+    } else {
+        ws_x = RA_Q16_ONE + ra_mul_q16(raw_x - RA_Q16_ONE, cfg->range_w_x_q16);
+        ws_y = RA_Q16_ONE + ra_mul_q16(raw_y - RA_Q16_ONE, cfg->range_w_y_q16);
+        if (cfg->flags & RA_F_SMOOTH_SCALE) {
+            ws_x = ra_simple_ema_step(&st->sc_x, &cfg->scale_coeffs, ws_x, dt_ms_q16);
+            ws_y = ra_simple_ema_step(&st->sc_y, &cfg->scale_coeffs, ws_y, dt_ms_q16);
+        }
+    }
 
-    __s32 eff_x = ra_axis_eff_scale(raw_x, wx,
-                                    cfg->output_dpi_adj_q16, RA_Q16_ONE);
-    __s32 eff_y = ra_axis_eff_scale(ry, wy,
-                                    cfg->output_dpi_adj_q16, cfg->yx_ratio_q16);
+    /* Output-DPI scaling then the per-axis trailing factor (yx_output_dpi_ratio
+     * on Y), following the (smoothed) scale, matching modify's order. */
+    __s32 eff_x = ra_mul_q16(ws_x, cfg->output_dpi_adj_q16);
+    __s32 eff_y = ra_mul_q16(ra_mul_q16(ws_y, cfg->output_dpi_adj_q16),
+                             cfg->yx_ratio_q16);
 
     __s64 ox = (inx_q16 * (__s64)eff_x) >> RA_Q16_SHIFT;
     __s64 oy = (iny_q16 * (__s64)eff_y) >> RA_Q16_SHIFT;
@@ -540,7 +562,7 @@ RA_FP_INLINE void ra_modify_q16_flat(const struct ra_bpf_config *cfg,
     __s32 raw_x = ra_lut_sample(lut_x, ix, fx);
     __s32 raw_y = ra_lut_sample(lut_y, iy, fy);
 
-    ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, weight,
+    ra_post_lut(cfg, st, inx, iny, raw_x, raw_y, single_scale, weight, dt_ms_q16,
                 out_x_q16, out_y_q16);
 }
 

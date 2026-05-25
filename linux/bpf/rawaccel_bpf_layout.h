@@ -63,6 +63,13 @@ struct ra_linear_ema_coeffs {
     __s32 log2_trc;
 };
 
+/* Simple EMA smoother coefficients: log2(coeff) in Q16.16 (negative) for the
+ * window/cutoff pair. No trend term (cf. simple_ema_smoother). */
+struct ra_simple_ema_coeffs {
+    __s32 log2_win;
+    __s32 log2_cut;
+};
+
 /* The two per-axis lookup tables (anisotropy) store the RAW curve scale
  * f(speed) in Q16.16. Range/domain weighting, output-DPI scaling, and the
  * directional multipliers live in ra_bpf_config and are applied in-kernel
@@ -132,12 +139,16 @@ struct ra_bpf_config {
      * input_speed_smooth_halflife and the fixed input trend halflife (1.25).
      * Used only when RA_F_SMOOTH_INPUT is set. */
     struct ra_linear_ema_coeffs in_coeffs;
+
+    /* scale_smoother (simple EMA) coefficients, from scale_smooth_halflife.
+     * Used only when RA_F_SMOOTH_SCALE is set. */
+    struct ra_simple_ema_coeffs scale_coeffs;
 };
 
 #ifndef __BPF__
 /* Host side is always C++ (agent + tests); BPF side skips this. Catches
  * accidental padding/layout drift between agent and kernel. */
-static_assert(sizeof(struct ra_bpf_config) == 108,
+static_assert(sizeof(struct ra_bpf_config) == 116,
               "ra_bpf_config layout changed; update kernel + agent in lockstep");
 #endif
 
@@ -152,6 +163,12 @@ struct ra_linear_ema_state {
     __s64 cut_tr;
 };
 
+/* Simple EMA smoother accumulators: a window/cutoff level pair, __s64 Q16.16. */
+struct ra_simple_ema_state {
+    __s64 win;
+    __s64 cut;
+};
+
 /* Per-device runtime state. One instance per BPF object load. */
 struct ra_bpf_state {
     __u64 last_ts_ns;       /* bpf_ktime_get_ns() at the last packet */
@@ -163,10 +180,15 @@ struct ra_bpf_state {
      * (calc_speed_separate). */
     struct ra_linear_ema_state in_x;
     struct ra_linear_ema_state in_y;
+
+    /* scale_smoother state, per axis. Whole mode smooths the single scale via
+     * sc_x; separate mode uses sc_x for X and sc_y for Y. */
+    struct ra_simple_ema_state sc_x;
+    struct ra_simple_ema_state sc_y;
 };
 
 #ifndef __BPF__
-static_assert(sizeof(struct ra_bpf_state) == 80,
+static_assert(sizeof(struct ra_bpf_state) == 112,
               "ra_bpf_state layout changed; update kernel + agent in lockstep");
 #endif
 

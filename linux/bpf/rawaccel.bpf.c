@@ -199,7 +199,7 @@ int BPF_PROG(rawaccel_hid_device_event,
                               q16_lookup(&ra_lut_y, iy + 1), fy);
 
     __s64 acc_x, acc_y;
-    ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, weight,
+    ra_post_lut(cfg, st, inx, iny, raw_x, raw_y, single_scale, weight, dt_ms_q16,
                 &acc_x, &acc_y);
 
     /* Carry-accumulate and split off the integer counts to emit. ra_emit_q16

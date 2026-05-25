@@ -368,6 +368,51 @@ RA_TEST("Seq: whole-mode input smoothing matches the stateful oracle (1 ms)")
     }
 }
 
+RA_TEST("Seq: scale smoothing matches the stateful oracle (whole + separate)")
+{
+    // The scale smoother (simple EMA) smooths the range-weighted curve scale
+    // before the output-DPI multiply. Both totals start at 0, so the scale
+    // ramps in from below; parity must hold from the first packet through the
+    // ramp into steady state, in whole and separate mode.
+    ra::device_config dev{};
+
+    {   // whole mode, diagonal hold
+        ra::modifier_settings s{};
+        s.prof.accel_x.mode = ra::accel_mode::classic;
+        s.prof.accel_x.acceleration = 0.05;
+        s.prof.accel_x.exponent_classic = 2.0;
+        s.prof.accel_y = s.prof.accel_x;
+        s.prof.speed_processor_args.scale_smooth_halflife = 25;
+        DtPackets pk;
+        for (int i = 0; i < 250; ++i) pk.push_back({90.0, 120.0, 1.0});
+        auto f = run_fixed_acc(s, dev, pk);
+        auto o = run_oracle_stateful(s, pk);
+        for (std::size_t i = 0; i < pk.size(); ++i) {
+            RA_CHECK_NEAR(f[i].first,  o[i].first,  1e-2 + std::fabs(o[i].first) * 5e-3);
+            RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2 + std::fabs(o[i].second) * 5e-3);
+        }
+    }
+    {   // separate mode, asymmetric curves -> per-axis scale smoothing
+        ra::modifier_settings s{};
+        s.prof.accel_x.mode = ra::accel_mode::classic;
+        s.prof.accel_x.acceleration = 0.05;
+        s.prof.accel_x.exponent_classic = 2.0;
+        s.prof.accel_y.mode = ra::accel_mode::classic;
+        s.prof.accel_y.acceleration = 0.02;
+        s.prof.accel_y.exponent_classic = 2.0;
+        s.prof.speed_processor_args.whole = false;
+        s.prof.speed_processor_args.scale_smooth_halflife = 25;
+        DtPackets pk;
+        for (int i = 0; i < 250; ++i) pk.push_back({110.0, 70.0, 1.0});
+        auto f = run_fixed_acc(s, dev, pk);
+        auto o = run_oracle_stateful(s, pk);
+        for (std::size_t i = 0; i < pk.size(); ++i) {
+            RA_CHECK_NEAR(f[i].first,  o[i].first,  1e-2 + std::fabs(o[i].first) * 5e-3);
+            RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2 + std::fabs(o[i].second) * 5e-3);
+        }
+    }
+}
+
 RA_TEST("Seq: idle (0,0) packets emit nothing and preserve carry")
 {
     ra::modifier_settings s{};

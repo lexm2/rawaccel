@@ -82,6 +82,18 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         }
     }
 
+    // scale_smoother coefficients (simple_ema_smoother::init): a window/cutoff
+    // level pair, no trend. RA_F_SMOOTH_SCALE below gates kernel application.
+    {
+        double hl = settings.prof.speed_processor_args.scale_smooth_halflife;
+        if (hl > 0.0) {
+            double win = std::pow(0.5, 1.0 / hl);
+            double cut = 1.0 - std::sqrt(1.0 - win);
+            out.sc_log2_win_q16 = q16_round(std::log2(win));
+            out.sc_log2_cut_q16 = q16_round(std::log2(cut));
+        }
+    }
+
     // Weighting / output scaling, applied in-kernel around the raw curve.
     out.range_w_x_q16      = q16_round(prof.range_weights.x);
     out.range_w_y_q16      = q16_round(prof.range_weights.y);
@@ -134,6 +146,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     // LUT is always built stateless above; the EMA is layered in-kernel.
     if (settings.prof.speed_processor_args.input_speed_smooth_halflife > 0.0)
         out.flags |= RA_F_SMOOTH_INPUT;
+    if (settings.prof.speed_processor_args.scale_smooth_halflife > 0.0)
+        out.flags |= RA_F_SMOOTH_SCALE;
 
     // Distance mode mirrors speed_processor::init.
     const auto& spa = prof.speed_processor_args;
@@ -201,6 +215,8 @@ ra_bpf_config to_bpf_config(const LutBuildResult& lut,
     cfg.in_coeffs.log2_cut = lut.in_log2_cut_q16;
     cfg.in_coeffs.log2_trw = lut.in_log2_trw_q16;
     cfg.in_coeffs.log2_trc = lut.in_log2_trc_q16;
+    cfg.scale_coeffs.log2_win = lut.sc_log2_win_q16;
+    cfg.scale_coeffs.log2_cut = lut.sc_log2_cut_q16;
 
     return cfg;
 }
