@@ -198,14 +198,29 @@ bool BpfBackend::attach_node(const std::string& sysname)
         return false;
     }
 
-    // hid_id must be set on the struct_ops map BEFORE load(); first 4 bytes
-    // of the map value are the hid_id field per hid_bpf_ops in vmlinux.h.
+    // hid_id must be set on the struct_ops map BEFORE load(); it is the first
+    // field of struct hid_bpf_ops (offset 0). bpf_map__set_initial_value()
+    // refuses a partial write (it requires size == the whole struct_ops value
+    // size), so patch the field directly in the map's mutable initial value -
+    // the bpf_object equivalent of skel->struct_ops.rawaccel_ops->hid_id = ...
+    // Leaving hid_id at 0 makes attach_struct_ops fail with EINVAL.
     bpf_map* ops = bpf_object__find_map_by_name(obj, "rawaccel_ops");
     if (!ops) {
         bpf_object__close(obj);
         return false;
     }
-    bpf_map__set_initial_value(ops, &hid_id, sizeof(hid_id));
+    {
+        std::size_t ops_val_size = 0;
+        void* ops_val = bpf_map__initial_value(ops, &ops_val_size);
+        if (!ops_val || ops_val_size < sizeof(hid_id)) {
+            std::fprintf(stderr,
+                "bpf backend: cannot patch hid_id on rawaccel_ops (%s)\n",
+                sysname.c_str());
+            bpf_object__close(obj);
+            return false;
+        }
+        std::memcpy(ops_val, &hid_id, sizeof(hid_id));
+    }
 
     if (bpf_object__load(obj) != 0) {
         const int saved = errno;
