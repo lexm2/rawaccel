@@ -26,9 +26,10 @@ namespace {
 
 // Authoritative output for one axis, mirroring how build_lut prepares the
 // curve (smoother halflives zeroed) and how the BPF program is exercised
-// (dpi_factor 1, 1 ms slice).
+// (dpi_factor 1, dt_ms slice -> ips_factor 1/dt_ms). dt_ms defaults to 1 so the
+// single-EMA/1 ms cases are unchanged; the dt-aware cases pass the real slice.
 double oracle_axis(const ra::modifier_settings& s,
-                   double in_x, double in_y, bool want_x)
+                   double in_x, double in_y, bool want_x, double dt_ms = 1.0)
 {
     ra::modifier_settings ms = s;
     ms.prof.speed_processor_args.input_speed_smooth_halflife = 0;
@@ -41,7 +42,7 @@ double oracle_axis(const ra::modifier_settings& s,
     sp.init(ms.prof.speed_processor_args);
 
     vec2d v{in_x, in_y};
-    mod.modify(v, sp, ms, 1.0, 1.0);
+    mod.modify(v, sp, ms, 1.0, dt_ms);
     return want_x ? v.x : v.y;
 }
 
@@ -50,19 +51,27 @@ double oracle_axis(const ra::modifier_settings& s,
 // velocity equals the raw count in in/s, matching modify's ips_factor of 1.
 void check_with(const ra::modifier_settings& s, const LutBuildResult& lut,
                 const ra_bpf_config& cfg, std::int32_t dx, std::int32_t dy,
-                double abs_tol, double rel_tol)
+                double abs_tol, double rel_tol, double dt_ms = 1.0)
 {
     ra_bpf_state st{};  // fresh: smoothed_v and carry both zero
+
+    // Quantize dt to Q16.16 and feed the SAME value to both sides, so dt
+    // quantization is never counted as parity error. dt stays inside the
+    // config's clamp window in the callers, so the (kernel-only) dt clamp is a
+    // no-op here and the oracle (which does not clamp internally) agrees.
+    __s32 dt_q16 = static_cast<__s32>(std::lround(dt_ms * RA_Q16_ONE));
+    if (dt_q16 <= 0) dt_q16 = 1;
+    double dt_exact = static_cast<double>(dt_q16) / RA_Q16_ONE;
 
     // __s64 (long long) not int64_t (long): match the helper's signature.
     __s64 ox_q16 = 0, oy_q16 = 0;
     ra_modify_q16_flat(&cfg, &st, lut.lut_x.data(), lut.lut_y.data(),
-                       dx, dy, &ox_q16, &oy_q16);
+                       dx, dy, dt_q16, &ox_q16, &oy_q16);
 
     double kx = static_cast<double>(ox_q16) / RA_Q16_ONE;
     double ky = static_cast<double>(oy_q16) / RA_Q16_ONE;
-    double ex = oracle_axis(s, dx, dy, true);
-    double ey = oracle_axis(s, dx, dy, false);
+    double ex = oracle_axis(s, dx, dy, true, dt_exact);
+    double ey = oracle_axis(s, dx, dy, false, dt_exact);
 
     RA_CHECK_NEAR(kx, ex, abs_tol + std::fabs(ex) * rel_tol);
     RA_CHECK_NEAR(ky, ey, abs_tol + std::fabs(ey) * rel_tol);
@@ -264,6 +273,73 @@ RA_TEST("Fixed: speed clamp composes with a curve")
     check_axis(s, 40, 0);
     check_axis(s, 200, 0);   // clamped to 80 before the curve
     check_axis(s, 90, 120);  // |v| 150 -> clamped to 80
+}
+
+// ---- P2.1: real per-packet dt ------------------------------------------
+//
+// The curve domain is in/s; the kernel now folds 1/dt into the velocity used
+// for LUT indexing and the speed clamp, so the same displacement delivered over
+// a different polling interval lands at a different speed. Parity holds against
+// the oracle called with the matching time slice. dt values stay inside the
+// default clamp window [0.0625, 100] ms so the kernel-only dt clamp is inert.
+
+RA_TEST("Fixed: real dt scales the curve-input speed (poll-rate independence)")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+
+    ra::device_config dev{};
+    LutBuildResult lut = build_lut(s, dev);
+    BpfMouseLayout layout{};
+    ra_bpf_config cfg = to_bpf_config(lut, layout);
+
+    // 8 kHz .. 125 Hz worth of slices; magnitudes kept so 1/dt * |v| stays
+    // inside the LUT's velocity span.
+    for (double dt : {0.125, 0.5, 1.0, 2.0, 4.0, 8.0}) {
+        for (std::int32_t v : {5, 20, 80, 200}) {
+            check_with(s, lut, cfg, v, 0, 1e-2, 2e-3, dt);
+            check_with(s, lut, cfg, 0, v, 1e-2, 2e-3, dt);
+            check_with(s, lut, cfg, v, v, 1e-2, 3e-3, dt);
+        }
+    }
+}
+
+RA_TEST("Fixed: noaccel output is dt-invariant (scale is 1 at every speed)")
+{
+    // noaccel scale is 1 regardless of speed, so changing dt changes nothing:
+    // output stays equal to input and the oracle agrees at any slice.
+    ra::modifier_settings s{};
+    ra::device_config dev{};
+    LutBuildResult lut = build_lut(s, dev);
+    BpfMouseLayout layout{};
+    ra_bpf_config cfg = to_bpf_config(lut, layout);
+
+    for (double dt : {0.125, 1.0, 5.0, 50.0})
+        for (std::int32_t v : {7, 33, 150})
+            check_with(s, lut, cfg, v, -v, 1e-2, 2e-3, dt);
+}
+
+RA_TEST("Fixed: speed clamp tracks the dt-scaled velocity")
+{
+    // The clamp threshold is in in/s, so the same displacement is clamped
+    // differently per poll rate: a slow slice lowers the IPS below the cap.
+    ra::modifier_settings s{};
+    s.prof.speed_min = 10.0;
+    s.prof.speed_max = 50.0;
+
+    ra::device_config dev{};
+    LutBuildResult lut = build_lut(s, dev);
+    BpfMouseLayout layout{};
+    ra_bpf_config cfg = to_bpf_config(lut, layout);
+
+    for (double dt : {0.25, 1.0, 3.0}) {
+        check_with(s, lut, cfg, 30, 0, 1e-2, 2e-3, dt);
+        check_with(s, lut, cfg, 100, 0, 1e-2, 2e-3, dt);
+        check_with(s, lut, cfg, 30, 40, 1e-2, 2e-3, dt);
+    }
 }
 
 RA_TEST("Fixed: angle snapping collapses near-axis input onto the axis")

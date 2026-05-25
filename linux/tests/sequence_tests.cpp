@@ -95,8 +95,10 @@ std::vector<Emit> run_fixed(const ra::modifier_settings& s,
             continue;
         }
         __s64 ax = 0, ay = 0;
+        // These sequences assume a 1 ms slice (RA_Q16_ONE); dt-varying behavior
+        // is covered by fixedpoint_tests.cpp's P2.1 cases.
         ra_modify_q16_flat(&cfg, &st, lut.lut_x.data(), lut.lut_y.data(),
-                           dx, dy, &ax, &ay);
+                           dx, dy, RA_Q16_ONE, &ax, &ay);
         if (acc_out) acc_out->push_back({(long long)ax, (long long)ay});
 
         __s32 ex = 0, ey = 0;

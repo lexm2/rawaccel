@@ -102,6 +102,12 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         out.snap_hi_tan_q16 = q16_round(std::tan(kPi / 2.0 - snap_rad));
     }
 
+    // Per-packet dt clamp window (device_config::clamp, default 0.0625..100 ms).
+    // The kernel folds 1/dt into the velocity, so it clamps the measured dt into
+    // this window first (mirrors the driver's I/O-layer time_clamp).
+    out.time_min_q16 = q16_round(dev_config.clamp.min);
+    out.time_max_q16 = q16_round(dev_config.clamp.max);
+
     // Flags fire only when the corresponding setting is non-trivial, matching
     // modifier_flags.
     out.flags = 0;
@@ -178,6 +184,8 @@ ra_bpf_config to_bpf_config(const LutBuildResult& lut,
     cfg.speed_max_q16     = lut.speed_max_q16;
     cfg.snap_lo_tan_q16   = lut.snap_lo_tan_q16;
     cfg.snap_hi_tan_q16   = lut.snap_hi_tan_q16;
+    cfg.time_min_q16      = lut.time_min_q16;
+    cfg.time_max_q16      = lut.time_max_q16;
 
     return cfg;
 }

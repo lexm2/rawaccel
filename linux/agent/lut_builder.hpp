@@ -51,6 +51,8 @@ struct LutBuildResult {
     std::int32_t speed_max_q16     = 0;
     std::int32_t snap_lo_tan_q16   = 0;
     std::int32_t snap_hi_tan_q16   = 0;
+    std::int32_t time_min_q16      = 0;
+    std::int32_t time_max_q16      = 0;
 
     // modifier_flags bitfield + distance mode (RA_F_* / RA_DIST_*). Reserved
     // for Phase 1; emitted now so the config layout is stable.

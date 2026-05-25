@@ -160,6 +160,27 @@ int BPF_PROG(rawaccel_hid_device_event,
     RA_BARRIER(dx);
     RA_BARRIER(dy);
 
+    /* Real per-packet delta-time. last_ts_ns == 0 is the first packet after a
+     * config (re)load, where there is no prior timestamp; assume 1 ms so the
+     * smoother/velocity warmup matches the host oracle's first-packet dt. The
+     * elapsed ns is capped at 1 s before the Q16.16 ms conversion (keeps the
+     * << 16 inside u64) and then clamped to the configured [min, max] window;
+     * a long idle gap therefore collapses to time_max. bpf_ktime_get_ns lives
+     * only in the kernel, so dt is computed here and passed into the shared
+     * pipeline rather than inside rawaccel_fixedpoint.h. */
+    __u64 now = bpf_ktime_get_ns();
+    __s32 dt_ms_q16;
+    if (st->last_ts_ns == 0) {
+        dt_ms_q16 = RA_Q16_ONE;
+    } else {
+        __u64 dt_ns = now - st->last_ts_ns;
+        if (dt_ns > 1000000000ULL) dt_ns = 1000000000ULL;
+        __s32 dt = (__s32)((dt_ns << RA_Q16_SHIFT) / 1000000ULL);
+        if (dt < cfg->time_min_q16) dt = cfg->time_min_q16;
+        if (cfg->time_max_q16 > 0 && dt > cfg->time_max_q16) dt = cfg->time_max_q16;
+        dt_ms_q16 = dt;
+    }
+
     /* Per-packet pipeline. ra_pre_lut / ra_post_lut (rawaccel_fixedpoint.h)
      * are shared with the host parity tests; the only kernel-specific step is
      * the LUT read, since a BPF array-map pointer cannot stride past one
@@ -169,7 +190,7 @@ int BPF_PROG(rawaccel_hid_device_event,
     __s32 fx, fy;
     __u8 single_scale;
     __s32 weight;
-    ra_pre_lut(cfg, st, dx, dy, &inx, &iny, &ix, &fx, &iy, &fy,
+    ra_pre_lut(cfg, st, dx, dy, dt_ms_q16, &inx, &iny, &ix, &fx, &iy, &fy,
                &single_scale, &weight);
 
     __s32 raw_x = ra_q16_lerp(q16_lookup(&ra_lut_x, ix),

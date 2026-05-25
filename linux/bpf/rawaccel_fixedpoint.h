@@ -60,6 +60,30 @@ RA_FP_INLINE __s32 ra_mul_q16(__s32 a, __s32 b)
     return (__s32)(((__s64)a * (__s64)b) >> RA_Q16_SHIFT);
 }
 
+/* Saturate a 64-bit value into signed 32-bit range. Speeds past this are far
+ * beyond lut_max and get clamped at index time anyway. (Defined early so the
+ * divide can reuse it.) */
+RA_FP_INLINE __s32 ra_sat_s32(__s64 v)
+{
+    if (v > 0x7fffffff) return 0x7fffffff;
+    if (v < -0x7fffffff) return -0x7fffffff;
+    return (__s32)v;
+}
+
+/* Q16.16 divide: (num / den) in Q16.16. The BPF verifier rejects signed
+ * division, so the magnitudes are divided as u64 and the sign reapplied.
+ * den == 0 returns 0; the result saturates to s32. den == RA_Q16_ONE returns
+ * num exactly, so dividing by a unit dt is a no-op. */
+RA_FP_INLINE __s32 ra_div_q16(__s32 num, __s32 den)
+{
+    if (den == 0) return 0;
+    int neg = (num < 0) ^ (den < 0);
+    __u64 n = (__u64)(num < 0 ? -(__s64)num : (__s64)num);
+    __u64 d = (__u64)(den < 0 ? -(__s64)den : (__s64)den);
+    __u64 q = (n << RA_Q16_SHIFT) / d;
+    return ra_sat_s32(neg ? -(__s64)q : (__s64)q);
+}
+
 /* Linear interpolation between two Q16.16 values; frac in [0, RA_Q16_ONE). */
 RA_FP_INLINE __s32 ra_q16_lerp(__s32 a, __s32 b, __s32 frac_q16)
 {
@@ -76,15 +100,6 @@ RA_FP_INLINE void ra_rotate_q16(__s64 *x, __s64 *y, __s32 cos_q16, __s32 sin_q16
     __s64 ry = (*x * (__s64)sin_q16 + *y * (__s64)cos_q16) >> RA_Q16_SHIFT;
     *x = rx;
     *y = ry;
-}
-
-/* Saturate a 64-bit value into signed 32-bit range. Speeds past this are far
- * beyond lut_max and get clamped at index time anyway. */
-RA_FP_INLINE __s32 ra_sat_s32(__s64 v)
-{
-    if (v > 0x7fffffff) return 0x7fffffff;
-    if (v < -0x7fffffff) return -0x7fffffff;
-    return (__s32)v;
 }
 
 /* Integer sqrt of a u64, digit-by-digit, fixed 32-iteration loop.
@@ -161,13 +176,16 @@ RA_FP_NOINLINE __s32 ra_atan_ratio_q16(__s64 num, __s64 den)
 }
 
 /* Speed clamp (modifier::modify): clamp the working vector's speed
- * (magnitude * dpi_norm, in/s) to [speed_min, speed_max] and rescale the
- * vector by the resulting ratio. __noinline: verified once. */
+ * (magnitude * eff_dpi_norm, in/s) to [speed_min, speed_max] and rescale the
+ * vector by the resulting ratio. eff_dpi_norm already folds in 1/dt, so the
+ * clamp threshold is compared in real in/s (modify's magnitude * ips_factor).
+ * __noinline: verified once. */
 RA_FP_NOINLINE void ra_clamp_speed(const struct ra_bpf_config *cfg,
+                                   __s32 eff_dpi_norm_q16,
                                    __s64 *inx, __s64 *iny)
 {
     __s32 mag = ra_magnitude_q16(*inx, *iny);          /* Q16 counts */
-    __s32 speed = ra_mul_q16(mag, cfg->dpi_norm_q16);  /* Q16 in/s */
+    __s32 speed = ra_mul_q16(mag, eff_dpi_norm_q16);   /* Q16 in/s */
     if (speed <= 0) return;
 
     __s32 clamped = speed;
@@ -292,7 +310,7 @@ RA_FP_INLINE __s32 ra_axis_eff_scale(__s32 raw_q16, __s32 range_w_q16,
  * Stage 1: raw counts -> working vector + per-axis curve LUT indices. */
 RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
                              struct ra_bpf_state *st,
-                             __s32 dx, __s32 dy,
+                             __s32 dx, __s32 dy, __s32 dt_ms_q16,
                              __s64 *inx_q16, __s64 *iny_q16,
                              __u32 *ix, __s32 *fx, __u32 *iy, __s32 *fy,
                              __u8 *single_scale, __s32 *weight_q16)
@@ -301,6 +319,15 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
      * per-packet transform (rotation, snap, speed clamp) to the LUT stage. */
     __s64 inx = (__s64)dx << RA_Q16_SHIFT;
     __s64 iny = (__s64)dy << RA_Q16_SHIFT;
+
+    /* Fold the real per-packet dt into the velocity normalization. modify uses
+     * speed = component * dpi_factor / time (ips_factor); here dpi_norm plays
+     * dpi_factor's role, so eff_dpi_norm = dpi_norm / dt_ms gives in/s at the
+     * actual polling interval. dt_ms_q16 is already clamped by the caller, and
+     * ra_div_q16(x, RA_Q16_ONE) == x, so a 1 ms packet leaves velocity intact
+     * (matching the Phase-1 behavior). The output vector below stays in raw
+     * counts: dt scales only the speed used for indexing and the clamp. */
+    __s32 eff_dpi_norm_q16 = ra_div_q16(cfg->dpi_norm_q16, dt_ms_q16);
 
     /* Rotation is the first transform in modifier::modify. Velocity and the
      * curve index are derived from the rotated vector. */
@@ -330,14 +357,15 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
 
     /* Speed clamp acts on the (rotated) vector before the curve. */
     if (cfg->flags & RA_F_CLAMP_SPEED)
-        ra_clamp_speed(cfg, &inx, &iny);
+        ra_clamp_speed(cfg, eff_dpi_norm_q16, &inx, &iny);
 
     *inx_q16 = inx;
     *iny_q16 = iny;
 
-    /* Per-axis abs weighted velocity (modify's abs_weighted_vel). */
-    __s32 awv_x = ra_axis_speed_q16(inx, cfg->dpi_norm_q16, cfg->domain_w_x_q16);
-    __s32 awv_y = ra_axis_speed_q16(iny, cfg->dpi_norm_q16, cfg->domain_w_y_q16);
+    /* Per-axis abs weighted velocity (modify's abs_weighted_vel), in real in/s
+     * via the dt-folded normalization. */
+    __s32 awv_x = ra_axis_speed_q16(inx, eff_dpi_norm_q16, cfg->domain_w_x_q16);
+    __s32 awv_y = ra_axis_speed_q16(iny, eff_dpi_norm_q16, cfg->domain_w_y_q16);
 
     if (cfg->dist_mode == RA_DIST_SEPARATE) {
         /* Separate: each axis indexes its own curve at its own speed. Per-axis
@@ -405,7 +433,7 @@ RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
 RA_FP_INLINE void ra_modify_q16_flat(const struct ra_bpf_config *cfg,
                                      struct ra_bpf_state *st,
                                      const __s32 *lut_x, const __s32 *lut_y,
-                                     __s32 dx, __s32 dy,
+                                     __s32 dx, __s32 dy, __s32 dt_ms_q16,
                                      __s64 *out_x_q16, __s64 *out_y_q16)
 {
     __s64 inx, iny;
@@ -413,7 +441,7 @@ RA_FP_INLINE void ra_modify_q16_flat(const struct ra_bpf_config *cfg,
     __s32 fx, fy;
     __u8 single_scale;
     __s32 weight;
-    ra_pre_lut(cfg, st, dx, dy, &inx, &iny, &ix, &fx, &iy, &fy,
+    ra_pre_lut(cfg, st, dx, dy, dt_ms_q16, &inx, &iny, &ix, &fx, &iy, &fy,
                &single_scale, &weight);
 
     __s32 raw_x = ra_lut_sample(lut_x, ix, fx);
