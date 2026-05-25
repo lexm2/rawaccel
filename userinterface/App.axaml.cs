@@ -123,6 +123,7 @@ public partial class App : Application
         services.AddSingleton<IViewModelFactory, ViewModelFactory>();
         services.AddSingleton<LocalizationService>();
         services.AddSingleton<FrameTimerService>();
+        services.AddTransient<MouseSpeedPollingService>();
         services.AddSingleton<PreviewChartRenderer>();
         services.AddSingleton<IAnimationStateService, AnimationStateService>();
         services.AddSingleton<ISettingsService, SettingsService>();

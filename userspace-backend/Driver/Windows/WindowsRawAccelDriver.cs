@@ -85,5 +85,7 @@ namespace userspace_backend.Driver.Windows
             // hook stays a no-op until consolidated.
             return 0;
         }
+
+        public MouseSpeedSample GetCurrentMouseSpeedSample() => MouseSpeedSample.Zero;
     }
 }

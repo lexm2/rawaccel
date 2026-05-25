@@ -31,5 +31,11 @@ namespace userspace_backend.Driver
         // Optional telemetry: current input speed (counts/ms or in/s,
         // implementation-defined). Returns 0 when unsupported.
         double GetCurrentMouseSpeed();
+
+        // Optional telemetry: current input speed split into per-axis X/Y plus
+        // the combined (lp-norm / hypot) magnitude. Returns MouseSpeedSample.Zero
+        // when unsupported. Combined mirrors GetCurrentMouseSpeed() where both
+        // are implemented.
+        MouseSpeedSample GetCurrentMouseSpeedSample();
     }
 }

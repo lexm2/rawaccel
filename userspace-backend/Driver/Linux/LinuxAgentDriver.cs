@@ -135,19 +135,44 @@ namespace userspace_backend.Driver.Linux
             }
         }
 
-        public double GetCurrentMouseSpeed()
+        // DEBUG AID: when true, GetCurrentMouseSpeedSample returns random speeds
+        // instead of querying the agent, so the chart's current-speed indicator
+        // lines can be verified before the HID-BPF agent exposes real per-axis
+        // telemetry (current_speed_x/current_speed_y from the ra_state map).
+        // Leave false in committed code; flip to true to visually test the lines.
+        private static readonly bool DebugRandomSpeed = false;
+
+        public double GetCurrentMouseSpeed() => GetCurrentMouseSpeedSample().Combined;
+
+        public MouseSpeedSample GetCurrentMouseSpeedSample()
         {
+            if (DebugRandomSpeed)
+            {
+                // Random per-axis speeds in a typical mouse-speed range; Combined
+                // is their honest hypot so combined-mode shows a consistent value.
+                double rx = Random.Shared.NextDouble() * 100.0;
+                double ry = Random.Shared.NextDouble() * 100.0;
+                return new MouseSpeedSample(rx, ry, Math.Sqrt(rx * rx + ry * ry));
+            }
+
             try
             {
                 var respJson = client.Call("{\"cmd\":\"stats\"}");
                 var resp = JObject.Parse(respJson);
-                if (!resp.Value<bool>("ok")) return 0;
-                return resp.Value<double?>("current_speed") ?? 0;
+                if (!resp.Value<bool>("ok")) return MouseSpeedSample.Zero;
+                // current_speed is the combined magnitude; the agent may also
+                // emit per-axis current_speed_x/current_speed_y. Until it does,
+                // fall back to the combined value so the single-line case keeps
+                // working and the two-line case degrades gracefully.
+                double combined = resp.Value<double?>("current_speed") ?? 0;
+                double x = resp.Value<double?>("current_speed_x") ?? combined;
+                double y = resp.Value<double?>("current_speed_y") ?? combined;
+                return new MouseSpeedSample(x, y, combined);
             }
             catch (Exception ex)
             {
                 logger.LogDebug(ex, "agent stats probe failed");
-                return 0;
+                return MouseSpeedSample.Zero;
             }
         }
     }

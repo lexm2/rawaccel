@@ -64,6 +64,7 @@ namespace userspace_backend.Model.ProfileComponents
                 Domain = new Vector2() { X = DomainX.ModelValue, Y = DomainY.ModelValue },
                 Range = new Vector2() { X = RangeX.ModelValue, Y = RangeY.ModelValue },
                 LPNorm = LPNorm.ModelValue,
+                CombineXYComponents = CombineXYComponents.ModelValue,
             };
         }
 

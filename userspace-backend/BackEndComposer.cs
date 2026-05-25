@@ -170,7 +170,8 @@ namespace userspace_backend
                         displayName: "Combine X and Y Components",
                         initialValue: false,
                         parser: services.GetRequiredService<IUserInputParser<bool>>(),
-                        validator: services.GetRequiredService<IModelValueValidator<bool>>()));
+                        validator: services.GetRequiredService<IModelValueValidator<bool>>(),
+                        localizationKey: "AnisotropyCombineXY"));
 
             #endregion Anisotropy
 
