@@ -45,16 +45,13 @@ double oracle_axis(const ra::modifier_settings& s,
     return want_x ? v.x : v.y;
 }
 
-// Run one pure-axis sample through the fixed-point pipeline and assert both
-// components match the oracle. dev.dpi stays 0 so dpi_norm is 1 and the kernel
+// Compare one sample against the oracle using a prebuilt LUT/config, with a
+// caller-chosen tolerance. dev.dpi stays 0 so dpi_norm is 1 and the kernel
 // velocity equals the raw count in in/s, matching modify's ips_factor of 1.
-void check_axis(const ra::modifier_settings& s, std::int32_t dx, std::int32_t dy)
+void check_with(const ra::modifier_settings& s, const LutBuildResult& lut,
+                const ra_bpf_config& cfg, std::int32_t dx, std::int32_t dy,
+                double abs_tol, double rel_tol)
 {
-    ra::device_config dev{};
-    LutBuildResult lut = build_lut(s, dev);
-    BpfMouseLayout layout{};  // HID fields irrelevant to the math
-    ra_bpf_config cfg = to_bpf_config(lut, layout);
-
     ra_bpf_state st{};  // fresh: smoothed_v and carry both zero
 
     // __s64 (long long) not int64_t (long): match the helper's signature.
@@ -67,9 +64,40 @@ void check_axis(const ra::modifier_settings& s, std::int32_t dx, std::int32_t dy
     double ex = oracle_axis(s, dx, dy, true);
     double ey = oracle_axis(s, dx, dy, false);
 
-    // Tolerance covers Q16.16 quantization of the LUT entries times the count.
-    RA_CHECK_NEAR(kx, ex, 1e-2 + std::fabs(ex) * 2e-3);
-    RA_CHECK_NEAR(ky, ey, 1e-2 + std::fabs(ey) * 2e-3);
+    RA_CHECK_NEAR(kx, ex, abs_tol + std::fabs(ex) * rel_tol);
+    RA_CHECK_NEAR(ky, ey, abs_tol + std::fabs(ey) * rel_tol);
+}
+
+// Run one sample through the fixed-point pipeline and assert both components
+// match the oracle. Tolerance covers Q16.16 quantization of the LUT entries
+// times the count.
+void check_axis(const ra::modifier_settings& s, std::int32_t dx, std::int32_t dy)
+{
+    ra::device_config dev{};
+    LutBuildResult lut = build_lut(s, dev);
+    BpfMouseLayout layout{};  // HID fields irrelevant to the math
+    ra_bpf_config cfg = to_bpf_config(lut, layout);
+    check_with(s, lut, cfg, dx, dy, 1e-2, 2e-3);
+}
+
+// Sweep a dense grid of directions and magnitudes (pure axis, diagonal, every
+// quadrant) through one profile, building the LUT once. The grid values are
+// chosen off the 15-degree marks so a snap profile's tan threshold never lands
+// exactly on a sample (where fixed-point vs double rounding could disagree).
+void sweep_grid(const ra::modifier_settings& s,
+                double abs_tol = 1e-2, double rel_tol = 2e-3)
+{
+    ra::device_config dev{};
+    LutBuildResult lut = build_lut(s, dev);
+    BpfMouseLayout layout{};
+    ra_bpf_config cfg = to_bpf_config(lut, layout);
+
+    static const std::int32_t vals[] = {
+        -300, -128, -50, -17, -5, 0, 5, 17, 50, 128, 300};
+    for (std::int32_t dx : vals)
+        for (std::int32_t dy : vals)
+            if (dx != 0 || dy != 0)
+                check_with(s, lut, cfg, dx, dy, abs_tol, rel_tol);
 }
 
 } // namespace
@@ -279,6 +307,101 @@ RA_TEST("Fixed: angle snapping composes with directional weighting")
     check_axis(s, 20, 150);
     // Unsnapped diagonal -> blended weight from the true angle.
     check_axis(s, 150, 80);
+}
+
+// ---- P1.7: consolidated grid parity --------------------------------------
+//
+// The per-feature tests above pin each transform; these sweep a dense grid of
+// directions and magnitudes across whole profiles to catch composition bugs
+// (sign handling, quadrant symmetry, magnitude/angle interplay) that a handful
+// of hand-picked points could miss.
+
+RA_TEST("Grid: noaccel is identity across every direction")
+{
+    ra::modifier_settings s{};
+    sweep_grid(s);
+}
+
+RA_TEST("Grid: whole euclidean classic matches oracle across directions")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;  // whole mode uses accel_x for both
+    sweep_grid(s);
+}
+
+RA_TEST("Grid: separate-mode asymmetric curves match oracle across directions")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y.mode = ra::accel_mode::classic;
+    s.prof.accel_y.acceleration = 0.02;
+    s.prof.accel_y.exponent_classic = 2.0;
+    s.prof.speed_processor_args.whole = false;
+    sweep_grid(s);
+}
+
+RA_TEST("Grid: max distance mode matches oracle across directions")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.speed_processor_args.lp_norm = 16.0;  // >= MAX_NORM -> max
+    sweep_grid(s);
+}
+
+RA_TEST("Grid: rotation + classic matches oracle across directions")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.degrees_rotation = 23.0;
+    sweep_grid(s);
+}
+
+RA_TEST("Grid: speed clamp + classic matches oracle across directions")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.speed_min = 20.0;
+    s.prof.speed_max = 200.0;
+    sweep_grid(s);
+}
+
+RA_TEST("Grid: directional weighting matches oracle across directions")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.range_weights = vec2d{0.6, 1.4};  // whole-mode angular blend
+    // The reference-angle atan is a polynomial fit (< 0.0015 rad); allow a
+    // slightly wider relative band than the curve-only grids.
+    sweep_grid(s, 1e-2, 5e-3);
+}
+
+RA_TEST("Grid: directional output DPI matches oracle across directions")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.lr_output_dpi_ratio = 1.3;  // X when output < 0
+    s.prof.ud_output_dpi_ratio = 0.7;  // Y when output < 0
+    sweep_grid(s);
 }
 
 RA_TEST("Fixed: max distance mode matches oracle on diagonals")
