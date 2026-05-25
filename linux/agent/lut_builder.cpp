@@ -21,11 +21,9 @@ std::int32_t q16_round(double d)
     return static_cast<std::int32_t>(std::lround(v));
 }
 
-// Evaluate the RAW per-axis acceleration curve f(speed) -- the bare
-// accel_union, with no range_weight wrap (callback_template's
-// 1 + (f-1)*weight), no domain weighting, and no output-DPI scaling. Those
-// are applied in-kernel around the LUT. Sample at a tiny epsilon at v=0 to
-// capture the v->0+ limit (gain curves divide by speed).
+// RAW per-axis curve f(speed): bare accel_union, no range/domain weight or
+// output-DPI (those apply in-kernel). v=0 sampled at epsilon for the v->0+
+// limit (gain curves divide by speed).
 double raw_curve_at(ra::modifier_settings& s, double v, bool along_x)
 {
     double sample = v > 0.0 ? v : 1e-9;
@@ -39,8 +37,8 @@ double raw_curve_at(ra::modifier_settings& s, double v, bool along_x)
 LutBuildResult build_lut(const ra::modifier_settings& settings,
                          const ra::device_config& dev_config)
 {
-    // The BPF program layers its own dt-adaptive smoothers in-kernel; zero the
-    // userspace smoother halflives so the LUT reflects only the raw curve.
+    // kernel layers its own dt-adaptive smoothers; zero the userspace
+    // halflives so the LUT is the raw curve only
     ra::modifier_settings stateless = settings;
     stateless.prof.speed_processor_args.input_speed_smooth_halflife = 0;
     stateless.prof.speed_processor_args.scale_smooth_halflife = 0;
@@ -54,22 +52,17 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.lut_max_q16  = static_cast<std::int32_t>(
         static_cast<std::int64_t>(RA_LUT_SIZE) * RA_Q16_ONE - 1);
 
-    // dpi_factor = NORMALIZED_DPI/device_dpi is the value Windows passes to
-    // modify(): it scales raw counts -> in/s for the curve domain (ips_factor =
-    // dpi_factor/time, rawaccel.hpp:320) AND scales the output (modify multiplies
-    // the result by output_dpi_adjustment_factor * dpi_factor, rawaccel.hpp:412).
-    // Capture it once and fold it into both dpi_norm and output_dpi_adj below.
-    // dpi=0 -> dpi_factor 1: the BPF program treats raw counts as normalized.
+    // dpi_factor = NORMALIZED_DPI/device_dpi (Windows modify()): scales the
+    // curve domain (rawaccel.hpp:320) AND the output (rawaccel.hpp:412), so
+    // fold it into both dpi_norm and output_dpi_adj. dpi=0 -> 1 (counts as-is).
     double dpi_factor = 1.0;
     if (dev_config.dpi > 0)
         dpi_factor = ra::NORMALIZED_DPI / static_cast<double>(dev_config.dpi);
     out.dpi_norm_q16 = q16_round(dpi_factor);
 
-    // input_speed_smoother coefficients (linear_ema_smoother::init): the kernel
-    // applies a real dt-adaptive EMA, so the agent precomputes log2(coeff) for
-    // the window/cutoff level pair and the window/cutoff trend pair. The trend
-    // halflife is the fixed speed_processor::input_trend_halflife (1.25). The
-    // RA_F_SMOOTH_INPUT flag below gates whether the kernel applies them.
+    // input_speed_smoother coeffs (linear_ema_smoother::init): precompute
+    // log2(coeff) for the level + trend window/cutoff pairs (trend halflife is
+    // the fixed input_trend_halflife 1.25). RA_F_SMOOTH_INPUT gates them.
     {
         double hl = settings.prof.speed_processor_args.input_speed_smooth_halflife;
         if (hl > 0.0) {
@@ -85,8 +78,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         }
     }
 
-    // scale_smoother coefficients (simple_ema_smoother::init): a window/cutoff
-    // level pair, no trend. RA_F_SMOOTH_SCALE below gates kernel application.
+    // scale_smoother coeffs (simple_ema_smoother::init): level pair, no trend.
+    // RA_F_SMOOTH_SCALE gates.
     {
         double hl = settings.prof.speed_processor_args.scale_smooth_halflife;
         if (hl > 0.0) {
@@ -97,9 +90,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         }
     }
 
-    // output_speed_smoother coefficients (linear_ema_smoother::init): same
-    // shape as the input smoother but with the fixed output trend halflife
-    // (0.7 = speed_processor::output_trend_halflife). RA_F_SMOOTH_OUTPUT gates.
+    // output_speed_smoother coeffs (linear_ema_smoother::init): like the input
+    // smoother but with the fixed output trend halflife 0.7. RA_F_SMOOTH_OUTPUT gates.
     {
         double hl = settings.prof.speed_processor_args.output_speed_smooth_halflife;
         if (hl > 0.0) {
@@ -120,25 +112,21 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.range_w_y_q16      = q16_round(prof.range_weights.y);
     out.domain_w_x_q16     = q16_round(prof.domain_weights.x);
     out.domain_w_y_q16     = q16_round(prof.domain_weights.y);
-    // output_dpi_adjustment_factor * dpi_factor (rawaccel.hpp:412): folding
-    // dpi_factor in here is what makes Linux output match Windows when a device
-    // DPI is configured. With dpi=0 (dpi_factor 1) it collapses to the old
-    // output_dpi / NORMALIZED_DPI.
+    // output_dpi_adjustment_factor * dpi_factor (rawaccel.hpp:412): the
+    // dpi_factor fold is what matches Windows output when a device DPI is set.
     out.output_dpi_adj_q16 = q16_round(prof.output_dpi / ra::NORMALIZED_DPI * dpi_factor);
     out.yx_ratio_q16       = q16_round(prof.yx_output_dpi_ratio);
     out.lr_ratio_q16       = q16_round(prof.lr_output_dpi_ratio);
     out.ud_ratio_q16       = q16_round(prof.ud_output_dpi_ratio);
 
-    // Rotation direction = {cos, sin}(degrees_rotation); init_data already
-    // computed it into data.rot_direction. Flag mirrors modifier_flags.
+    // rotation {cos, sin}, already in data.rot_direction via init_data
     out.rot_cos_q16 = q16_round(stateless.data.rot_direction.x);
     out.rot_sin_q16 = q16_round(stateless.data.rot_direction.y);
     out.speed_min_q16 = q16_round(prof.speed_min);
     out.speed_max_q16 = q16_round(prof.speed_max);
 
-    // Angle-snap thresholds as tangents so the kernel decides with a multiply
-    // (mirrors modify's atan(|y/x|) vs snap / (pi/2 - snap)). tan(pi/2 - snap)
-    // grows without bound as snap -> 0; q16_round saturates it to INT32_MAX,
+    // snap thresholds as tangents (kernel snaps with a multiply, not atan).
+    // tan(pi/2-snap) -> inf as snap -> 0; q16_round saturates to INT32_MAX,
     // which the kernel's s64 cross-product handles.
     {
         const double kPi = 3.14159265358979323846;
@@ -147,28 +135,26 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         out.snap_hi_tan_q16 = q16_round(std::tan(kPi / 2.0 - snap_rad));
     }
 
-    // Per-packet dt clamp window (device_config::clamp, default 0.0625..100 ms).
-    // The kernel folds 1/dt into the velocity, so it clamps the measured dt into
-    // this window first (mirrors the driver's I/O-layer time_clamp).
+    // dt clamp window (device_config::clamp, default 0.0625..100 ms); kernel
+    // clamps measured dt here before folding 1/dt into velocity (driver time_clamp).
     out.time_min_q16 = q16_round(dev_config.clamp.min);
     out.time_max_q16 = q16_round(dev_config.clamp.max);
 
-    // Flags fire only when the corresponding setting is non-trivial, matching
-    // modifier_flags.
+    // flags fire only when the setting is non-trivial (mirrors modifier_flags)
     out.flags = 0;
     if (prof.lr_output_dpi_ratio != 1.0) out.flags |= RA_F_APPLY_DIR_MUL_X;
     if (prof.ud_output_dpi_ratio != 1.0) out.flags |= RA_F_APPLY_DIR_MUL_Y;
     if (prof.degrees_rotation != 0.0)    out.flags |= RA_F_APPLY_ROTATE;
     if (prof.speed_max > 0.0 && prof.speed_min <= prof.speed_max)
         out.flags |= RA_F_CLAMP_SPEED;
-    // Whole-mode anisotropic range weights blend by movement angle in-kernel
-    // (mirrors modifier_flags::apply_directional_weight).
+    // whole-mode anisotropic range weights blend by angle in-kernel
+    // (modifier_flags::apply_directional_weight)
     if (prof.speed_processor_args.whole &&
         prof.range_weights.x != prof.range_weights.y)
         out.flags |= RA_F_APPLY_DIR_WEIGHT;
     if (prof.degrees_snap != 0.0) out.flags |= RA_F_APPLY_SNAP;
-    // Input-speed smoothing (speed_processor::should_smooth_input). The curve
-    // LUT is always built stateless above; the EMA is layered in-kernel.
+    // input smoothing (speed_processor::should_smooth_input); LUT is stateless,
+    // EMA is layered in-kernel
     if (settings.prof.speed_processor_args.input_speed_smooth_halflife > 0.0)
         out.flags |= RA_F_SMOOTH_INPUT;
     if (settings.prof.speed_processor_args.scale_smooth_halflife > 0.0)
@@ -187,10 +173,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     else
         out.dist_mode = RA_DIST_EUCLIDEAN;
 
-    // Phase 1 in progress: refuse profiles whose features are not yet ported
-    // to the kernel rather than silently approximating them. The Lp distance
-    // norm needs fixed-point pow (deferred); every other modifier feature is
-    // now handled in-kernel.
+    // refuse unported features rather than approximate; Lp norm needs
+    // fixed-point pow (deferred), all other features are handled in-kernel
     if (out.dist_mode == RA_DIST_LP)
         throw std::runtime_error("rawaccel: Lp distance norm not yet supported on Linux");
 

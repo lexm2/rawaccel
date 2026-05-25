@@ -55,8 +55,7 @@ BpfProbeResult probe_bpf_capability()
         return r;
     }
 
-    // Probes the same prog type the rawaccel program loads as; returns 1
-    // when the kernel and our caps both allow bpf().
+    // probe the prog type rawaccel loads; 1 when kernel + caps allow bpf()
     int probe = libbpf_probe_bpf_prog_type(BPF_PROG_TYPE_STRUCT_OPS, nullptr);
     if (probe <= 0) {
         r.reason = "bpf() syscall denied (need CAP_BPF or root)";

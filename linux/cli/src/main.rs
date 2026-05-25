@@ -53,11 +53,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Launch the graphical interface (the default when no command is given).
-    /// Starts rawaccel-agentd first if it is not already running.
+    /// Launch the GUI (default with no command); starts rawaccel-agentd first
+    /// if needed.
     Gui,
-    /// Start rawaccel-agentd if it is not already running (uses sudo when the
-    /// daemon needs root)
+    /// Start rawaccel-agentd if not already running (uses sudo when root is
+    /// needed)
     Start,
     /// Stop rawaccel-agentd (uses sudo)
     Stop,
@@ -93,14 +93,11 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<()> {
     let timeout = Duration::from_secs(cli.timeout);
-    // No subcommand defaults to launching the GUI.
+    // no subcommand -> GUI
     let command = cli.command.unwrap_or(Command::Gui);
 
     match command {
-        // Plain `rawaccel` (and explicit `gui`) == start the daemon, then
-        // launch the GUI. A privilege failure here aborts before the GUI
-        // starts, surfacing the same hint as `rawaccel start` (the GUI is
-        // useless without a running agent).
+        // start daemon, then GUI; a privilege failure aborts before the GUI
         Command::Gui => launch_gui_with_daemon(&cli.socket),
         Command::Start => {
             let socket = daemon::start(&cli.socket)?;
@@ -120,7 +117,7 @@ fn run(cli: Cli) -> Result<()> {
             println!("rawaccel-agentd restarted ({})", socket.display());
             Ok(())
         }
-        // Client RPCs connect to whichever socket is live.
+        // client RPCs connect to whichever socket is live
         other => {
             let socket = daemon::connect_socket(&cli.socket);
             let mut client = Client::connect(&socket, timeout)?;
@@ -137,9 +134,8 @@ fn run(cli: Cli) -> Result<()> {
     }
 }
 
-// Start rawaccel-agentd (no-op if already up), pin RAWACCEL_SOCKET to the
-// socket it serves so the GUI and its .NET backend connect to that exact
-// agent, then hand off to the GUI.
+// Start the daemon, pin RAWACCEL_SOCKET to the socket it serves so the GUI and
+// its .NET backend hit that exact agent, then hand off.
 fn launch_gui_with_daemon(socket: &Option<PathBuf>) -> Result<()> {
     let resolved = daemon::start(socket)
         .context("could not start rawaccel-agentd; the GUI needs it to apply settings")?;
@@ -147,13 +143,11 @@ fn launch_gui_with_daemon(socket: &Option<PathBuf>) -> Result<()> {
     launch_gui()
 }
 
-// Replace this process with the rawaccel GUI. Resolution order: an explicit
-// RAWACCEL_GUI command, then a `rawaccel-gui` binary (beside this exe or on
-// PATH), then a dev fallback to `dotnet run --project userinterface` when run
-// from the source tree. The GUI talks to the agent on its own, so this path
-// never touches the control socket.
+// Exec the GUI. Resolution order: $RAWACCEL_GUI, then a `rawaccel-gui` binary
+// (beside this exe or on PATH), then a dev `dotnet run --project userinterface`
+// fallback. The GUI talks to the agent itself; this path never touches the socket.
 fn launch_gui() -> Result<()> {
-    // 1. Explicit override: RAWACCEL_GUI holds the command line to run.
+    // 1. explicit override: $RAWACCEL_GUI is the command line to run
     if let Some(raw) = env::var_os("RAWACCEL_GUI") {
         let cow = raw.to_string_lossy();
         let cmd = cow.trim();
@@ -167,19 +161,19 @@ fn launch_gui() -> Result<()> {
         }
     }
 
-    // 2. A published GUI binary, beside this executable or on PATH.
+    // 2. published GUI binary, beside this exe or on PATH
     if let Some(gui) = find_gui_binary() {
         eprintln!("rawaccel: launching GUI ({})", gui.display());
         return exec_or_err(&mut SysCommand::new(gui));
     }
 
-    // 3. Dev fallback: run the source project with dotnet.
+    // 3. dev fallback: run the source project with dotnet
     if let Some(repo) = find_repo_root() {
         let project = repo.join("userinterface");
         let mut c = SysCommand::new("dotnet");
         c.arg("run").arg("--project").arg(&project);
 
-        // Let the preview P/Invoke find librawaccel_common.so in the build dir.
+        // let the preview P/Invoke find librawaccel_common.so in the build dir
         let shim_dir = repo.join("linux").join("build");
         if shim_dir.is_dir() {
             let mut ld = shim_dir.into_os_string();
@@ -200,13 +194,13 @@ fn launch_gui() -> Result<()> {
     ))
 }
 
-// exec() replaces the current process image and only returns on failure.
+// exec() replaces the process image; only returns on failure
 fn exec_or_err(cmd: &mut SysCommand) -> Result<()> {
     use std::os::unix::process::CommandExt;
     Err(cmd.exec()).context("failed to launch the GUI")
 }
 
-// `rawaccel-gui` beside the current executable (installed layout) or on PATH.
+// `rawaccel-gui` beside this exe (installed layout) or on PATH
 fn find_gui_binary() -> Option<PathBuf> {
     if let Ok(exe) = env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -222,9 +216,9 @@ fn find_gui_binary() -> Option<PathBuf> {
         .find(|c| c.is_file())
 }
 
-// Walk up from the executable, then the cwd, looking for the source tree
-// (userinterface/userinterface.csproj) so the dev fallback can `dotnet run`
-// and the daemon module can locate linux/build/rawaccel-agentd.
+// Walk up from the exe, then the cwd, for the source tree
+// (userinterface/userinterface.csproj): used by the dev fallback and to locate
+// linux/build/rawaccel-agentd.
 pub(crate) fn find_repo_root() -> Option<PathBuf> {
     fn search(start: &Path) -> Option<PathBuf> {
         let mut dir = Some(start);

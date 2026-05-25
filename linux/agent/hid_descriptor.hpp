@@ -1,9 +1,8 @@
 #pragma once
 
-// HID report-descriptor parser scoped to what the BPF backend needs:
-// finding the relative X/Y fields inside an Input report. validate_for_bpf
-// enforces a conservative shape (byte-aligned, 8/16-bit signed, in a
-// top-level Mouse or Pointer collection); other devices are skipped.
+// HID report-descriptor parser scoped to the BPF backend's needs: the relative
+// X/Y fields of an Input report. validate_for_bpf enforces a conservative shape
+// (byte-aligned, 8/16-bit signed, in a Mouse/Pointer collection); else skipped.
 
 #include <cstddef>
 #include <cstdint>
@@ -15,7 +14,7 @@ namespace rawaccel_agent {
 
 struct MouseAxis {
     bool present = false;
-    std::uint32_t bit_offset_in_payload = 0;  // excludes the report-ID prefix.
+    std::uint32_t bit_offset_in_payload = 0;  // excludes report-ID prefix
     std::uint32_t bit_size = 0;
     bool is_signed = true;
 };
@@ -25,7 +24,7 @@ struct MouseDescriptor {
     std::uint8_t report_id = 0;
     MouseAxis x;
     MouseAxis y;
-    std::uint32_t report_bits = 0;  // payload bits, excluding report-ID prefix
+    std::uint32_t report_bits = 0;  // payload bits, excludes report-ID prefix
 };
 
 std::optional<MouseDescriptor> parse_mouse_descriptor(

@@ -1,5 +1,5 @@
-// Probe every /sys/class/hidraw node and report whether the BPF backend
-// would accept it. Run on a target host before enabling the daemon.
+// Probe every /sys/class/hidraw node, report BPF-backend acceptance. Run on a
+// target host before enabling the daemon.
 
 #include "hid_descriptor.hpp"
 
@@ -15,8 +15,8 @@ using namespace rawaccel_agent;
 
 namespace {
 
-// 8 KiB matches read_descriptor()'s cap; sysfs report_descriptor is bounded
-// to HID_MAX_DESCRIPTOR_SIZE = 4096 by the kernel.
+// 8 KiB cap; kernel bounds sysfs report_descriptor to 4096
+// (HID_MAX_DESCRIPTOR_SIZE).
 bool read_descriptor(const std::string& path, std::vector<std::uint8_t>& out)
 {
     constexpr std::size_t MAX = 8192;

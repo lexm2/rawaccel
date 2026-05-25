@@ -80,13 +80,13 @@ RA_TEST("Agent: deactivate clears pending and rebinds known devices")
     auto s = agent.status(t0);
     RA_CHECK(!s.has_pending_apply);
     RA_CHECK(s.has_active_config);
-    // Deactivate rebinds every known device against the default config.
+    // deactivate rebinds every known device against the default config
     RA_CHECK_EQ(backend.binds, 1);
 
     auto active = agent.get_active();
     RA_CHECK(active.profiles.empty());
 
-    // A subsequent tick should be a no-op (no pending).
+    // subsequent tick is a no-op
     RA_CHECK(!agent.tick(t0 + std::chrono::milliseconds(2000)));
     RA_CHECK_EQ(backend.binds, 1);
 }
@@ -99,22 +99,21 @@ RA_TEST("Agent: apply debounces to one bind per known device")
 
     rajson::driver_config cfg_a;
     rajson::driver_config cfg_b;
-    cfg_b.profiles.emplace_back();  // distinguish from cfg_a (empty profiles).
+    cfg_b.profiles.emplace_back();  // distinguish from cfg_a (empty)
 
     auto t0 = clock_type::now();
     agent.schedule_apply(cfg_a, t0);
     agent.schedule_apply(cfg_b, t0 + std::chrono::milliseconds(100));
 
-    // 100ms after the second schedule_apply: still within the 1s window.
+    // 100ms after second schedule_apply: still inside the 1s window
     RA_CHECK(!agent.tick(t0 + std::chrono::milliseconds(200)));
     RA_CHECK_EQ(backend.binds, 0);
 
-    // 1.05s after the second schedule_apply: deadline reached. Only cfg_b
-    // should apply; cfg_a is debounced out. One known device -> one bind.
+    // deadline reached: only cfg_b applies, cfg_a debounced out -> one bind
     RA_CHECK(agent.tick(t0 + std::chrono::milliseconds(1150)));
     RA_CHECK_EQ(backend.binds, 1);
 
-    // Repeat tick: no more pending.
+    // repeat tick: nothing pending
     RA_CHECK(!agent.tick(t0 + std::chrono::milliseconds(2000)));
     RA_CHECK_EQ(backend.binds, 1);
 }
@@ -131,11 +130,11 @@ RA_TEST("Agent: apply held until WRITE_DELAY elapses")
     auto t0 = clock_type::now();
     agent.schedule_apply(cfg, t0);
 
-    // Just before the deadline: no apply.
+    // just before deadline: no apply
     RA_CHECK(!agent.tick(t0 + std::chrono::milliseconds(999)));
     RA_CHECK_EQ(backend.binds, 0);
 
-    // At the deadline: apply.
+    // at deadline: apply
     RA_CHECK(agent.tick(t0 + WRITE_DELAY));
     RA_CHECK_EQ(backend.binds, 1);
 }
@@ -160,7 +159,7 @@ RA_TEST("Agent: on_device_added before apply waits for active config")
     NoopBackend backend;
     Agent agent(backend);
     agent.on_device_added(make_info(1, "hidraw0", "0003:046D:C54D.000A"));
-    // No apply yet -> no bind.
+    // no apply yet -> no bind
     RA_CHECK_EQ(backend.binds, 0);
 }
 
@@ -198,7 +197,7 @@ RA_TEST("Agent: on_device_removed unbinds and is idempotent")
     agent.on_device_removed(42);
     RA_CHECK_EQ(backend.unbinds, 1);
 
-    // Second removal: no-op.
+    // second removal: no-op
     agent.on_device_removed(42);
     RA_CHECK_EQ(backend.unbinds, 1);
 }
@@ -227,7 +226,7 @@ RA_TEST("Agent: resolve picks profile matched by device id")
     RA_CHECK_EQ(backend.binds, 1);
     RA_CHECK_EQ(backend.last_settings[1].prof.output_dpi, 8000.0);
 
-    // A different device should fall back to the first profile.
+    // different device falls back to the first profile
     agent.on_device_added(make_info(2, "hidraw1", "0003:1234:5678.000B", "Some Trackpad"));
     RA_CHECK_EQ(backend.binds, 2);
     RA_CHECK_EQ(backend.last_settings[2].prof.output_dpi, 1000.0);
@@ -326,18 +325,18 @@ RA_TEST("Agent: version check matches driver semantics")
     NoopBackend backend;
     Agent agent(backend);
 
-    // Same version: ok.
+    // same version: ok
     {
         auto vc = agent.check_version(ra::version);
         RA_CHECK(vc.status == VersionStatus::ok);
     }
-    // Older than minimum: client_too_old.
+    // older than minimum: client_too_old
     {
         ra::version_t old_v{0, 0, 1};
         auto vc = agent.check_version(old_v);
         RA_CHECK(vc.status == VersionStatus::client_too_old);
     }
-    // Newer than agent: client_too_new.
+    // newer than agent: client_too_new
     {
         ra::version_t newer{
             ra::version.major,
@@ -375,7 +374,7 @@ RA_TEST("Agent: status reports pending window and device count")
     {
         auto s = agent.status(t0 + std::chrono::milliseconds(250));
         RA_CHECK(s.has_pending_apply);
-        // 1000ms window minus 250ms elapsed = 750ms remaining.
+        // 1000ms window - 250ms elapsed = 750ms remaining
         RA_CHECK_EQ(s.until_apply.count(), 750);
     }
 

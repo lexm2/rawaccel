@@ -3,10 +3,9 @@ using System.Collections.Generic;
 
 namespace userspace_backend.Driver.Linux
 {
-    // Parses /proc/bus/input/devices. Each record is separated by a blank
-    // line; lines start with a single letter and a colon. Only fields we
-    // need are kept (I/N/H); the rest are ignored. See linux/Documentation/
-    // input/input.rst for the format.
+    // Parses /proc/bus/input/devices: blank-line-separated records, each line
+    // a single-letter prefix + colon. Keeps only I/N/H. Format: linux/
+    // Documentation/input/input.rst.
     internal static class ProcInputParser
     {
         public readonly struct Record

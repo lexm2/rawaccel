@@ -1,6 +1,5 @@
-// Exercises the on-the-wire framing of ControlServer by spinning up a real
-// AF_UNIX socket against a temp path, running the server in a thread, and
-// sending a length-prefixed JSON frame from the test thread.
+// ControlServer wire framing: real AF_UNIX socket on a temp path, server in
+// a thread, length-prefixed JSON frame sent from the test thread.
 
 #include "agent.hpp"
 #include "backend.hpp"
@@ -34,7 +33,7 @@ std::string make_tmp_socket_path()
     int fd = ::mkstemp(buf);
     if (fd < 0) return {};
     ::close(fd);
-    ::unlink(buf);  // we want the path, not the file.
+    ::unlink(buf);  // want the path, not the file
     return std::string(buf);
 }
 
@@ -66,7 +65,7 @@ RA_TEST("Socket: status roundtrip over AF_UNIX frame")
 
     std::thread t([&]{ server.run(std::chrono::milliseconds(20)); });
 
-    // Retry connect briefly; the listener thread may not be in poll() yet.
+    // retry connect: listener may not be in poll() yet
     int fd = -1;
     for (int i = 0; i < 50 && fd < 0; ++i) {
         fd = connect_unix(path);
@@ -132,7 +131,7 @@ RA_TEST("Socket: apply then status then get")
     auto r_status_before = send({{"cmd", "status"}});
     RA_CHECK(r_status_before["has_pending_apply"].get<bool>());
 
-    // Wait past the debounce.
+    // past the debounce
     std::this_thread::sleep_for(WRITE_DELAY + std::chrono::milliseconds(150));
 
     auto r_status_after = send({{"cmd", "status"}});

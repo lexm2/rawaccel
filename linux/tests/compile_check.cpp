@@ -1,10 +1,8 @@
 // Portability check.
 //
-// Includes only the math headers from common/. Does NOT include
-// rawaccel-io.hpp or rawaccel-io-def.h: those are intentionally
-// Windows-only (DWORD, GetLastError, <Windows.h>) and the Linux agent
-// must never pull them in. This file compiles under clang/gcc and
-// exercises a modifier end-to-end against default settings.
+// Includes only common/ math headers, never rawaccel-io.hpp /
+// rawaccel-io-def.h (Windows-only: DWORD, GetLastError, <Windows.h>) which
+// the Linux agent must not pull in. Must compile under clang/gcc.
 
 #include "rawaccel.hpp"
 #include "rawaccel-version.h"

@@ -1,13 +1,10 @@
 #pragma once
 
-// Precompute the per-axis Q16.16 lookup tables plus the scalar config the BPF
-// program reads at runtime. The LUTs hold the RAW curve scale f(speed) (one
-// per axis); range/domain weighting, output-DPI scaling, and the directional
-// multipliers are emitted as config fields and applied in-kernel around the
-// LUT, mirroring common/rawaccel.hpp's modifier::modify. The agent walks the
-// active modifier's curves at quantized speeds using full-precision common/
-// math; the resulting tables are what live in the kernel-side ra_lut_x /
-// ra_lut_y maps.
+// Precompute the per-axis Q16.16 LUTs plus the scalar config the BPF program
+// reads. LUTs hold the RAW curve scale f(speed); weighting, output-DPI, and
+// directional multipliers are config fields applied in-kernel around the LUT
+// (mirrors modifier::modify). Tables are sampled with full-precision common/
+// math and live in the kernel ra_lut_x / ra_lut_y maps.
 
 #include "hid_descriptor.hpp"   // BpfMouseLayout
 #include "rawaccel.hpp"
@@ -22,15 +19,12 @@ namespace rawaccel_agent {
 namespace ra = rawaccel;
 
 struct LutBuildResult {
-    // Per-axis RAW acceleration curve f(speed) at each quantized speed
-    // bucket, Q16.16. Index i corresponds to a normalized speed of
-    // i * lut_step (the kernel multiplies raw HID counts by dpi_norm, then by
-    // the per-axis domain weight, to enter this space).
+    // Per-axis RAW curve f(speed), Q16.16. Index i = speed i * lut_step
+    // (kernel maps counts into this space via dpi_norm and domain weight).
     std::array<std::int32_t, RA_LUT_SIZE> lut_x{};
     std::array<std::int32_t, RA_LUT_SIZE> lut_y{};
 
-    // Velocity-domain config the LUT builder owns (the BPF backend fills the
-    // HID layout fields from the descriptor parser).
+    // velocity-domain config (HID layout fields filled by the BPF backend)
     std::int32_t lut_step_q16     = 0;
     std::int32_t lut_max_q16      = 0;
     std::int32_t dpi_norm_q16     = 0;
@@ -53,8 +47,7 @@ struct LutBuildResult {
     std::int32_t time_min_q16      = 0;
     std::int32_t time_max_q16      = 0;
 
-    // input_speed_smoother (linear EMA) log2 coefficients (negative); applied
-    // in-kernel via ra_exp2_q16 when RA_F_SMOOTH_INPUT is set.
+    // input_speed_smoother (linear EMA) log2 coeffs (negative); RA_F_SMOOTH_INPUT.
     std::int32_t in_log2_win_q16   = 0;
     std::int32_t in_log2_cut_q16   = 0;
     std::int32_t in_log2_trw_q16   = 0;
@@ -70,22 +63,18 @@ struct LutBuildResult {
     std::int32_t out_log2_trw_q16  = 0;
     std::int32_t out_log2_trc_q16  = 0;
 
-    // modifier_flags bitfield + distance mode (RA_F_* / RA_DIST_*). Reserved
-    // for Phase 1; emitted now so the config layout is stable.
+    // modifier_flags + distance mode (RA_F_* / RA_DIST_*)
     std::uint32_t flags    = 0;
     std::uint8_t  dist_mode = 0;
 };
 
-// Walk the modifier's per-axis curves at RA_LUT_SIZE speed buckets and emit a
-// complete LutBuildResult. The settings copy is made stateless internally
-// (smoother halflives zeroed) so the LUT reflects only the curve, not any
-// warmup state the live agent might be carrying.
+// Sample the per-axis curves at RA_LUT_SIZE buckets into a LutBuildResult.
+// Settings are zeroed stateless internally so the LUT is the curve only.
 LutBuildResult build_lut(const ra::modifier_settings& settings,
                          const ra::device_config& dev_config);
 
-// Assemble the kernel config struct from a built LUT plus the device's HID
-// report layout. Shared by the BPF backend (populate_maps) and the host
-// parity tests so the two never drift.
+// Assemble the kernel config from a built LUT + HID layout. Shared by the BPF
+// backend and the host parity tests so the two never drift.
 ra_bpf_config to_bpf_config(const LutBuildResult& lut,
                             const BpfMouseLayout& layout);
 

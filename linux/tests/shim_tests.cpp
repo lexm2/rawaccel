@@ -1,10 +1,9 @@
 // Tests for the cross-OS curve shim (shim/ra_curve.cpp).
 //
-// The shim is what the Linux GUI preview P/Invokes: it parses a driver-config
-// JSON into a modifier and runs rawaccel::modifier::modify. These tests assert
-// the C ABI faithfully reflects modify (parity against a direct call on the
-// same settings), that profile scaling actually takes effect, and that bad
-// input degrades to a null handle / pass-through rather than crashing.
+// The shim is what the Linux GUI preview P/Invokes: parse driver-config JSON
+// into a modifier, run rawaccel::modifier::modify. Asserts ABI parity against
+// a direct modify call, that profile scaling takes effect, and that bad input
+// degrades to a null handle / pass-through instead of crashing.
 
 #include "ra_curve.h"
 #include "test_harness.hpp"
@@ -16,9 +15,9 @@ namespace ra = rawaccel;
 
 namespace {
 
-// Direct modifier::modify on the same settings the shim builds from: parse the
-// JSON, zero smoother halflives, init_data, construct a modifier. Mirrors
-// ra_curve_create_from_config_json so the two can be compared.
+// Direct modifier on the same settings the shim builds: parse JSON, zero
+// smoother halflives, init_data, construct. Mirrors
+// ra_curve_create_from_config_json for comparison.
 ra::modifier reference_modifier(const std::string& json,
                                 ra::modifier_settings& out_settings)
 {
@@ -64,8 +63,7 @@ RA_TEST("Shim: modify matches a direct modifier::modify on a classic curve")
     ra::modifier_settings ref{};
     ra::modifier mod = reference_modifier(json, ref);
 
-    // Skip v=0 (curve limit is sampled separately by the LUT builder); compare
-    // the running pipeline at representative speeds.
+    // skip v=0 (LUT builder samples the limit separately); representative speeds
     for (double v : {1.0, 5.0, 20.0, 100.0}) {
         double ox = 0, oy = 0;
         ra_curve_modify(c, v, 0.0, 1.0, 1.0, &ox, &oy);
@@ -119,11 +117,11 @@ RA_TEST("Shim: malformed and empty input degrade gracefully")
     RA_CHECK(ra_curve_create_from_config_json(nullptr) == nullptr);
     RA_CHECK(ra_curve_create_from_config_json("not json") == nullptr);
 
-    // Valid JSON but no profiles -> null handle.
+    // valid JSON, no profiles -> null handle
     std::string empty = rajson::to_string(rajson::driver_config{});
     RA_CHECK(ra_curve_create_from_config_json(empty.c_str()) == nullptr);
 
-    // Null handle passes the input through unchanged.
+    // null handle passes input through unchanged
     double ox = 1, oy = 1;
     ra_curve_modify(nullptr, 4.0, 9.0, 1.0, 1.0, &ox, &oy);
     RA_CHECK_NEAR(ox, 4.0, 0.0);

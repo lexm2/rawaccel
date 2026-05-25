@@ -6,9 +6,8 @@ namespace rawaccel_agent {
 
 namespace {
 
-// Hard caps. HID descriptors come from untrusted USB peripherals, so the
-// parser must refuse anything that would explode memory or wrap arithmetic.
-// Real mice fit comfortably under all of these.
+// Hard caps: descriptors are untrusted, reject anything that explodes memory
+// or wraps arithmetic. Real mice fit well under all of these.
 constexpr std::uint32_t MAX_REPORT_SIZE   = 64;
 constexpr std::uint32_t MAX_REPORT_COUNT  = 1024;
 constexpr std::uint32_t MAX_REPORT_BITS   = 1u << 16;   // 8 KiB per report.
@@ -60,12 +59,12 @@ struct GlobalState {
 struct PerReport {
     std::uint8_t report_id = 0;
     bool         has_report_id = false;
-    std::uint32_t bit_offset = 0;  // running bit cursor within payload.
+    std::uint32_t bit_offset = 0;  // running bit cursor
     MouseAxis x;
     MouseAxis y;
 };
 
-// Decode a variable-width signed/unsigned data field from item data.
+// Decode a variable-width signed item-data field.
 std::int32_t read_signed(const std::uint8_t* p, std::size_t n)
 {
     if (n == 0) return 0;
@@ -105,15 +104,15 @@ bool is_data(std::uint32_t input_flags)
     return (input_flags & 0x01) == 0;  // bit 0 = Constant when set.
 }
 
-// Returns false on overflow; caller should abandon the descriptor.
+// False on overflow; caller abandons the descriptor.
 bool process_input(const GlobalState& g, std::vector<std::uint32_t>& usages,
                    std::uint32_t input_flags, PerReport& rep)
 {
     if (g.report_size > MAX_REPORT_SIZE || g.report_count > MAX_REPORT_COUNT) {
         return false;
     }
-    // Walk ReportCount fields, each ReportSize bits. Consume one Local
-    // Usage per field; repeat the last when the list runs out (HID 1.11 6.2.2.7).
+    // ReportCount fields of ReportSize bits, one Usage each; repeat the last
+    // when the list runs out (HID 1.11 6.2.2.7).
     for (std::uint32_t i = 0; i < g.report_count; ++i) {
         std::uint32_t usage = 0;
         if (!usages.empty()) {
@@ -157,13 +156,13 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
     bool usage_min_set = false;
     bool usage_max_set = false;
 
-    std::vector<std::uint32_t> coll_usages;  // Outer collection usage stack.
+    std::vector<std::uint32_t> coll_usages;  // collection usage stack
     bool in_mouse_collection = false;
     PerReport rep{};
     std::optional<MouseDescriptor> result;
 
     auto flush_locals = [&]{
-        // Per HID 1.11 6.2.2.8: Local items are reset by Main items.
+        // Main items reset Local items (HID 1.11 6.2.2.8)
         usages.clear();
         usage_min_set = usage_max_set = false;
         usage_min = usage_max = 0;
@@ -185,7 +184,7 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
     while (i < len) {
         const std::uint8_t prefix = descriptor[i++];
         if (prefix == 0xFE) {
-            // Long item: bSize (1 byte) + bLongItemTag (1 byte) + data.
+            // long item: bSize + bLongItemTag + data
             if (i + 1 >= len) return std::nullopt;
             std::size_t dsize = descriptor[i++];
             ++i;  // long tag
@@ -212,10 +211,10 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
                 case TAG_REPORT_ID:
                     g.has_report_id = true;
                     g.report_id = static_cast<std::uint8_t>(uv);
-                    // A new Report ID resets the cursor within that report.
+                    // a new Report ID resets the cursor
                     if (rep.report_id != g.report_id ||
                         rep.has_report_id != g.has_report_id) {
-                        // Commit anything from the prior report first.
+                        // commit the prior report first
                         commit_report_if_complete();
                         rep = PerReport{};
                         rep.has_report_id = g.has_report_id;
@@ -243,8 +242,7 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
                     usage_max = uv;
                     usage_max_set = true;
                     if (usage_min_set) {
-                        // Reject malicious / nonsensical ranges before they
-                        // expand into a huge vector.
+                        // reject nonsensical ranges before they expand
                         if (usage_max < usage_min) return std::nullopt;
                         const std::uint32_t span =
                             static_cast<std::uint32_t>(usage_max - usage_min);
@@ -295,8 +293,7 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
                 }
                 flush_locals();
             } else {
-                // Output / Feature: do not contribute to Input layout but
-                // consume Local state per spec.
+                // Output/Feature: no Input layout, but still flush Locals
                 flush_locals();
             }
         }
@@ -321,8 +318,7 @@ BpfDecision validate_for_bpf(const MouseDescriptor& d)
     if (!d.x.is_signed) { reject("X is unsigned"); return out; }
     if (!d.y.is_signed) { reject("Y is unsigned"); return out; }
 
-    // The BPF layout fields are uint8_t; refuse anything whose absolute byte
-    // offset would truncate. 255 bytes is well past any real mouse report.
+    // layout offsets are uint8_t; reject >255 (past any real mouse report)
     const std::uint32_t prefix = d.has_report_id ? 1u : 0u;
     const std::uint32_t dx_off = prefix + d.x.bit_offset_in_payload / 8;
     const std::uint32_t dy_off = prefix + d.y.bit_offset_in_payload / 8;

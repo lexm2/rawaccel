@@ -4,12 +4,10 @@ using userspace_backend.Model;
 
 namespace userspace_backend.Driver.Linux
 {
-    // Linux device enumeration via /proc/bus/input/devices, the same source
-    // X11/libinput query. Filters to entries whose handler list contains a
-    // "mouseN" token, which the kernel's mousedev driver emits for anything
-    // it classifies as a mouse. HWIDs are formatted to match the Windows
-    // shape (HID\VID_XXXX&PID_XXXX, uppercase hex) so device JSON written on
-    // either OS keys against the same string.
+    // Device enumeration via /proc/bus/input/devices. Keeps entries whose
+    // handler list has a "mouseN" token (emitted by the kernel mousedev
+    // driver). HWIDs use the Windows shape (HID\VID_XXXX&PID_XXXX, uppercase
+    // hex) so device JSON keys identically on either OS.
     public sealed class LinuxSystemDevicesRetriever : ISystemDevicesRetriever
     {
         private const string ProcInputDevices = "/proc/bus/input/devices";

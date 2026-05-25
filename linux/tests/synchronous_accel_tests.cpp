@@ -1,9 +1,8 @@
 // Native C++ port of wrapper-tests/SynchronousAccelTests.cs.
 //
-// The reference simulator below is an independent implementation of the
-// synchronous-curve math (the C# version in SynchronousAccelTests.cs:80+).
-// It MUST NOT delegate to common/accel-synchronous.hpp: the whole point
-// is to cross-check that common/ produces the same numbers.
+// The reference simulator below independently implements the synchronous-curve
+// math (SynchronousAccelTests.cs:80+). It MUST NOT delegate to
+// common/accel-synchronous.hpp; the point is to cross-check common/.
 
 #include "test_harness.hpp"
 

@@ -1,15 +1,12 @@
-// Cross-OS C ABI for the userspace curve preview. Wraps the full common/
-// modifier pipeline behind an opaque handle so .NET callers (Linux and
-// Windows) can evaluate the live preview via P/Invoke without depending on
-// C++/CLI or the kernel driver. The header is plain C; the .cpp side does the
-// C++ dispatch.
+// Cross-OS C ABI for the userspace curve preview. Wraps the common/ modifier
+// pipeline behind an opaque handle so .NET callers (Linux/Windows) can preview
+// via P/Invoke without C++/CLI or the driver. Plain C header; C++ dispatch in .cpp.
 //
-// The handle is built from a driver-config JSON (the same cross-OS settings
-// shape the agent and wrapper consume) and evaluated with ra_curve_modify,
-// which runs rawaccel::modifier::modify -- the exact code path the agent's
-// LUT builder and the Windows driver use. This keeps the Linux preview in
-// lockstep with what the HID-BPF program actually applies, instead of
-// reimplementing the per-profile math (range weight, DPI, anisotropy) in C#.
+// Built from a driver-config JSON (the cross-OS settings shape agent and
+// wrapper consume) and evaluated via ra_curve_modify -> rawaccel::modifier::modify,
+// the exact path the agent LUT builder and Windows driver use. Keeps the
+// preview in lockstep with the HID-BPF program instead of reimplementing the
+// per-profile math (range weight, DPI, anisotropy) in C#.
 
 #ifndef RAWACCEL_SHIM_RA_CURVE_H
 #define RAWACCEL_SHIM_RA_CURVE_H
@@ -33,36 +30,29 @@ extern "C" {
 
 typedef struct ra_curve ra_curve_t;
 
-// Build a curve handle from a driver-config JSON string (UTF-8). The shape is
-// RawAccel.Contracts.RawAccelConfig / the agent's rajson::driver_config: a
-// top-level object with "defaultDeviceConfig", "profiles", and "devices". The
-// handle is built from the first entry in "profiles"; the rest is ignored.
+// Build a curve handle from a driver-config JSON string (UTF-8). Shape is
+// RawAccel.Contracts.RawAccelConfig / rajson::driver_config: top-level object
+// with "defaultDeviceConfig", "profiles", "devices". Uses profiles[0]; rest ignored.
 //
-// The smoother halflives are zeroed internally so the preview reflects the
-// steady-state curve (matching the curve-only LUT the BPF program loads),
-// not any EMA warmup. Returns null on parse failure, an empty profile list,
-// or allocation failure. Caller owns the handle and must release it with
-// ra_curve_destroy.
+// Smoother halflives are zeroed so the preview is the steady-state curve
+// (matching the BPF LUT), not EMA warmup. Returns null on parse failure, empty
+// profiles, or OOM. Caller owns the handle; release with ra_curve_destroy.
 RA_API ra_curve_t* ra_curve_create_from_config_json(const char* config_json);
 
-// Free a curve previously returned by ra_curve_create_from_config_json. Null
-// is a no-op.
+// Free a handle from ra_curve_create_from_config_json; null is a no-op.
 RA_API void ra_curve_destroy(ra_curve_t* curve);
 
-// Evaluate the modifier at one input sample. Mirrors ManagedAccel.Accelerate
-// and rawaccel::modifier::modify: (x, y) are raw counts for this sample,
-// dpi_factor is the device DPI normalized against NORMALIZED_DPI (1.0 for the
-// device-independent chart), time_ms is the time slice (1.0 in the preview).
-// The post-acceleration components are written to out_x / out_y. If curve is
-// null the input is passed through unchanged. out_x and out_y must be
-// non-null.
+// Evaluate the modifier at one sample. Mirrors ManagedAccel.Accelerate /
+// rawaccel::modifier::modify: (x, y) raw counts, dpi_factor = device DPI /
+// NORMALIZED_DPI (1.0 for the device-independent chart), time_ms the time slice
+// (1.0 in preview). Result written to out_x/out_y (both must be non-null);
+// null curve passes input through.
 RA_API void ra_curve_modify(const ra_curve_t* curve,
                             double x, double y,
                             double dpi_factor, double time_ms,
                             double* out_x, double* out_y);
 
-// ABI version. Bump if the struct layout or function signatures change in
-// a way that breaks existing callers.
+// ABI version; bump on any layout/signature change that breaks callers.
 RA_API uint32_t ra_curve_abi_version(void);
 
 #ifdef __cplusplus

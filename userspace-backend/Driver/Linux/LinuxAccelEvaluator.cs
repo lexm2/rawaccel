@@ -5,13 +5,11 @@ using RawAccel.Contracts;
 
 namespace userspace_backend.Driver.Linux
 {
-    // Curve evaluator backed by the cross-OS C-ABI shim over common/. The shim
-    // builds a full rawaccel::modifier from the profile and runs the same
-    // modifier::modify the agent's LUT builder and the Windows driver use, so
-    // the preview matches what the HID-BPF program applies. The profile is
-    // handed over as a one-profile RawAccelConfig JSON -- the identical shape
-    // (and serializer) the apply path already sends to the agent -- so there
-    // is one math path and one JSON contract, with nothing reimplemented here.
+    // Curve evaluator backed by the cross-OS C-ABI shim over common/. Runs the
+    // same modifier::modify the agent and Windows driver use, so the preview
+    // matches what HID-BPF applies. The profile is passed as a one-profile
+    // RawAccelConfig JSON (same shape and serializer the apply path uses), so
+    // there is one math path and one JSON contract.
     public sealed class LinuxAccelEvaluator : IAccelEvaluator
     {
         private readonly bool shimAvailable;
@@ -45,9 +43,8 @@ namespace userspace_backend.Driver.Linux
         {
             if (!shimAvailable || profile == null) return IdentityInstance.Instance;
 
-            // Wrap the single profile in the same config shape the agent
-            // consumes; defaultDeviceConfig/devices use their contract
-            // defaults (irrelevant to a device-independent preview).
+            // wrap the profile in the config shape the agent consumes;
+            // device fields use contract defaults (irrelevant to preview)
             var config = new RawAccelConfig
             {
                 profiles = new List<RawAccelProfile> { profile },

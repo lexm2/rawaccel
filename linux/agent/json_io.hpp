@@ -1,8 +1,8 @@
 #pragma once
 
-// Native C++ port of the JSON layer in wrapper/wrapper.cpp. The JSON field
-// names are the cross-OS settings.json contract; do NOT rename any key here
-// without changing the matching JsonProperty on the Windows side.
+// Native C++ port of wrapper/wrapper.cpp's JSON layer. Field names are the
+// cross-OS settings.json contract: do NOT rename a key without changing the
+// matching JsonProperty on Windows.
 
 #include "rawaccel.hpp"
 #include "rawaccel-version.h"
@@ -92,7 +92,7 @@ inline constexpr const char* Y = "y";
 
 } // namespace key
 
-// "lut" in JSON maps to rawaccel::accel_mode::lookup in common/.
+// JSON "lut" maps to accel_mode::lookup.
 inline constexpr const char* ACCEL_MODE_NAMES[] = {
     "classic", "jump", "natural", "synchronous", "power", "lut", "noaccel"
 };
@@ -120,8 +120,7 @@ ra::accel_mode accel_mode_from_string(const std::string& s);
 const char* cap_mode_to_string(ra::cap_mode m);
 ra::cap_mode cap_mode_from_string(const std::string& s);
 
-// Linux assumes wchar_t is 32-bit (UTF-32). Caller-supplied buffer must
-// have room for the trailing null.
+// Linux wchar_t is 32-bit (UTF-32); caller buffer needs room for the null.
 std::string wchar_to_utf8(const wchar_t* s, std::size_t cap);
 void utf8_to_wchar(const std::string& s, wchar_t* out, std::size_t cap);
 

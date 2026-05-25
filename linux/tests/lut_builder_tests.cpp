@@ -1,17 +1,16 @@
 // Tests for the curve -> LUT precomputation.
 //
-// The LUT must reflect what the BPF program will compute at runtime:
+// Runtime LUT use:
 //   v_q16 = raw_count * dpi_norm_q16
 //   idx   = v_q16 / lut_step_q16
 //   scale = lut_x[idx] (or lut_y[idx])
 //   out   = (raw_count * scale + carry) >> 16
 //
-// The LUT now holds the RAW per-axis curve f(speed); range/domain weighting
-// and output-DPI scaling are emitted as config fields and applied in-kernel.
-// So a correct LUT for a noaccel profile is the identity; for a classic accel
-// profile it is monotone increasing from 1.0; output_dpi and range_weights no
-// longer change the LUT (they show up in output_dpi_adj_q16 / range_w_*_q16),
-// and fixedpoint_tests checks the kernel math composes them correctly.
+// The LUT holds the RAW per-axis curve f(speed); weighting and output-DPI are
+// config fields applied in-kernel. So noaccel -> identity LUT, classic accel ->
+// monotone increasing from 1.0; output_dpi/range_weights live in
+// output_dpi_adj_q16 / range_w_*_q16, not the LUT (fixedpoint_tests checks the
+// kernel composes them).
 
 #include "lut_builder.hpp"
 #include "test_harness.hpp"
@@ -39,7 +38,7 @@ RA_TEST("Lut: noaccel profile produces identity LUT on both axes")
     ra::device_config dev{};
     auto r = build_lut(s, dev);
 
-    // Every bucket should round to exactly Q16_ONE for both axes.
+    // every bucket exactly Q16_ONE on both axes
     int bad = 0;
     for (int i = 0; i < RA_LUT_SIZE; ++i) {
         if (r.lut_x[i] != RA_Q16_ONE) { ++bad; break; }
@@ -55,7 +54,7 @@ RA_TEST("Lut: output_dpi 2000 leaves the raw LUT at 1.0 and sets adj to 2.0x")
     ra::device_config dev{};
     auto r = build_lut(s, dev);
 
-    // output_dpi now scales in-kernel via output_dpi_adj_q16, not in the LUT.
+    // output_dpi scales in-kernel via output_dpi_adj_q16, not the LUT
     for (int i = 0; i < RA_LUT_SIZE; ++i) {
         RA_CHECK_EQ(r.lut_x[i], RA_Q16_ONE);
         RA_CHECK_EQ(r.lut_y[i], RA_Q16_ONE);
@@ -73,16 +72,16 @@ RA_TEST("Lut: classic accel is monotone increasing from 1.0")
     ra::device_config dev{};
     auto r = build_lut(s, dev);
 
-    // Bucket 0 is the v=0 limit -> 1.0.
+    // bucket 0 is the v=0 limit -> 1.0
     RA_CHECK(q16_near(r.lut_x[0], 1.0, 1e-4));
     RA_CHECK(q16_near(r.lut_y[0], 1.0, 1e-4));
 
-    // Monotone non-decreasing across non-trivial range.
+    // monotone non-decreasing
     for (int i = 1; i < 200; ++i) {
         RA_CHECK(r.lut_x[i] >= r.lut_x[i - 1]);
         RA_CHECK(r.lut_y[i] >= r.lut_y[i - 1]);
     }
-    // At a large speed the scale must be strictly > 1.
+    // large speed -> scale strictly > 1
     RA_CHECK(q16_near(r.lut_x[200], 1.0, 0.0) ? false : true);
     RA_CHECK(r.lut_x[200] > RA_Q16_ONE);
 }
@@ -94,11 +93,8 @@ RA_TEST("Lut: anisotropic range_weights live in config, not the raw LUT")
     s.prof.accel_x.acceleration = 0.05;
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y = s.prof.accel_x;
-    // Same curve on both axes; only the range weight differs. Weighting is
-    // applied in-kernel now, so the raw per-axis LUTs are identical and the
-    // asymmetry lives in range_w_*_q16. (fixedpoint_tests confirms the kernel
-    // math then diverges X vs Y.) Use separate mode: whole-mode asymmetric
-    // weights need directional weighting (P1.5), which build_lut still rejects.
+    // Same curve, only the range weight differs. Weighting is in-kernel, so the
+    // raw LUTs are identical and the asymmetry lives in range_w_*_q16.
     s.prof.range_weights = vec2d{1.0, 0.5};
     s.prof.speed_processor_args.whole = false;
 
@@ -121,14 +117,14 @@ RA_TEST("Lut: features not yet ported throw instead of silently approximating")
         catch (...) { return true; }
     };
 
-    // Lp distance norm (lp_norm in (0,16), != 2, whole mode) still needs
-    // fixed-point pow; it is the only remaining unsupported feature.
+    // Lp norm (lp_norm in (0,16), != 2, whole) still needs fixed-point pow;
+    // the only remaining unsupported feature.
     { ra::modifier_settings s{}; s.prof.speed_processor_args.lp_norm = 3.0;
       RA_CHECK(throws(s)); }
 
-    // A plain supported profile still builds.
+    // plain supported profile builds
     { ra::modifier_settings s{}; RA_CHECK(!throws(s)); }
-    // Angle snapping now builds (no longer a throw case).
+    // angle snapping builds
     { ra::modifier_settings s{}; s.prof.degrees_snap = 5.0;
       RA_CHECK(!throws(s)); }
 }
@@ -137,13 +133,13 @@ RA_TEST("Lut: angle snapping sets APPLY_SNAP and emits the threshold tangents")
 {
     ra::device_config dev{};
 
-    // No snap: flag clear, thresholds left at zero.
+    // no snap: flag clear, thresholds zero
     {
         ra::modifier_settings s{};
         auto r = build_lut(s, dev);
         RA_CHECK((r.flags & RA_F_APPLY_SNAP) == 0);
     }
-    // 15 deg snap: flag set; tan(15) ~= 0.2679, tan(75) ~= 3.7321.
+    // 15 deg snap: flag set; tan(15) ~= 0.2679, tan(75) ~= 3.7321
     {
         ra::modifier_settings s{};
         s.prof.degrees_snap = 15.0;
@@ -159,20 +155,20 @@ RA_TEST("Lut: whole-mode anisotropic range weights set APPLY_DIR_WEIGHT")
 {
     ra::device_config dev{};
 
-    // Whole mode + asymmetric range weights -> directional weighting flag.
+    // whole + asymmetric weights -> directional weighting flag
     {
         ra::modifier_settings s{};
         s.prof.range_weights = vec2d{1.0, 0.5};  // whole is the default
         auto r = build_lut(s, dev);
         RA_CHECK((r.flags & RA_F_APPLY_DIR_WEIGHT) != 0);
     }
-    // Symmetric weights: no directional blend needed.
+    // symmetric weights: no blend
     {
         ra::modifier_settings s{};
         auto r = build_lut(s, dev);
         RA_CHECK((r.flags & RA_F_APPLY_DIR_WEIGHT) == 0);
     }
-    // Separate mode never sets it (the blend is a whole-mode construct).
+    // separate mode never sets it (whole-mode construct)
     {
         ra::modifier_settings s{};
         s.prof.range_weights = vec2d{1.0, 0.5};
@@ -188,14 +184,14 @@ RA_TEST("Lut: dpi_norm is NORMALIZED_DPI/dev_dpi when dpi is set")
     ra::device_config dev{};
     dev.dpi = 2000;
     auto r = build_lut(s, dev);
-    // 1000/2000 = 0.5 -> 0.5 * 65536 = 32768.
+    // 1000/2000 = 0.5 -> 0.5 * 65536 = 32768
     RA_CHECK_EQ(r.dpi_norm_q16, 32768);
 }
 
 RA_TEST("Lut: dpi_norm defaults to 1.0 when dev_dpi is 0")
 {
     ra::modifier_settings s{};
-    ra::device_config dev{};  // dpi defaults to 0
+    ra::device_config dev{};  // dpi 0
     auto r = build_lut(s, dev);
     RA_CHECK_EQ(r.dpi_norm_q16, RA_Q16_ONE);
 }
@@ -204,16 +200,15 @@ RA_TEST("Lut: input smoothing sets RA_F_SMOOTH_INPUT and emits log2 coefficients
 {
     ra::device_config dev{};
 
-    // halflife 0 -> no input smoothing: flag clear, coefficients left at 0. The
-    // kernel then indexes the raw speed directly.
+    // halflife 0 -> no smoothing: flag clear, coeffs 0
     {
         ra::modifier_settings s{};
         auto r = build_lut(s, dev);
         RA_CHECK((r.flags & RA_F_SMOOTH_INPUT) == 0);
         RA_CHECK_EQ(r.in_log2_win_q16, 0);
     }
-    // halflife 50 ms -> flag set; log2(coeff) values match linear_ema_smoother
-    // init with input_trend_halflife = 1.25.
+    // halflife 50 ms -> flag set; log2(coeff) matches linear_ema_smoother init
+    // with input_trend_halflife = 1.25
     {
         ra::modifier_settings s{};
         s.prof.speed_processor_args.input_speed_smooth_halflife = 50;
@@ -228,7 +223,7 @@ RA_TEST("Lut: input smoothing sets RA_F_SMOOTH_INPUT and emits log2 coefficients
         RA_CHECK(q16_near(r.in_log2_cut_q16, std::log2(cut), 1e-3));
         RA_CHECK(q16_near(r.in_log2_trw_q16, std::log2(trw), 1e-3));
         RA_CHECK(q16_near(r.in_log2_trc_q16, std::log2(trc), 1e-3));
-        RA_CHECK(r.in_log2_win_q16 < 0);  // coeff in (0,1) -> log2 < 0
+        RA_CHECK(r.in_log2_win_q16 < 0);  // coeff in (0,1)
     }
 }
 
@@ -238,6 +233,6 @@ RA_TEST("Lut: step and max span the full quantized range")
     ra::device_config dev{};
     auto r = build_lut(s, dev);
     RA_CHECK_EQ(r.lut_step_q16, RA_Q16_ONE);
-    // Whole buckets: max ~= LUT_SIZE * step - 1.
+    // whole buckets: max ~= LUT_SIZE * step - 1
     RA_CHECK(r.lut_max_q16 >= (std::int32_t)(RA_LUT_SIZE - 1) * RA_Q16_ONE);
 }

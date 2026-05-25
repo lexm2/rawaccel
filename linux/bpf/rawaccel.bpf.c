@@ -1,22 +1,11 @@
-/* Rawaccel HID-BPF kernel program.
- *
- * Rewrites the dx/dy bytes of an incoming mouse HID report using a
- * precomputed Q16.16 lookup table plus a fixed-point exponential moving
- * average on velocity. One BPF object per attached device: each load
- * binds its own state, config, and LUT maps to a single hid_id.
- *
- * Pipeline mirrors driver/driver.cpp:84-131 in fixed point:
- *   parse(dx, dy) -> |v| -> EMA -> LUT[scale_x], LUT[scale_y]
- *                 -> per-axis (dx * scale + carry) >> 16
- *                 -> write_back, save new carry
- *
- * Verifier defenses: no floats, no dynamic loops, LUT indices masked to
- * (RA_LUT_SIZE - 1), report-buffer access via hid_bpf_get_data() with a
- * compile-time bounded size argument.
- */
+/* Rawaccel HID-BPF kernel program. Rewrites the dx/dy bytes of a mouse HID
+ * report via a Q16.16 LUT + fixed-point velocity EMA. One BPF object per
+ * device, each bound to a single hid_id. Pipeline mirrors driver.cpp in
+ * fixed point: parse -> |v| -> EMA -> LUT scale -> carry-accumulate -> write.
+ * Verifier defenses: no floats, no dynamic loops, masked LUT indices,
+ * bounded hid_bpf_get_data() reads. */
 
-/* clang -target bpf defines __BPF__ for us, so the layout header just
- * needs to test the macro; no manual define here. */
+/* clang -target bpf defines __BPF__; the layout header tests it. */
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -25,8 +14,7 @@
 
 char LICENSE[] SEC("license") = "GPL";
 
-/* hid_bpf kfunc prototypes. The kernel exports these via __ksym; bpf_helpers
- * pulls them in by extern declaration. */
+/* hid_bpf kfunc prototypes (kernel exports via __ksym). */
 extern __u8 *hid_bpf_get_data(struct hid_bpf_ctx *ctx,
                               unsigned int offset,
                               const size_t rdwr_buf_size) __ksym;
@@ -63,11 +51,9 @@ struct {
 
 /* ---- Helpers -------------------------------------------------------- */
 
-/* The scalar math (abs, lerp, EMA, indexing, weighting) lives in
- * rawaccel_fixedpoint.h so host tests exercise the exact same code. The only
- * kernel-specific piece is the LUT fetch: a BPF array-map pointer cannot
- * stride past one element, so each entry is looked up on its own here and
- * fed into the shared ra_q16_lerp. */
+/* Scalar math lives in rawaccel_fixedpoint.h (shared with host tests). The
+ * one kernel-specific piece is the LUT fetch: a BPF array-map pointer can't
+ * stride, so each entry is looked up on its own and fed to ra_q16_lerp. */
 static __always_inline __s32 q16_lookup(void *map, __u32 idx)
 {
     __u32 k = idx & (RA_LUT_SIZE - 1);
@@ -75,8 +61,7 @@ static __always_inline __s32 q16_lookup(void *map, __u32 idx)
     return p ? *p : RA_Q16_ONE;
 }
 
-/* Read a signed 8 or 16 bit value from a known offset in the report
- * buffer. The verifier needs to see fixed sizes per branch. */
+/* Read a signed 8/16-bit value; fixed sizes per branch for the verifier. */
 static __always_inline __s32 read_signed(const __u8 *p, __u32 size)
 {
     if (size == 2) {
@@ -102,9 +87,7 @@ static __always_inline void write_signed(__u8 *p, __u32 size, __s32 v)
 
 /* ---- struct_ops --------------------------------------------------- */
 
-/* Verifier-bounded view of the report. Picked so a typical 16-bit
- * mouse with a 1-byte report ID prefix fits comfortably; the actual
- * accessed bytes are gated on the per-device config offsets. */
+/* Verifier-bounded report view; accessed bytes gated on the config offsets. */
 #define RA_REPORT_VIEW_BYTES 16
 
 SEC("struct_ops/hid_device_event")
@@ -121,25 +104,18 @@ int BPF_PROG(rawaccel_hid_device_event,
     __u8 *rpt = hid_bpf_get_data(hctx, 0, RA_REPORT_VIEW_BYTES);
     if (!rpt) return 0;
 
-    /* If the device prefixes reports with an ID byte, only act on the
-     * configured report type. Unknown reports flow through untouched. */
+    /* With a report-ID prefix, only act on the configured type; others pass through. */
     if (cfg->report_id != 0 && rpt[0] != cfg->report_id) {
         return 0;
     }
 
-    /* Narrow byte sizes to {1, 2} so the size-branch in read_signed /
-     * write_signed has a known shape. */
+    /* Narrow byte sizes to {1, 2} for read_signed/write_signed. */
     if (cfg->dx_byte_size != 1 && cfg->dx_byte_size != 2) return 0;
     if (cfg->dy_byte_size != 1 && cfg->dy_byte_size != 2) return 0;
 
-    /* Mask offsets to keep the verifier happy with __u8* + __u8
-     * arithmetic. Then tighten unconditionally to (RA_REPORT_VIEW_BYTES
-     * - 2): even when dx_byte_size == 1 we reserve room for two bytes,
-     * because the verifier tracks dx_off independently of dx_byte_size
-     * and will not infer 'dx_off+1 in range' from 'dx_off+size <= 16'
-     * inside the size==2 branch. Losing one byte at the high end of the
-     * view is harmless: real mouse descriptors put X/Y near the start
-     * of the report, never at byte 15. */
+    /* Mask offsets for the verifier, then tighten to VIEW-2: it tracks
+     * dx_off independently of dx_byte_size, so reserve room for two bytes
+     * always. Harmless: X/Y sit near the report start, never at byte 15. */
     __u32 dx_off = cfg->dx_byte_offset & (RA_REPORT_VIEW_BYTES - 1);
     __u32 dy_off = cfg->dy_byte_offset & (RA_REPORT_VIEW_BYTES - 1);
     if (dx_off > RA_REPORT_VIEW_BYTES - 2) return 0;
@@ -152,22 +128,16 @@ int BPF_PROG(rawaccel_hid_device_event,
         return 0;  /* idle packet, no carry update */
     }
 
-    /* read_signed's 8- vs 16-bit branch leaves dx/dy with different value
-     * ranges; without this the two ranges never merge and double the verifier
-     * state count through every downstream branch. The barrier collapses them
-     * to one unbounded-scalar state (dx/dy are only scaled, never used as
-     * pointer offsets, so losing the range bound is safe). */
+    /* read_signed's 8/16-bit branches leave dx/dy with different ranges that
+     * never merge, doubling verifier state downstream. The barrier collapses
+     * them to one scalar (dx/dy are only scaled, never pointer offsets). */
     RA_BARRIER(dx);
     RA_BARRIER(dy);
 
-    /* Real per-packet delta-time. last_ts_ns == 0 is the first packet after a
-     * config (re)load, where there is no prior timestamp; assume 1 ms so the
-     * smoother/velocity warmup matches the host oracle's first-packet dt. The
-     * elapsed ns is capped at 1 s before the Q16.16 ms conversion (keeps the
-     * << 16 inside u64) and then clamped to the configured [min, max] window;
-     * a long idle gap therefore collapses to time_max. bpf_ktime_get_ns lives
-     * only in the kernel, so dt is computed here and passed into the shared
-     * pipeline rather than inside rawaccel_fixedpoint.h. */
+    /* Per-packet dt. last_ts_ns == 0 (first packet after a config load) ->
+     * assume 1 ms to match the host oracle. Elapsed ns capped at 1 s (keeps
+     * << 16 in u64), then clamped to [time_min, time_max]; a long idle gap
+     * collapses to time_max. Computed here since bpf_ktime_get_ns is kernel-only. */
     __u64 now = bpf_ktime_get_ns();
     __s32 dt_ms_q16;
     if (st->last_ts_ns == 0) {
@@ -181,10 +151,7 @@ int BPF_PROG(rawaccel_hid_device_event,
         dt_ms_q16 = dt;
     }
 
-    /* Per-packet pipeline. ra_pre_lut / ra_post_lut (rawaccel_fixedpoint.h)
-     * are shared with the host parity tests; the only kernel-specific step is
-     * the LUT read, since a BPF array-map pointer cannot stride past one
-     * element. Each entry is fetched on its own and fed into ra_q16_lerp. */
+    /* Per-packet pipeline; only the LUT read (map lookups) is kernel-specific. */
     __s64 inx, iny;
     __u32 ix, iy;
     __s32 fx, fy;
@@ -202,11 +169,7 @@ int BPF_PROG(rawaccel_hid_device_event,
     ra_post_lut(cfg, st, inx, iny, raw_x, raw_y, single_scale, weight, dt_ms_q16,
                 &acc_x, &acc_y);
 
-    /* Carry-accumulate and split off the integer counts to emit. ra_emit_q16
-     * (rawaccel_fixedpoint.h) owns the fractional carry and the ValidCarry
-     * drop (driver/driver.cpp:37-42); it returns 0 to skip a packet whose carry
-     * would land outside [-1, 1), leaving the saved carry untouched. Shared
-     * with the host sequence tests so emission is exercised, not duplicated. */
+    /* Carry-accumulate + emit; ra_emit_q16 drops a packet whose carry leaves [-1, 1). */
     __s32 out_x, out_y;
     if (!ra_emit_q16(st, acc_x, acc_y, &out_x, &out_y)) return 0;
 

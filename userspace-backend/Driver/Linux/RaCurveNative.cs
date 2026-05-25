@@ -5,26 +5,22 @@ using System.Runtime.InteropServices;
 
 namespace userspace_backend.Driver.Linux
 {
-    // P/Invoke surface for shim/ra_curve.h. Resolves librawaccel_common.so
-    // (Linux) / rawaccel_common.dll (Windows) via NativeLibrary.SetDllImport-
-    // Resolver so dev builds can find the .so next to the CMake artifact
-    // tree without requiring LD_LIBRARY_PATH or a system install.
+    // P/Invoke surface for shim/ra_curve.h. A custom DllImportResolver finds
+    // librawaccel_common.so / rawaccel_common.dll in the CMake build tree, so
+    // dev builds need no LD_LIBRARY_PATH or system install.
     internal static class RaCurveNative
     {
         public const string LibraryName = "rawaccel_common";
 
-        // The shim ABI this binding targets; ra_curve_abi_version must agree.
+        // shim ABI this binding targets; ra_curve_abi_version must agree
         public const uint ExpectedAbiVersion = 2;
 
         [DllImport(LibraryName, EntryPoint = "ra_curve_abi_version",
             CallingConvention = CallingConvention.Cdecl)]
         public static extern uint AbiVersion();
 
-        // Builds a curve handle from a driver-config JSON string (the same
-        // RawAccelConfig shape the apply path sends to the agent). The shim
-        // parses the first profile and runs the full modifier pipeline, so no
-        // per-profile math is reimplemented on the managed side. Returns
-        // IntPtr.Zero on parse/allocation failure.
+        // Builds a curve handle from a RawAccelConfig JSON string (the shim
+        // parses the first profile). Returns IntPtr.Zero on failure.
         [DllImport(LibraryName, EntryPoint = "ra_curve_create_from_config_json",
             CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr CreateFromConfigJson(
@@ -34,8 +30,8 @@ namespace userspace_backend.Driver.Linux
             CallingConvention = CallingConvention.Cdecl)]
         public static extern void Destroy(IntPtr curve);
 
-        // Mirrors ManagedAccel.Accelerate / rawaccel::modifier::modify: one
-        // input sample (x, y) in, post-acceleration (outX, outY) out.
+        // one input sample (x, y) in, post-acceleration (outX, outY) out
+        // (mirrors rawaccel::modifier::modify)
         [DllImport(LibraryName, EntryPoint = "ra_curve_modify",
             CallingConvention = CallingConvention.Cdecl)]
         public static extern void Modify(IntPtr curve, double x, double y,
@@ -56,17 +52,16 @@ namespace userspace_backend.Driver.Linux
         {
             if (name != LibraryName) return IntPtr.Zero;
 
-            // 1. Standard probe (LD_LIBRARY_PATH, ldconfig, RPATH, etc.).
+            // 1. standard probe (LD_LIBRARY_PATH, ldconfig, RPATH)
             if (NativeLibrary.TryLoad(LibraryName, asm, path, out var h))
                 return h;
 
-            // 2. Explicit override via env var.
+            // 2. explicit override via env var
             var env = Environment.GetEnvironmentVariable("RAWACCEL_NATIVE_LIB");
             if (!string.IsNullOrEmpty(env) &&
                 NativeLibrary.TryLoad(env, out h)) return h;
 
-            // 3. Dev tree: walk up from the running binary to find
-            //    linux/build/librawaccel_common.so produced by CMake.
+            // 3. dev tree: walk up from the binary to the CMake artifact
             foreach (var candidate in DevCandidates())
             {
                 if (NativeLibrary.TryLoad(candidate, out h)) return h;

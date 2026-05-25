@@ -1,8 +1,8 @@
 #pragma once
 
 // Minimal header-only test harness for the Linux parity tests.
-// Kept purposefully small (no vendored doctest/Catch2): registration
-// via static-ctor side effect, RA_TEST macro defines + registers a fn.
+// No vendored doctest/Catch2: registration via static-ctor side effect,
+// RA_TEST defines + registers a fn.
 
 #include <cmath>
 #include <cstdio>

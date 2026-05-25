@@ -1,7 +1,6 @@
-// Tests for the HID report descriptor parser. Synthetic descriptors come
-// straight from the USB HID 1.11 spec examples and known-good real-mouse
-// shapes; rejection cases check that the BPF-safety filter is strict
-// enough to keep the kernel rewriter from clobbering wheel/button bytes.
+// Tests for the HID report descriptor parser. Descriptors come from the
+// USB HID 1.11 spec examples and real-mouse shapes; rejection cases check
+// the BPF-safety filter stays strict enough not to clobber other bytes.
 
 #include "hid_descriptor.hpp"
 #include "test_harness.hpp"
@@ -13,9 +12,8 @@ using namespace rawaccel_agent;
 
 namespace {
 
-// Canonical boot-mouse descriptor (HID 1.11 Appendix E.10): 3 buttons + 5
-// bits padding + signed 8-bit X + signed 8-bit Y. Report is 3 bytes; no
-// report ID prefix.
+// Boot-mouse descriptor (HID 1.11 Appendix E.10): 3 buttons + 5 padding
+// bits + signed 8-bit X + signed 8-bit Y. 3-byte report, no report ID.
 const std::vector<std::uint8_t> BOOT_MOUSE = {
     0x05, 0x01,        // Usage Page (Generic Desktop)
     0x09, 0x02,        // Usage (Mouse)
@@ -45,8 +43,7 @@ const std::vector<std::uint8_t> BOOT_MOUSE = {
     0xC0,              // End Collection
 };
 
-// 16-bit X/Y with a Report ID prefix. Mirrors what most modern gaming mice
-// emit (Logitech G Pro shape, generic high-DPI 16-bit).
+// 16-bit X/Y with a Report ID prefix (Logitech G Pro shape, high-DPI).
 const std::vector<std::uint8_t> HIGH_DPI_MOUSE = {
     0x05, 0x01,        // Usage Page (Generic Desktop)
     0x09, 0x02,        // Usage (Mouse)
@@ -77,9 +74,8 @@ const std::vector<std::uint8_t> HIGH_DPI_MOUSE = {
     0xC0,              // End Collection
 };
 
-// A descriptor whose X axis is 12 bits, packed alongside Y in a 24-bit
-// field. Common on some older trackballs. The BPF backend cannot safely
-// rewrite this without bit-level packing, so it must fail validation.
+// 12-bit X packed alongside Y in a 24-bit field (some older trackballs).
+// Not byte-aligned, so the BPF backend must reject it.
 const std::vector<std::uint8_t> PACKED_12BIT = {
     0x05, 0x01,        // Usage Page (Generic Desktop)
     0x09, 0x02,        // Usage (Mouse)
@@ -136,7 +132,7 @@ RA_TEST("HID: 16-bit mouse with report ID places X/Y past the prefix byte")
     RA_CHECK_EQ(static_cast<int>(md->report_id), 1);
     RA_CHECK_EQ(static_cast<int>(md->x.bit_size), 16);
     RA_CHECK_EQ(static_cast<int>(md->y.bit_size), 16);
-    // Payload layout: 5 button bits + 3 padding bits + 16 X + 16 Y.
+    // payload: 5 button bits + 3 padding bits + 16 X + 16 Y
     RA_CHECK_EQ(static_cast<int>(md->x.bit_offset_in_payload), 8);
     RA_CHECK_EQ(static_cast<int>(md->y.bit_offset_in_payload), 24);
 }
@@ -147,8 +143,7 @@ RA_TEST("HID: 16-bit mouse validates with correct BPF byte offsets")
     RA_CHECK(md.has_value());
     auto dec = validate_for_bpf(*md);
     RA_CHECK(dec.layout.has_value());
-    // Report ID byte 0; payload starts at byte 1. X at payload bit 8 -> byte 2;
-    // Y at payload bit 24 -> byte 4.
+    // report ID byte 0, payload from byte 1; X bit 8 -> byte 2, Y bit 24 -> byte 4
     RA_CHECK_EQ(static_cast<int>(dec.layout->report_id), 1);
     RA_CHECK_EQ(static_cast<int>(dec.layout->dx_byte_offset), 2);
     RA_CHECK_EQ(static_cast<int>(dec.layout->dx_byte_size), 2);
@@ -173,7 +168,7 @@ RA_TEST("HID: empty descriptor returns no mouse")
 
 RA_TEST("HID: descriptor without X/Y is rejected")
 {
-    // Buttons-only collection, no relative axes.
+    // buttons-only, no relative axes
     std::vector<std::uint8_t> buttons_only = {
         0x05, 0x01,        // Usage Page (Generic Desktop)
         0x09, 0x02,        // Usage (Mouse)

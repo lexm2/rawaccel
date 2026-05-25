@@ -1,10 +1,9 @@
 // rawaccel-agentd: owns the active modifier state, serves apply/get/version/
-// status RPCs over /run/rawaccel/control.sock, and pushes resolved settings
-// to the BPF backend.
+// status RPCs over /run/rawaccel/control.sock, pushes settings to the backend.
 //
-// --backend auto: probe kernel + bpf(), pick bpf if supported, else exit.
+// --backend auto: probe, pick bpf if supported, else exit.
 // --backend bpf:  force HID-BPF (kernel >= 6.11, CAP_BPF).
-// --backend noop: control plane only; used by tests.
+// --backend noop: control plane only; for tests.
 
 #include "agent.hpp"
 #include "backend.hpp"
@@ -35,8 +34,7 @@ void usage()
         "[--backend {auto,bpf,noop}] [--bpf-object PATH]\n");
 }
 
-// Look beside the executable. Production installs override with
-// --bpf-object pointing at /usr/share/rawaccel/rawaccel.bpf.o.
+// Beside the executable; installs override via --bpf-object.
 std::string default_bpf_object_path(const char* argv0)
 {
     std::string p = argv0 ? argv0 : "";
@@ -118,8 +116,7 @@ int main(int argc, char** argv)
         }
     }
 
-    // start() enumerates hidraw and re-enters the agent via on_device_added,
-    // so the active config loaded above is what each bind sees.
+    // start() re-enters via on_device_added, so binds see the config loaded above
     if (bpf_ptr) {
         if (!bpf_ptr->start()) {
             std::fprintf(stderr, "bpf backend failed to start\n");
@@ -136,7 +133,7 @@ int main(int argc, char** argv)
 
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
-    // A client that disconnects mid-response must not kill the daemon.
+    // a mid-response client disconnect must not kill the daemon
     std::signal(SIGPIPE, SIG_IGN);
 
     server.run();

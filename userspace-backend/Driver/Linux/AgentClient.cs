@@ -8,23 +8,17 @@ using System.Threading.Tasks;
 
 namespace userspace_backend.Driver.Linux
 {
-    // Thrown by AgentClient.Call when the agent socket file is missing,
-    // i.e. rawaccel-agentd is not running. Distinct from generic transport
-    // errors so callers can surface a "start the daemon" hint instead of a
-    // confusing AF_UNIX SocketException.
+    // Thrown when the agent socket file is missing (daemon not running);
+    // distinct from transport errors so callers can hint "start the daemon".
     public sealed class AgentUnavailableException : Exception
     {
         public AgentUnavailableException(string message) : base(message) { }
     }
 
-    // Minimal unix-domain-socket client for the rawaccel-agent control
-    // protocol. Wire format mirrors linux/agent/control_server.cpp:
-    //   request:  4-byte big-endian length + UTF-8 JSON
-    //   response: 4-byte big-endian length + UTF-8 JSON
-    //   one request per connection.
-    //
-    // The Rust CLI in linux/cli/src/client.rs uses the same shape; keep the
-    // two clients in agreement.
+    // Unix-domain-socket client for the rawaccel-agent control protocol.
+    // Wire format (mirrors linux/agent/control_server.cpp and the Rust CLI in
+    // linux/cli/src/client.rs): 4-byte big-endian length + UTF-8 JSON, one
+    // request per connection. Keep all three clients in agreement.
     internal sealed class AgentClient
     {
         public const int MaxFrameBytes = 16 * 1024 * 1024;
@@ -48,10 +42,8 @@ namespace userspace_backend.Driver.Linux
                     $"request frame too large: {requestBytes.Length} > {MaxFrameBytes}");
             }
 
-            // Fast-fail when the socket file is missing. Without this, .NET
-            // surfaces EADDRNOTAVAIL ("Cannot assign requested address") for
-            // AF_UNIX connects to a non-existent path, which obscures the
-            // actual cause: rawaccel-agentd is not running.
+            // Fast-fail when missing: an AF_UNIX connect to a nonexistent path
+            // otherwise surfaces a misleading EADDRNOTAVAIL.
             if (!File.Exists(socketPath))
             {
                 throw new AgentUnavailableException(

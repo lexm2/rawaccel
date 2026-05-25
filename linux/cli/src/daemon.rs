@@ -1,18 +1,14 @@
-// Daemon lifecycle for the rawaccel CLI: detect, start, and stop
-// rawaccel-agentd. The agent needs root (CAP_BPF/CAP_SYS_ADMIN), so any
-// path that must start it escalates with sudo -- a terminal password prompt,
-// never pkexec. If escalation is impossible or fails, the command fails with
-// a "run as sudo" hint.
+// Daemon lifecycle (detect/start/stop) for rawaccel-agentd. The agent needs
+// root (CAP_BPF/CAP_SYS_ADMIN), so starting it escalates with sudo -- terminal
+// prompt, never pkexec; failure surfaces a "run as sudo" hint.
 //
-// Two deployment realities are handled:
-//   - installed: a systemd unit (rawaccel-agentd.service), socket at
-//     /run/rawaccel/control.sock; started via `systemctl start`.
-//   - dev (source tree): linux/build/rawaccel-agentd spawned directly,
-//     detached via setsid, socket at $XDG_RUNTIME_DIR/rawaccel.sock.
+// Two deployments:
+//   - installed: systemd unit, socket /run/rawaccel/control.sock, `systemctl start`.
+//   - dev: linux/build/rawaccel-agentd spawned via setsid, socket
+//     $XDG_RUNTIME_DIR/rawaccel.sock.
 //
-// The dev socket path mirrors linux/run-dev-agent.sh and the .NET
-// LinuxAgentDriver resolution, so the GUI connects whether the agent was
-// started by systemd, by run-dev-agent.sh, or by `rawaccel start`.
+// Dev socket path mirrors run-dev-agent.sh and .NET LinuxAgentDriver, so the
+// GUI connects however the agent was started.
 
 use std::env;
 use std::fs;
@@ -28,19 +24,18 @@ use crate::client::Client;
 const SERVICE: &str = "rawaccel-agentd";
 const SYSTEM_SOCKET: &str = "/run/rawaccel/control.sock";
 
-// How long to wait for the socket to appear (start) or vanish (stop).
+// Wait for the socket to appear (start) / vanish (stop).
 const START_TIMEOUT: Duration = Duration::from_secs(8);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
-// True if something is accepting connections on `socket`. A stale socket file
-// (agent gone) refuses the connect and reads as down, which is what we want.
+// True if something accepts connections on `socket`. A stale socket file
+// (agent gone) refuses the connect and reads as down -- intended.
 fn is_up(socket: &Path) -> bool {
     Client::connect(socket, Duration::from_millis(500)).is_ok()
 }
 
-// Socket to connect to for client RPCs (status/apply/get/version). Mirrors the
-// .NET LinuxAgentDriver order: explicit override, then the system path, then
-// the dev-launcher path under XDG_RUNTIME_DIR. First existing wins.
+// Socket for client RPCs. Mirrors .NET LinuxAgentDriver order: explicit
+// override, system path, then dev path under XDG_RUNTIME_DIR; first existing wins.
 pub fn connect_socket(explicit: &Option<PathBuf>) -> PathBuf {
     if let Some(p) = explicit {
         return p.clone();
@@ -57,9 +52,9 @@ pub fn connect_socket(explicit: &Option<PathBuf>) -> PathBuf {
     system
 }
 
-// Where to create the socket when we start the daemon ourselves: an explicit
-// override wins; otherwise the system path if the service is installed (the
-// unit's RuntimeDirectory= makes /run/rawaccel), else the per-user dev socket.
+// Where to create the socket when we start the daemon: explicit override, else
+// the system path if the service is installed (its RuntimeDirectory= makes
+// /run/rawaccel), else the per-user dev socket.
 fn target_socket(explicit: &Option<PathBuf>) -> Result<PathBuf> {
     if let Some(p) = explicit {
         return Ok(p.clone());
@@ -80,11 +75,10 @@ fn dev_socket() -> Option<PathBuf> {
     env::var_os("XDG_RUNTIME_DIR").map(|d| PathBuf::from(d).join("rawaccel.sock"))
 }
 
-// Ensure rawaccel-agentd is running and return the socket it serves. A no-op
-// (no sudo) when it is already up. Otherwise starts it via systemctl (when the
-// unit is installed) or by spawning the dev binary, then waits for the socket.
+// Ensure rawaccel-agentd is running; return its socket. No-op (no sudo) if
+// already up; else systemctl start or spawn the dev binary, then wait.
 pub fn start(explicit: &Option<PathBuf>) -> Result<PathBuf> {
-    // Already up at a path we'd connect to? Nothing to do, no escalation.
+    // already up at a path we'd connect to -> no escalation
     let existing = connect_socket(explicit);
     if is_up(&existing) {
         return Ok(existing);
@@ -105,8 +99,8 @@ pub fn start(explicit: &Option<PathBuf>) -> Result<PathBuf> {
     Ok(socket)
 }
 
-// Stop rawaccel-agentd. systemctl when the service is active, otherwise signal
-// the directly-spawned dev daemon. Returns false when nothing was running.
+// Stop rawaccel-agentd: systemctl if active, else signal the dev daemon.
+// Returns false when nothing was running.
 pub fn stop(explicit: &Option<PathBuf>) -> Result<bool> {
     let socket = connect_socket(explicit);
 
@@ -121,10 +115,9 @@ pub fn stop(explicit: &Option<PathBuf>) -> Result<bool> {
             );
         }
     } else if is_up(&socket) {
-        // -x matches the exact process name (not the full command line), so we
-        // don't accidentally signal something like `tail -f rawaccel-agentd.log`.
-        // pkill returns 1 when nothing matched; that just means it already
-        // exited, so only a hard error (>=2) is worth reporting.
+        // -x matches the exact process name, not the command line (avoids
+        // signalling e.g. `tail -f rawaccel-agentd.log`). pkill exit 1 == no
+        // match == already gone; only >=2 is a real error.
         let status = privileged("pkill", &["-TERM", "-x", SERVICE])
             .status()
             .context("failed to run pkill (is sudo available?)")?;
@@ -134,7 +127,7 @@ pub fn stop(explicit: &Option<PathBuf>) -> Result<bool> {
             }
         }
     } else {
-        // Nothing listening and no active service: already stopped.
+        // nothing listening, no active service -> already stopped
         return Ok(false);
     }
 
@@ -149,9 +142,8 @@ pub fn restart(explicit: &Option<PathBuf>) -> Result<PathBuf> {
 
 // ---- escalation -------------------------------------------------------------
 
-// Build a command, prefixing sudo when we are not already root. sudo reads the
-// password from the controlling terminal (/dev/tty), so the prompt still shows
-// even when the child's stdio is redirected.
+// Build a command, prefixing sudo when not already root. sudo reads the
+// password from /dev/tty, so the prompt shows even with stdio redirected.
 fn privileged(program: &str, args: &[&str]) -> Command {
     if is_root() {
         let mut c = Command::new(program);
@@ -172,7 +164,7 @@ fn is_root() -> bool {
     euid() == Some(0)
 }
 
-// Effective uid from /proc/self/status (no libc dependency). Format:
+// Effective uid from /proc/self/status (no libc). Format:
 //   Uid:\t<real>\t<eff>\t<saved>\t<fs>
 fn euid() -> Option<u32> {
     let status = fs::read_to_string("/proc/self/status").ok()?;
@@ -200,9 +192,8 @@ fn start_via_systemctl() -> Result<()> {
     Ok(())
 }
 
-// Spawn the dev-tree daemon detached: setsid --fork reparents it so it outlives
-// this process and the controlling terminal. Output is redirected to a log so
-// failures can be inspected; sudo still prompts on /dev/tty.
+// Spawn the dev-tree daemon detached: setsid --fork reparents it to outlive
+// this process and the terminal. Output goes to a log; sudo still prompts on /dev/tty.
 fn spawn_dev_agent(socket: &Path) -> Result<()> {
     let agent = agent_binary().ok_or_else(|| {
         anyhow!(
@@ -236,7 +227,7 @@ fn spawn_dev_agent(socket: &Path) -> Result<()> {
         c.arg("sh").arg("-c").arg(&script);
         c
     };
-    // sudo prompts on /dev/tty regardless; let the user see normal stdio.
+    // sudo prompts on /dev/tty regardless; let the user see normal stdio
     cmd.stdin(Stdio::inherit());
 
     let status = cmd
@@ -251,8 +242,7 @@ fn spawn_dev_agent(socket: &Path) -> Result<()> {
     Ok(())
 }
 
-// rawaccel-agentd beside this executable (installed layout) or in the dev
-// build dir located via the source tree.
+// rawaccel-agentd beside this exe (installed) or in the dev build dir
 fn agent_binary() -> Option<PathBuf> {
     if let Ok(exe) = env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -317,9 +307,8 @@ fn wait_until_down(socket: &Path) {
     }
 }
 
-// Failure message for a start that never produced a live socket: include the
-// tail of the agent log so the actual cause (e.g. missing rawaccel.bpf.o,
-// unsupported kernel) is visible.
+// Failure message for a start that never produced a live socket; appends the
+// agent log tail so the real cause (missing rawaccel.bpf.o, etc.) shows.
 fn start_failure_hint(socket: &Path) -> String {
     let mut msg = format!("rawaccel-agentd did not come up at {}", socket.display());
     let log = log_path();
@@ -335,7 +324,7 @@ fn start_failure_hint(socket: &Path) -> String {
             }
         }
         Err(_) => {
-            // systemctl path logs to the journal, not our file.
+            // systemctl path logs to the journal, not our file
             msg.push_str(&format!(
                 "\nsee {} (dev) or `journalctl -u {SERVICE}` (installed) for details",
                 log.display()
@@ -352,7 +341,7 @@ fn log_path() -> PathBuf {
         .join("rawaccel-agentd.log")
 }
 
-// Single-quote a path for safe embedding in an `sh -c` script.
+// Single-quote a path for safe embedding in `sh -c`.
 fn sh_quote(p: &Path) -> String {
     format!("'{}'", p.to_string_lossy().replace('\'', "'\\''"))
 }

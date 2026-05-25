@@ -1,7 +1,6 @@
-// One-shot: load rawaccel.bpf.o through libbpf and report whether the
-// verifier accepts it. Does not attach to any device or populate maps.
-// This is the artifact ctest runs to keep the BPF program verifier-clean
-// on every commit.
+// One-shot: load rawaccel.bpf.o through libbpf, report verifier acceptance.
+// No device attach, no map population. ctest runs this to keep the BPF
+// program verifier-clean per commit.
 
 #include <bpf/libbpf.h>
 
@@ -20,7 +19,7 @@ int log_collect(enum libbpf_print_level level, const char* fmt, va_list ap)
     char buf[2048];
     int n = std::vsnprintf(buf, sizeof(buf), fmt, ap);
     if (n > 0) g_log.append(buf, std::min<int>(n, sizeof(buf) - 1));
-    // Echo to stderr too so an interactive run still sees the verifier log.
+    // echo to stderr so an interactive run still sees the verifier log
     std::fprintf(stderr, "libbpf[%d]: %s", level, buf);
     return 0;
 }
@@ -52,10 +51,8 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    // Per-program log buffer: the default is small enough that a non-trivial
-    // verifier rejection gets truncated and the actual reason scrolls off.
-    // 1 MiB is comfortably more than the kernel will emit. Allocated on the
-    // heap so the binary stack stays small.
+    // Per-program log buffer: the default truncates a non-trivial rejection.
+    // 1 MiB exceeds anything the kernel emits; on the heap to keep the stack small.
     static std::vector<char> verifier_log(1 << 20);
     bpf_program* p = nullptr;
     bpf_object__for_each_program(p, obj) {
@@ -66,9 +63,8 @@ int main(int argc, char** argv)
     int rc = bpf_object__load(obj);
     if (rc != 0) {
         const int saved = errno;
-        // EACCES is the verifier saying "your program is unsafe"; the log
-        // explains why. EPERM is missing CAP_BPF / RLIMIT_MEMLOCK and the
-        // program never made it to the verifier.
+        // EACCES: verifier rejected as unsafe (log explains). EPERM: missing
+        // CAP_BPF / RLIMIT_MEMLOCK, never reached the verifier.
         if (saved != EPERM) {
             std::fprintf(stderr,
                 "---- verifier log ----\n%s---- end verifier log ----\n",
@@ -89,7 +85,7 @@ int main(int argc, char** argv)
 
     std::printf("verifier accepted %s\n", path.c_str());
 
-    // Walk programs and report each name + size for diagnostic value.
+    // report each program's name + insn count
     bpf_program* prog = nullptr;
     bpf_object__for_each_program(prog, obj) {
         const char* name = bpf_program__name(prog);

@@ -1,14 +1,7 @@
-// Parity tests for the shared fixed-point pipeline (rawaccel_fixedpoint.h),
-// the exact code the BPF program runs in-kernel. Each case drives
-// ra_modify_q16_flat and compares its Q16.16 output against the authoritative
-// double-precision common/ math (rawaccel::modifier::modify).
-//
-// Phase 0 scope: the kernel keeps the max(|dx|,|dy|) speed metric and the 1 ms
-// timing assumption, and applies range weights per-axis. Both match the
-// oracle only for PURE-AXIS input (where magnitude == max and the whole-mode
-// directional blend collapses to range_weights.x / .y), so every case here
-// feeds either (dx, 0) or (0, dy). Diagonal parity arrives with the Phase 1
-// distance-mode / directional-weight work.
+// Parity tests for the shared fixed-point pipeline (rawaccel_fixedpoint.h), the
+// code the BPF program runs in-kernel. Each case drives ra_modify_q16_flat and
+// compares its Q16.16 output against the double-precision common/ math
+// (rawaccel::modifier::modify).
 
 #include "rawaccel_fixedpoint.h"
 #include "lut_builder.hpp"
@@ -24,10 +17,8 @@ namespace ra = rawaccel;
 
 namespace {
 
-// Authoritative output for one axis, mirroring how build_lut prepares the
-// curve (smoother halflives zeroed) and how the BPF program is exercised
-// (dpi_factor 1, dt_ms slice -> ips_factor 1/dt_ms). dt_ms defaults to 1 so the
-// single-EMA/1 ms cases are unchanged; the dt-aware cases pass the real slice.
+// Oracle output for one axis (smoother halflives zeroed, dpi_factor 1, dt_ms
+// slice -> ips_factor 1/dt_ms). dt_ms defaults to 1; dt-aware cases pass a slice.
 double oracle_axis(const ra::modifier_settings& s,
                    double in_x, double in_y, bool want_x, double dt_ms = 1.0,
                    double dpi_factor = 1.0)
@@ -47,20 +38,18 @@ double oracle_axis(const ra::modifier_settings& s,
     return want_x ? v.x : v.y;
 }
 
-// Compare one sample against the oracle using a prebuilt LUT/config, with a
-// caller-chosen tolerance. dev.dpi stays 0 so dpi_norm is 1 and the kernel
-// velocity equals the raw count in in/s, matching modify's ips_factor of 1.
+// Compare one sample against the oracle with a prebuilt LUT/config and a
+// caller-chosen tolerance. dev.dpi 0 -> dpi_norm 1, velocity == raw count in/s.
 void check_with(const ra::modifier_settings& s, const LutBuildResult& lut,
                 const ra_bpf_config& cfg, std::int32_t dx, std::int32_t dy,
                 double abs_tol, double rel_tol, double dt_ms = 1.0,
                 double dpi_factor = 1.0)
 {
-    ra_bpf_state st{};  // fresh: smoothed_v and carry both zero
+    ra_bpf_state st{};  // fresh: smoother state and carry zero
 
-    // Quantize dt to Q16.16 and feed the SAME value to both sides, so dt
-    // quantization is never counted as parity error. dt stays inside the
-    // config's clamp window in the callers, so the (kernel-only) dt clamp is a
-    // no-op here and the oracle (which does not clamp internally) agrees.
+    // Quantize dt and feed the SAME value to both sides so dt quantization isn't
+    // counted as parity error. dt stays inside the clamp window, so the
+    // kernel-only dt clamp is a no-op and the (unclamped) oracle agrees.
     __s32 dt_q16 = static_cast<__s32>(std::lround(dt_ms * RA_Q16_ONE));
     if (dt_q16 <= 0) dt_q16 = 1;
     double dt_exact = static_cast<double>(dt_q16) / RA_Q16_ONE;
@@ -79,9 +68,7 @@ void check_with(const ra::modifier_settings& s, const LutBuildResult& lut,
     RA_CHECK_NEAR(ky, ey, abs_tol + std::fabs(ey) * rel_tol);
 }
 
-// Run one sample through the fixed-point pipeline and assert both components
-// match the oracle. Tolerance covers Q16.16 quantization of the LUT entries
-// times the count.
+// Run one sample through the pipeline; assert both components match the oracle.
 void check_axis(const ra::modifier_settings& s, std::int32_t dx, std::int32_t dy)
 {
     ra::device_config dev{};
@@ -91,10 +78,9 @@ void check_axis(const ra::modifier_settings& s, std::int32_t dx, std::int32_t dy
     check_with(s, lut, cfg, dx, dy, 1e-2, 2e-3);
 }
 
-// Sweep a dense grid of directions and magnitudes (pure axis, diagonal, every
-// quadrant) through one profile, building the LUT once. The grid values are
-// chosen off the 15-degree marks so a snap profile's tan threshold never lands
-// exactly on a sample (where fixed-point vs double rounding could disagree).
+// Sweep a dense grid of directions/magnitudes through one profile, LUT built
+// once. Grid values sit off the 15-degree marks so a snap profile's tan
+// threshold never lands on a sample (where fixed-point vs double could disagree).
 void sweep_grid(const ra::modifier_settings& s,
                 double abs_tol = 1e-2, double rel_tol = 2e-3)
 {
@@ -115,8 +101,7 @@ void sweep_grid(const ra::modifier_settings& s,
 
 RA_TEST("Fixed: ra_exp2_q16 approximates 2^x for x <= 0")
 {
-    // The smoother decay 2^(dt*log2coeff) feeds this with x in roughly
-    // [-200, 0]; check the cubic against libc across the meaningful range.
+    // Smoother decay feeds this x <= 0; check the cubic against libc.
     for (double x = 0.0; x >= -30.0; x -= 0.011) {
         __s32 xq = static_cast<__s32>(std::lround(x * RA_Q16_ONE));
         double got = static_cast<double>(ra_exp2_q16(xq)) / RA_Q16_ONE;
@@ -124,14 +109,14 @@ RA_TEST("Fixed: ra_exp2_q16 approximates 2^x for x <= 0")
         RA_CHECK_NEAR(got, want, 1e-3 + want * 2e-3);
     }
     RA_CHECK_EQ(ra_exp2_q16(0), RA_Q16_ONE);                     // 2^0 = 1
-    // Deep underflow saturates to 0 (alpha -> 1, full tracking after a pause).
+    // deep underflow saturates to 0
     RA_CHECK_EQ(ra_exp2_q16(static_cast<__s32>(-60 * RA_Q16_ONE)), 0);
 }
 
 RA_TEST("Fixed: noaccel passes pure-axis input through unchanged")
 {
     ra::modifier_settings s{};
-    // Both signs: exercises the Q16.16 working-vector representation.
+    // both signs exercise the Q16.16 working vector
     for (std::int32_t v : {1, 5, 20, 100, 800}) {
         check_axis(s, v, 0);
         check_axis(s, 0, v);
@@ -147,7 +132,7 @@ RA_TEST("Fixed: directional output DPI scales only the negative direction")
     s.prof.ud_output_dpi_ratio = 0.8;   // Y, downward (output < 0)
 
     for (std::int32_t v : {10, 50, 300}) {
-        // Positive direction is untouched; negative direction is scaled.
+        // positive untouched, negative scaled
         check_axis(s, v, 0);
         check_axis(s, -v, 0);
         check_axis(s, 0, v);
@@ -165,9 +150,7 @@ RA_TEST("Fixed: output_dpi 2000 doubles both axes")
 
 RA_TEST("Fixed: rotation matches the oracle (noaccel, speed-independent)")
 {
-    // noaccel scale is 1 at every speed, so the Phase 0 max() speed metric is
-    // irrelevant here and rotation parity holds for arbitrary (incl diagonal)
-    // input. Rotated-vector + accel-curve parity arrives with P1.3 magnitude.
+    // noaccel scale is 1 at every speed, so rotation parity holds for any input.
     for (double deg : {15.0, 45.0, -30.0, 90.0}) {
         ra::modifier_settings s{};
         s.prof.degrees_rotation = deg;
@@ -200,8 +183,7 @@ RA_TEST("Fixed: separate mode applies asymmetric range_weights per axis")
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y = s.prof.accel_x;
     s.prof.range_weights = vec2d{1.0, 0.5};
-    // Separate (by-component) mode: per-axis weight, no directional blend.
-    // (Whole-mode asymmetric weighting needs directional weighting, P1.5.)
+    // separate mode: per-axis weight, no directional blend
     s.prof.speed_processor_args.whole = false;
 
     for (std::int32_t v : {5, 20, 100, 400}) {
@@ -217,8 +199,8 @@ RA_TEST("Fixed: whole euclidean curve matches oracle on diagonals")
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
     s.prof.accel_x.exponent_classic = 2.0;
-    s.prof.accel_y = s.prof.accel_x;  // whole mode uses accel_x for both axes
-    // default speed_processor_args: whole, lp_norm 2 -> euclidean magnitude
+    s.prof.accel_y = s.prof.accel_x;  // whole mode uses accel_x for both
+    // default speed_processor_args: lp_norm 2 -> euclidean
 
     check_axis(s, 30, 40);     // |v| = 50
     check_axis(s, 60, 80);     // |v| = 100
@@ -234,16 +216,16 @@ RA_TEST("Fixed: whole-mode directional weighting blends range_weights by angle")
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y = s.prof.accel_x;       // whole mode uses accel_x for both
     s.prof.range_weights = vec2d{0.5, 1.5};  // asymmetric -> angular blend
-    // default speed_processor_args: whole, euclidean magnitude.
+    // default speed_processor_args: whole, euclidean
 
-    // The reference angle drives the blend from range_w_x (horizontal) to
-    // range_w_y (vertical); the in-kernel atan must track the oracle's.
+    // reference angle blends range_w_x (horizontal) to range_w_y (vertical);
+    // the in-kernel atan must track the oracle's.
     check_axis(s, 100, 0);    // 0 deg   -> weight 0.5
     check_axis(s, 0, 100);    // 90 deg  -> weight 1.5
     check_axis(s, 100, 100);  // 45 deg  -> weight 1.0
     check_axis(s, 150, 50);   // shallow
     check_axis(s, 50, 150);   // steep
-    check_axis(s, -120, 90);  // negative quadrant, angle unaffected by sign
+    check_axis(s, -120, 90);  // negative quadrant, angle sign-independent
     check_axis(s, 200, 200);
 }
 
@@ -254,7 +236,7 @@ RA_TEST("Fixed: separate mode curve matches oracle on diagonals")
     s.prof.accel_x.acceleration = 0.05;
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y.mode = ra::accel_mode::classic;
-    s.prof.accel_y.acceleration = 0.02;   // different Y curve
+    s.prof.accel_y.acceleration = 0.02;   // different Y
     s.prof.accel_y.exponent_classic = 2.0;
     s.prof.speed_processor_args.whole = false;
 
@@ -268,8 +250,7 @@ RA_TEST("Fixed: speed clamp matches oracle (noaccel, isolates the clamp)")
     ra::modifier_settings s{};
     s.prof.speed_min = 10.0;
     s.prof.speed_max = 50.0;
-    // dpi_norm is 1 (dev.dpi 0), so count == in/s. Below min is boosted to
-    // min, above max is capped to max, in-range passes through.
+    // dpi_norm 1 (dev.dpi 0) so count == in/s
     check_axis(s, 5, 0);     // speed 5 -> boosted to 10
     check_axis(s, 30, 0);    // in range
     check_axis(s, 100, 0);   // capped to 50
@@ -294,11 +275,9 @@ RA_TEST("Fixed: speed clamp composes with a curve")
 
 // ---- P2.1: real per-packet dt ------------------------------------------
 //
-// The curve domain is in/s; the kernel now folds 1/dt into the velocity used
-// for LUT indexing and the speed clamp, so the same displacement delivered over
-// a different polling interval lands at a different speed. Parity holds against
-// the oracle called with the matching time slice. dt values stay inside the
-// default clamp window [0.0625, 100] ms so the kernel-only dt clamp is inert.
+// The kernel folds 1/dt into the velocity used for LUT indexing and the speed
+// clamp, so the same displacement over a different polling interval lands at a
+// different speed. dt stays inside the clamp window so the dt clamp is inert.
 
 RA_TEST("Fixed: real dt scales the curve-input speed (poll-rate independence)")
 {
@@ -313,8 +292,7 @@ RA_TEST("Fixed: real dt scales the curve-input speed (poll-rate independence)")
     BpfMouseLayout layout{};
     ra_bpf_config cfg = to_bpf_config(lut, layout);
 
-    // 8 kHz .. 125 Hz worth of slices; magnitudes kept so 1/dt * |v| stays
-    // inside the LUT's velocity span.
+    // 8 kHz .. 125 Hz; magnitudes keep 1/dt * |v| inside the LUT span.
     for (double dt : {0.125, 0.5, 1.0, 2.0, 4.0, 8.0}) {
         for (std::int32_t v : {5, 20, 80, 200}) {
             check_with(s, lut, cfg, v, 0, 1e-2, 2e-3, dt);
@@ -326,8 +304,7 @@ RA_TEST("Fixed: real dt scales the curve-input speed (poll-rate independence)")
 
 RA_TEST("Fixed: noaccel output is dt-invariant (scale is 1 at every speed)")
 {
-    // noaccel scale is 1 regardless of speed, so changing dt changes nothing:
-    // output stays equal to input and the oracle agrees at any slice.
+    // noaccel scale is 1 regardless of speed, so dt changes nothing.
     ra::modifier_settings s{};
     ra::device_config dev{};
     LutBuildResult lut = build_lut(s, dev);
@@ -341,8 +318,8 @@ RA_TEST("Fixed: noaccel output is dt-invariant (scale is 1 at every speed)")
 
 RA_TEST("Fixed: speed clamp tracks the dt-scaled velocity")
 {
-    // The clamp threshold is in in/s, so the same displacement is clamped
-    // differently per poll rate: a slow slice lowers the IPS below the cap.
+    // Clamp threshold is in/s, so the same displacement clamps differently per
+    // poll rate: a slow slice lowers the IPS below the cap.
     ra::modifier_settings s{};
     s.prof.speed_min = 10.0;
     s.prof.speed_max = 50.0;
@@ -361,12 +338,10 @@ RA_TEST("Fixed: speed clamp tracks the dt-scaled velocity")
 
 RA_TEST("Fixed: device DPI scales the output to match Windows (dpi_factor)")
 {
-    // Windows multiplies the output by output_dpi_adjustment_factor * dpi_factor
-    // (rawaccel.hpp:412), where dpi_factor = NORMALIZED_DPI/device_dpi. The agent
-    // folds dpi_factor into output_dpi_adj_q16, so a configured device DPI must
-    // make the kernel output track the oracle driven with the same dpi_factor.
-    // dev.dpi != 0 here, unlike every other parity test (which use dpi 0 ->
-    // dpi_factor 1 and so never exercised this multiply).
+    // Windows scales output by output_dpi_adjustment_factor * dpi_factor
+    // (rawaccel.hpp:412), dpi_factor = NORMALIZED_DPI/device_dpi. The agent folds
+    // dpi_factor into output_dpi_adj_q16. dev.dpi != 0 here (other tests use 0 ->
+    // dpi_factor 1, never exercising this multiply).
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
@@ -375,8 +350,7 @@ RA_TEST("Fixed: device DPI scales the output to match Windows (dpi_factor)")
     s.prof.output_dpi = 1500;  // output_dpi_adjustment_factor 1.5
 
     BpfMouseLayout layout{};
-    // dpi_factor = 1000/dpi, all exactly representable in Q16.16 so the parity
-    // tolerance stays tight: 0.625, 1.25, 2.0.
+    // dpi_factor = 1000/dpi, all exact in Q16.16: 0.625, 1.25, 2.0.
     for (int dpi : {1600, 800, 500}) {
         ra::device_config dev{};
         dev.dpi = dpi;
@@ -384,9 +358,8 @@ RA_TEST("Fixed: device DPI scales the output to match Windows (dpi_factor)")
         LutBuildResult lut = build_lut(s, dev);
         ra_bpf_config cfg = to_bpf_config(lut, layout);
 
-        // Across magnitudes and a couple of poll rates: the speed domain folds
-        // dpi_factor/dt, while the output folds dpi_factor (no dt). Both must
-        // compose correctly.
+        // speed domain folds dpi_factor/dt, output folds dpi_factor (no dt);
+        // both must compose.
         for (double dt : {0.5, 1.0, 2.0}) {
             check_with(s, lut, cfg, 40, 0, 1e-2, 3e-3, dt, dpi_factor);
             check_with(s, lut, cfg, 0, 90, 1e-2, 3e-3, dt, dpi_factor);
@@ -404,18 +377,17 @@ RA_TEST("Fixed: angle snapping collapses near-axis input onto the axis")
     s.prof.accel_y = s.prof.accel_x;
     s.prof.degrees_snap = 15.0;  // snap within 15 deg of either axis
 
-    // Within 15 deg of X (atan(20/150)=7.6 deg): collapses to pure X, the Y
-    // output must vanish and X must carry the full magnitude through the curve.
+    // within 15 deg of X (atan(20/150)=7.6): collapse to pure X
     check_axis(s, 150, 20);
     check_axis(s, -150, 20);
-    // Within 15 deg of Y (atan(20/150) from vertical): collapses to pure Y.
+    // within 15 deg of Y: collapse to pure Y
     check_axis(s, 20, 150);
     check_axis(s, 20, -150);
-    // Comfortably diagonal (45 deg): untouched by snapping.
+    // 45 deg: untouched
     check_axis(s, 100, 100);
-    // Just outside the snap cone (atan(50/150)=18.4 deg > 15): not snapped.
+    // atan(50/150)=18.4 > 15: not snapped
     check_axis(s, 150, 50);
-    // Pure-axis input is a no-op either way.
+    // pure-axis: no-op
     check_axis(s, 200, 0);
     check_axis(s, 0, 200);
 }
@@ -430,20 +402,19 @@ RA_TEST("Fixed: angle snapping composes with directional weighting")
     s.prof.degrees_snap = 15.0;
     s.prof.range_weights = vec2d{0.5, 1.5};  // whole-mode angular blend
 
-    // Snapped to X -> reference angle 0 -> weight range_w_x (0.5).
+    // snapped to X -> angle 0 -> weight 0.5
     check_axis(s, 150, 20);
-    // Snapped to Y -> reference angle pi/2 -> weight range_w_y (1.5).
+    // snapped to Y -> angle pi/2 -> weight 1.5
     check_axis(s, 20, 150);
-    // Unsnapped diagonal -> blended weight from the true angle.
+    // unsnapped diagonal -> blended weight
     check_axis(s, 150, 80);
 }
 
 // ---- P1.7: consolidated grid parity --------------------------------------
 //
-// The per-feature tests above pin each transform; these sweep a dense grid of
-// directions and magnitudes across whole profiles to catch composition bugs
-// (sign handling, quadrant symmetry, magnitude/angle interplay) that a handful
-// of hand-picked points could miss.
+// Per-feature tests above pin each transform; these sweep a dense grid across
+// whole profiles to catch composition bugs (sign, quadrant symmetry,
+// magnitude/angle interplay) that hand-picked points could miss.
 
 RA_TEST("Grid: noaccel is identity across every direction")
 {
@@ -516,8 +487,7 @@ RA_TEST("Grid: directional weighting matches oracle across directions")
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y = s.prof.accel_x;
     s.prof.range_weights = vec2d{0.6, 1.4};  // whole-mode angular blend
-    // The reference-angle atan is a polynomial fit (< 0.0015 rad); allow a
-    // slightly wider relative band than the curve-only grids.
+    // atan is a polynomial fit (< 0.0015 rad); wider band than curve-only grids
     sweep_grid(s, 1e-2, 5e-3);
 }
 

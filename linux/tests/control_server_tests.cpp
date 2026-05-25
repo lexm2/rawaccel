@@ -86,21 +86,20 @@ RA_TEST("Dispatch: apply schedules pending")
     RA_CHECK(resp["ok"].get<bool>());
     RA_CHECK_EQ(resp["deferred_ms"].get<int>(), 1000);
 
-    // The settings change has not yet reached the backend.
+    // settings not yet at the backend
     RA_CHECK_EQ(backend.binds, 0);
     auto s = agent.status(t0);
     RA_CHECK(s.has_pending_apply);
 
-    // Advance past the deadline and tick.
+    // past the deadline
     agent.tick(t0 + WRITE_DELAY);
     RA_CHECK_EQ(backend.binds, 1);
 }
 
 RA_TEST("Dispatch: apply fails when the data plane is dead")
 {
-    // A backend with prepared devices but none attached (e.g. struct_ops attach
-    // failed) must make apply fail loudly instead of reporting a write that has
-    // no effect on the mouse.
+    // devices prepared but none attached (struct_ops attach failed): apply
+    // must fail loudly, not report a write with no effect on the mouse.
     struct DeadBackend : NoopBackend {
         DataPlaneHealth health() const override {
             return {1, 0, "hidraw0: attach failed: Invalid argument (errno 22)"};
@@ -120,14 +119,13 @@ RA_TEST("Dispatch: apply fails when the data plane is dead")
 
     RA_CHECK(!resp["ok"].get<bool>());
     RA_CHECK(resp["error"].get<std::string>().find("attach failed") != std::string::npos);
-    // The dead-plane apply must not even schedule a pending write.
+    // dead-plane apply must not schedule a pending write
     RA_CHECK(!agent.status(t0).has_pending_apply);
 }
 
 RA_TEST("Dispatch: apply succeeds when a device is attached")
 {
-    // Mirror of the dead-plane case: with at least one attached device the
-    // apply goes through and schedules as normal.
+    // mirror of the dead-plane case: one attached device -> apply schedules
     struct LiveBackend : NoopBackend {
         DataPlaneHealth health() const override { return {1, 1, ""}; }
     };

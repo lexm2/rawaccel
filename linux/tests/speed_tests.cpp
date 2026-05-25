@@ -1,10 +1,8 @@
 // Native C++ port of wrapper-tests/SpeedTests.cs.
 //
-// The C# tests cross-validate ra::speed_processor smoothers against a
-// reimplemented EMA written in C#. To keep the parity test *meaningful*
-// after porting, the reference EMAs below are intentionally written from
-// scratch here: they must NOT delegate to common/, or the test would be
-// tautological.
+// Cross-validates ra::speed_processor smoothers against reference EMAs written
+// from scratch below. The references must NOT delegate to common/, or the test
+// is tautological.
 
 #include "test_harness.hpp"
 
@@ -14,8 +12,7 @@
 
 namespace {
 
-// Independent reference: simple exponential moving average.
-// Mirrors wrapper-tests/SpeedTests.cs:224-254 (SimpleExponentialSmoother).
+// Reference simple EMA. Mirrors SpeedTests.cs:224-254 (SimpleExponentialSmoother).
 struct ref_simple_ema {
     double window_coeff;
     double cutoff_coeff;
@@ -36,8 +33,7 @@ struct ref_simple_ema {
     }
 };
 
-// Independent reference: linear-trend EMA.
-// Mirrors wrapper-tests/SpeedTests.cs:256-318 (LinearExponentialSmoother).
+// Reference linear-trend EMA. Mirrors SpeedTests.cs:256-318 (LinearExponentialSmoother).
 struct ref_linear_ema {
     double window_coeff;
     double window_trend_coeff;

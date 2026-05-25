@@ -76,7 +76,7 @@ void utf8_to_wchar(const std::string& s, wchar_t* out, std::size_t cap)
 
 const char* accel_mode_to_string(ra::accel_mode m)
 {
-    // The C# CLI enum names "lookup" as "lut".
+    // C# names "lookup" as "lut"
     switch (m) {
         case ra::accel_mode::classic:     return "classic";
         case ra::accel_mode::jump:        return "jump";
@@ -151,8 +151,7 @@ json accel_args_to(const ra::accel_args& a)
     j[key::CAP]               = vec2_to(a.cap);
     j[key::CAP_MODE]          = cap_mode_to_string(a.cap_mode);
 
-    // LUT data is emitted only when mode == lut, and only the first `length`
-    // entries -- the rest of the fixed-size array is padding.
+    // emit LUT data only for mode == lut, only the first `length` entries
     json data_arr = json::array();
     if (a.mode == ra::accel_mode::lookup) {
         for (int i = 0; i < a.length; ++i) {
@@ -182,8 +181,7 @@ void accel_args_from(const json& j, ra::accel_args& out)
     out.cap              = vec2_from(j.at(key::CAP));
     out.cap_mode         = cap_mode_from_string(j.at(key::CAP_MODE).get<std::string>());
 
-    // Array length sets `length`; pad the fixed-size tail with zero so the
-    // binary layout the driver sees is constant.
+    // array size sets `length`; zero-pad the tail for a constant binary layout
     const auto& data_arr = j.at(key::DATA);
     const int n = static_cast<int>(data_arr.size());
     if (n > static_cast<int>(ra::LUT_RAW_DATA_CAPACITY)) {
@@ -254,9 +252,8 @@ void profile_from(const json& j, ra::profile& out)
 
 json device_config_to(const ra::device_config& c)
 {
-    // setExtraInfo / minimumTime / maximumTime are emitted only when they
-    // diverge from the C# ShouldSerialize defaults; the Windows side relies
-    // on this for byte-stable diffs.
+    // emit setExtraInfo/min/maxTime only when non-default (matches C#
+    // ShouldSerialize for byte-stable diffs)
     json j;
     j[key::DISABLE]        = c.disable;
     if (c.set_extra_info) j[key::SET_EXTRA_INFO] = c.set_extra_info;
@@ -301,9 +298,8 @@ void device_settings_from(const json& j, ra::device_settings& out)
 
 json to_jobject(const driver_config& cfg)
 {
-    // Insertion order matters: nlohmann::json preserves it, and the Windows
-    // side prepends the banners via AddFirst -- match that for byte-stable
-    // diffs across OSes.
+    // insertion order matters (preserved); banners first to match the Windows
+    // AddFirst for byte-stable cross-OS diffs
     json j;
     j[key::ACCEL_MODES_BANNER] = ACCEL_MODES_JOINED;
     j[key::CAP_MODES_BANNER]   = CAP_MODES_JOINED;

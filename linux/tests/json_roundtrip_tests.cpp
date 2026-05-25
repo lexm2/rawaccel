@@ -1,10 +1,8 @@
 // Roundtrip tests for linux/agent/json_io.
 //
-// The Windows JsonProperty names are the cross-OS contract. These tests
-// pin them by string match and by structural roundtrip. Adding or
-// renaming any field on either side should fail at least one of:
-// 1) the schema-name assertion in this file
-// 2) the corresponding constant in wrapper/wrapper.cpp
+// Windows JsonProperty names are the cross-OS contract. Renaming a field
+// on either side breaks one of: the schema-name assertion here, or the
+// matching constant in wrapper/wrapper.cpp.
 
 #include "test_harness.hpp"
 
@@ -25,7 +23,7 @@ namespace {
 driver_config make_default()
 {
     driver_config cfg{};
-    // mirror DriverConfig::FromProfile(new Profile()) on Windows
+    // mirrors DriverConfig::FromProfile(new Profile()) on Windows
     ra::modifier_settings mod{};
     ra::init_data(mod);
     cfg.profiles.push_back(std::move(mod));
@@ -38,7 +36,7 @@ RA_TEST("JSON: serialized default emits every Windows JsonProperty name")
 {
     const std::string s = to_string(make_default());
 
-    // Top-level banners and fields.
+    // top-level banners and fields
     RA_CHECK(s.find("### Accel modes ###") != std::string::npos);
     RA_CHECK(s.find("### Cap modes ###") != std::string::npos);
     RA_CHECK(s.find("\"version\"") != std::string::npos);
@@ -46,7 +44,7 @@ RA_TEST("JSON: serialized default emits every Windows JsonProperty name")
     RA_CHECK(s.find("\"profiles\"") != std::string::npos);
     RA_CHECK(s.find("\"devices\"") != std::string::npos);
 
-    // Profile field names.
+    // Profile field names
     RA_CHECK(s.find("\"Stretches domain for horizontal vs vertical inputs\"") != std::string::npos);
     RA_CHECK(s.find("\"Stretches accel range for horizontal vs vertical inputs\"") != std::string::npos);
     RA_CHECK(s.find("\"Whole or horizontal accel parameters\"") != std::string::npos);
@@ -60,7 +58,7 @@ RA_TEST("JSON: serialized default emits every Windows JsonProperty name")
     RA_CHECK(s.find("\"Degrees of angle snapping\"") != std::string::npos);
     RA_CHECK(s.find("\"Input Speed Cap\"") != std::string::npos);
 
-    // AccelArgs field names.
+    // AccelArgs field names
     RA_CHECK(s.find("\"Gain / Velocity\"") != std::string::npos);
     RA_CHECK(s.find("\"Cap / Jump\"") != std::string::npos);
     RA_CHECK(s.find("\"Cap mode\"") != std::string::npos);
@@ -68,14 +66,14 @@ RA_TEST("JSON: serialized default emits every Windows JsonProperty name")
     RA_CHECK(s.find("\"exponentPower\"") != std::string::npos);
     RA_CHECK(s.find("\"syncSpeed\"") != std::string::npos);
 
-    // SpeedArgs field names.
+    // SpeedArgs field names
     RA_CHECK(s.find("\"Whole/combined accel (set false for 'by component' mode)\"") != std::string::npos);
     RA_CHECK(s.find("\"lpNorm\"") != std::string::npos);
     RA_CHECK(s.find("Time in ms after which an input is weighted") != std::string::npos);
     RA_CHECK(s.find("Time in ms after which scale is weighted") != std::string::npos);
     RA_CHECK(s.find("Time in ms after which an output is weighted") != std::string::npos);
 
-    // DeviceConfig field names.
+    // DeviceConfig field names
     RA_CHECK(s.find("\"disable\"") != std::string::npos);
     RA_CHECK(s.find("\"Use constant time interval based on polling rate\"") != std::string::npos);
     RA_CHECK(s.find("\"DPI (normalizes input speed unit: counts/ms -> in/s)\"") != std::string::npos);
@@ -109,7 +107,7 @@ RA_TEST("JSON: non-default profile values roundtrip exactly")
     driver_config a = make_default();
     auto& p = a.profiles[0].prof;
 
-    // Set non-default values across the surface.
+    // non-default values across the surface
     p.output_dpi          = 1600;
     p.yx_output_dpi_ratio = 0.8;
     p.lr_output_dpi_ratio = 1.1;
@@ -190,14 +188,14 @@ RA_TEST("JSON: LUT data array round-trips with implicit length")
     RA_CHECK_EQ(bx.data[2], 3.0f);
     RA_CHECK_EQ(bx.data[3], 4.25f);
     RA_CHECK_EQ(bx.data[4], 5.75f);
-    // Trailing entries padded to zero.
+    // trailing entries padded to zero
     RA_CHECK_EQ(bx.data[5], 0.0f);
 }
 
 RA_TEST("JSON: non-LUT profile emits empty data array")
 {
     const std::string s = to_string(make_default());
-    // accel_x defaults to noaccel, so data should serialize as an empty array.
+    // accel_x defaults to noaccel -> empty data array
     RA_CHECK(s.find("\"data\": []") != std::string::npos
           || s.find("\"data\":[]") != std::string::npos);
 }

@@ -1,28 +1,18 @@
-// Scenario tests for the BPF per-packet pipeline driven as the kernel runs it:
-// build a config from modifier_settings, then push a SEQUENCE of fake packets
-// through the shared fixed-point code (rawaccel_fixedpoint.h) while threading a
-// single ra_bpf_state, and check the emitted integer output.
+// Multi-packet scenario tests for the BPF pipeline: build a config, push a
+// SEQUENCE of packets through rawaccel_fixedpoint.h threading one ra_bpf_state,
+// check the emitted integer output. Complements fixedpoint_tests.cpp (single
+// packet, Q16.16) by exercising cross-packet state: the carry accumulator, the
+// three dt-adaptive EMA smoothers, and ra_emit_q16's carry/emit/ValidCarry step.
 //
-// This is the multi-packet, integer-emission complement to fixedpoint_tests.cpp
-// (which checks one packet's Q16.16 output). It exercises the two pieces of
-// state that only matter across packets -- the fractional carry accumulator and
-// the three dt-adaptive EMA smoothers (input speed / scale / output speed) --
-// plus ra_emit_q16, the carry/emit/ValidCarry step the BPF program
-// (rawaccel.bpf.c) now shares with these tests instead of inlining. Smoother
-// parity is checked against a stateful oracle over real per-packet dt streams
-// (constant 1 ms, 500 Hz / 2 kHz, jitter, and a 10k-packet drift guard).
+// Expected values from two sources:
+//   - parity: double-precision common/ math over the same sequence, carry
+//     accumulated as ra_emit_q16 does;
+//   - invariants: relational properties robust to Q16.16 quantization (clamp
+//     pins fast input to the cap, only the negative direction is scaled,
+//     smoothing ramps monotonically to steady state).
 //
-// Expected values come from two sources (the "oracle + invariants" design):
-//   - parity: the authoritative double-precision common/ math run over the same
-//     sequence, accumulating carry exactly as ra_emit_q16 does;
-//   - invariants: relational properties robust to Q16.16 quantization (a clamp
-//     pins fast input to the cap, the negative direction is scaled and the
-//     positive is not, smoothing ramps monotonically to its steady state).
-//
-// Pure-axis input is used throughout: with dev.dpi 0 the kernel velocity equals
-// the raw count in in/s (ips_factor 1) and the whole-mode directional blend
-// collapses to range_weights.x / .y, the same Phase 0 parity constraint
-// fixedpoint_tests.cpp documents.
+// Pure-axis input throughout: dev.dpi 0 -> velocity == raw count in in/s and the
+// whole-mode directional blend collapses to range_weights.x / .y.
 
 #include "rawaccel_fixedpoint.h"
 #include "lut_builder.hpp"
@@ -49,13 +39,11 @@ using Packets = std::vector<Packet>;
 struct Emit {
     int x;
     int y;
-    bool emitted;  // false => ValidCarry drop (raw passthrough); never fires here
+    bool emitted;  // false => ValidCarry drop; never fires here
 };
 
-// Authoritative continuous output for one axis, mirroring how build_lut
-// prepares the curve (smoother halflives zeroed) and how the BPF program is
-// exercised (dpi_factor 1, 1 ms slice). Stateless per call, so it is a valid
-// per-packet oracle only for non-smoothing configs.
+// Continuous oracle for one axis (smoother halflives zeroed, dpi_factor 1,
+// 1 ms slice). Stateless, so valid only for non-smoothing configs.
 double oracle_axis(const ra::modifier_settings& s,
                    double in_x, double in_y, bool want_x)
 {
@@ -74,12 +62,11 @@ double oracle_axis(const ra::modifier_settings& s,
     return want_x ? v.x : v.y;
 }
 
-// Drive the fixed-point pipeline + emission across a packet sequence, threading
-// one ra_bpf_state, exactly as rawaccel.bpf.c's event handler does: an idle
-// (0,0) packet returns early -- emitting (0,0) without touching carry -- and a
-// ValidCarry drop leaves the report unmodified (raw passthrough). If acc_out is
-// given it receives each packet's pre-emit Q16.16 output (the carry-free scale
-// result), used by invariants that must dodge carry quantization.
+// Drive the fixed-point pipeline + emission across a sequence, threading one
+// ra_bpf_state as rawaccel.bpf.c does: idle (0,0) emits (0,0) without touching
+// carry; a ValidCarry drop passes the raw report through. If acc_out is given it
+// receives each packet's pre-emit Q16.16 output (carry-free) for invariants that
+// must dodge carry quantization.
 std::vector<Emit> run_fixed(const ra::modifier_settings& s,
                             const ra::device_config& dev,
                             const Packets& packets,
@@ -88,7 +75,7 @@ std::vector<Emit> run_fixed(const ra::modifier_settings& s,
     LutBuildResult lut = build_lut(s, dev);
     BpfMouseLayout layout{};  // HID fields irrelevant to the math
     ra_bpf_config cfg = to_bpf_config(lut, layout);
-    ra_bpf_state st{};  // fresh: smoothed_v and carry both zero
+    ra_bpf_state st{};  // fresh: smoother state and carry zero
 
     std::vector<Emit> out;
     out.reserve(packets.size());
@@ -100,8 +87,7 @@ std::vector<Emit> run_fixed(const ra::modifier_settings& s,
             continue;
         }
         __s64 ax = 0, ay = 0;
-        // These sequences assume a 1 ms slice (RA_Q16_ONE); dt-varying behavior
-        // is covered by fixedpoint_tests.cpp's P2.1 cases.
+        // 1 ms slice; dt-varying behavior is in fixedpoint_tests.cpp's P2.1 cases.
         ra_modify_q16_flat(&cfg, &st, lut.lut_x.data(), lut.lut_y.data(),
                            dx, dy, RA_Q16_ONE, &ax, &ay);
         if (acc_out) acc_out->push_back({(long long)ax, (long long)ay});
@@ -110,14 +96,13 @@ std::vector<Emit> run_fixed(const ra::modifier_settings& s,
         if (ra_emit_q16(&st, ax, ay, &ex, &ey))
             out.push_back({ex, ey, true});
         else
-            out.push_back({dx, dy, false});  // drop -> original report passes through
+            out.push_back({dx, dy, false});  // drop -> raw passthrough
     }
     return out;
 }
 
-// Predicted integer emission from the double-precision oracle, accumulating
-// carry the way ra_emit_q16 does: floor toward -inf (arithmetic >>), remainder
-// in [0, 1). Valid only for non-smoothing configs (oracle_axis is stateless).
+// Predicted integer emission from the oracle, carry accumulated as ra_emit_q16
+// does (floor toward -inf, remainder in [0,1)). Non-smoothing configs only.
 std::vector<Emit> run_oracle(const ra::modifier_settings& s, const Packets& packets)
 {
     double cx = 0.0, cy = 0.0;
@@ -144,11 +129,9 @@ std::vector<Emit> run_oracle(const ra::modifier_settings& s, const Packets& pack
 using DtPacket = std::array<double, 3>;
 using DtPackets = std::vector<DtPacket>;
 
-// Drive the fixed-point pipeline across a dt-varying sequence, threading one
-// ra_bpf_state, and return each packet's pre-emit Q16.16 output as doubles (the
-// carry-free scale result -- the analog used to compare smoother transients
-// without carry quantization). Idle packets emit (0,0) and skip the smoother,
-// exactly as rawaccel.bpf.c does.
+// Drive the pipeline across a dt-varying sequence, threading one ra_bpf_state;
+// return each packet's pre-emit Q16.16 output as doubles. Idle packets emit
+// (0,0) and skip the smoother, as rawaccel.bpf.c does.
 std::vector<std::pair<double, double>>
 run_fixed_acc(const ra::modifier_settings& s, const ra::device_config& dev,
               const DtPackets& packets)
@@ -173,11 +156,10 @@ run_fixed_acc(const ra::modifier_settings& s, const ra::device_config& dev,
     return out;
 }
 
-// Stateful double-precision reference: ONE modifier + speed_processor kept
-// across the whole sequence with the REAL smoother halflives, so the EMAs
-// accumulate exactly as the kernel's ra_bpf_state does. Returns each packet's
-// continuous (pre-carry) output -- the oracle for run_fixed_acc. Idle packets
-// skip modify so the smoother state freezes, matching the kernel's early return.
+// Stateful oracle: ONE modifier + speed_processor across the whole sequence
+// with the REAL smoother halflives, so the EMAs accumulate as ra_bpf_state does.
+// Returns each packet's continuous pre-carry output. Idle packets skip modify so
+// smoother state freezes, matching the kernel's early return.
 std::vector<std::pair<double, double>>
 run_oracle_stateful(const ra::modifier_settings& s, const DtPackets& packets)
 {
@@ -203,21 +185,21 @@ run_oracle_stateful(const ra::modifier_settings& s, const DtPackets& packets)
 RA_TEST("Seq: carry accumulates fractional output_dpi into whole counts")
 {
     ra::modifier_settings s{};
-    s.prof.output_dpi = 1500;  // 1.5x NORMALIZED_DPI, an exact-half scale
+    s.prof.output_dpi = 1500;  // 1.5x NORMALIZED_DPI
     ra::device_config dev{};
 
-    Packets pk(8, {1, 0});  // eight 1-count moves -> 1.5 each, carry bridges
+    Packets pk(8, {1, 0});  // eight 1-count moves -> 1.5 each
     auto f = run_fixed(s, dev, pk);
     auto o = run_oracle(s, pk);
 
     long sum_f = 0, sum_o = 0;
     for (std::size_t i = 0; i < pk.size(); ++i) {
-        RA_CHECK_EQ(f[i].x, o[i].x);  // exact: the per-packet scale is exactly 1.5
+        RA_CHECK_EQ(f[i].x, o[i].x);  // scale is exactly 1.5
         RA_CHECK_EQ(f[i].y, 0);
         sum_f += f[i].x;
         sum_o += o[i].x;
     }
-    // 1.5 with carry emits the 1,2,1,2,... pattern; 8 packets total 12 counts.
+    // 1.5 + carry emits 1,2,1,2,...; 8 packets total 12 counts.
     RA_CHECK_EQ(f[0].x, 1);
     RA_CHECK_EQ(f[1].x, 2);
     RA_CHECK_EQ(sum_f, 12);
@@ -227,11 +209,10 @@ RA_TEST("Seq: carry accumulates fractional output_dpi into whole counts")
 RA_TEST("Seq: speed clamp caps sustained fast input to the clamp speed")
 {
     ra::modifier_settings s{};
-    s.prof.speed_max = 50.0;  // dpi_norm 1 so count == in/s; cap at 50
+    s.prof.speed_max = 50.0;  // dpi_norm 1 so count == in/s
     ra::device_config dev{};
 
-    // Sustained 200-count input is clamped to 50 before the (noaccel) curve, so
-    // it must emit the same stream as sustained 50-count input.
+    // 200-count clamped to 50 before the noaccel curve -> same stream as 50-count
     Packets fast(16, {200, 0});
     Packets at_cap(16, {50, 0});
     auto f_fast = run_fixed(s, dev, fast);
@@ -241,7 +222,7 @@ RA_TEST("Seq: speed clamp caps sustained fast input to the clamp speed")
         RA_CHECK_EQ(f_fast[i].x, f_cap[i].x);
         RA_CHECK_EQ(f_fast[i].x, 50);  // noaccel: output == clamped speed
     }
-    // Parity with the oracle.
+    // oracle parity
     auto o_fast = run_oracle(s, fast);
     for (std::size_t i = 0; i < fast.size(); ++i)
         RA_CHECK(std::abs(f_fast[i].x - o_fast[i].x) <= 1);
@@ -269,20 +250,18 @@ RA_TEST("Seq: directional output DPI scales only the negative direction")
         spy += fpy[i].y;
         sny += fny[i].y;
     }
-    // Positive directions are untouched, so their totals are exact (scale 1.0).
+    // Positive untouched (scale 1.0), so totals are exact.
     RA_CHECK_EQ(spx, (long)(10 * N));
     RA_CHECK_EQ(spy, (long)(10 * N));
-    // Negative directions are scaled by the ratio. The cumulative total is
-    // within 1 count of the analytic value: a ratio not exactly representable
-    // in Q16.16 (0.8 rounds to 0.800003) drifts the sum by a count over the
-    // sequence, the off-by-one the carry convention can produce at a boundary.
+    // Negative scaled by the ratio, within 1 count: 0.8 isn't exact in Q16.16
+    // (rounds to 0.800003), so the sum can drift by a count over the sequence.
     RA_CHECK(std::abs(snx - -(long)std::llround(10.0 * N * 1.25)) <= 1);
     RA_CHECK(std::abs(sny - -(long)std::llround(10.0 * N * 0.8)) <= 1);
-    // The contract itself: negative is scaled away from the untouched positive.
-    RA_CHECK(std::abs(snx) > spx);   // 1.25x grows the leftward magnitude
-    RA_CHECK(std::abs(sny) < spy);   // 0.8x shrinks the downward magnitude
+    // contract: negative scaled relative to untouched positive
+    RA_CHECK(std::abs(snx) > spx);   // 1.25x grows leftward
+    RA_CHECK(std::abs(sny) < spy);   // 0.8x shrinks downward
 
-    // Parity with the oracle on both X streams.
+    // oracle parity on both X streams
     auto opx = run_oracle(s, posx);
     auto onx = run_oracle(s, negx);
     for (int i = 0; i < N; ++i) {
@@ -310,20 +289,16 @@ RA_TEST("Seq: classic curve output rises with speed and matches the oracle")
     for (std::size_t i = 0; i < sweep.size(); ++i)
         RA_CHECK(std::abs(f[i].x - o[i].x) <= 1);
 
-    // Output magnitude is monotone non-decreasing as input speed rises (classic
-    // gain >= 1 and increasing). Use the pre-emit Q16.16 acc so carry rounding
-    // does not perturb the comparison.
+    // Output monotone non-decreasing as speed rises; pre-emit acc dodges carry.
     for (std::size_t i = 1; i < sweep.size(); ++i)
         RA_CHECK(acc[i].first >= acc[i - 1].first);
 }
 
 RA_TEST("Seq: input speed smoothing matches the stateful oracle (1 ms)")
 {
-    // The kernel's linear-EMA input smoother (with trend extrapolation) must
-    // track the common/ linear_ema_smoother packet for packet. Compare the
-    // pre-emit Q16.16 output against a stateful oracle over a step-up / step-down
-    // sequence (which exercises the trend term in both directions) at a constant
-    // 1 ms slice. dt-varying parity is added in P2.5.
+    // Linear-EMA input smoother vs common/ linear_ema_smoother, packet for
+    // packet, over a step-up/step-down sequence (trend term in both directions)
+    // at 1 ms. dt-varying parity is in P2.5.
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
@@ -333,7 +308,7 @@ RA_TEST("Seq: input speed smoothing matches the stateful oracle (1 ms)")
     ra::device_config dev{};
 
     DtPackets pk;
-    for (int i = 0; i < 150; ++i) pk.push_back({120.0, 0.0, 1.0});  // step up from rest
+    for (int i = 0; i < 150; ++i) pk.push_back({120.0, 0.0, 1.0});  // step up
     for (int i = 0; i < 150; ++i) pk.push_back({20.0, 0.0, 1.0});   // step down
 
     auto f = run_fixed_acc(s, dev, pk);
@@ -344,15 +319,13 @@ RA_TEST("Seq: input speed smoothing matches the stateful oracle (1 ms)")
         RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2);
     }
 
-    // The smoother must actually be ramping (first packet from rest is well
-    // below the steady-state scale the oracle settles at).
+    // smoother actually ramps: first packet well below steady state
     RA_CHECK(f[0].first < f[140].first);
 }
 
 RA_TEST("Seq: whole-mode input smoothing matches the stateful oracle (1 ms)")
 {
-    // Whole mode smooths the single aggregate (euclidean) speed via smoother_x;
-    // drive a diagonal step and check parity against the stateful oracle.
+    // Whole mode smooths the aggregate euclidean speed via smoother_x.
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
@@ -374,10 +347,9 @@ RA_TEST("Seq: whole-mode input smoothing matches the stateful oracle (1 ms)")
 
 RA_TEST("Seq: scale smoothing matches the stateful oracle (whole + separate)")
 {
-    // The scale smoother (simple EMA) smooths the range-weighted curve scale
-    // before the output-DPI multiply. Both totals start at 0, so the scale
-    // ramps in from below; parity must hold from the first packet through the
-    // ramp into steady state, in whole and separate mode.
+    // Scale smoother (simple EMA) smooths the range-weighted curve scale before
+    // the output-DPI multiply. Totals start at 0, so the scale ramps from below;
+    // parity must hold from the first packet through the ramp.
     ra::device_config dev{};
 
     {   // whole mode, diagonal hold
@@ -419,10 +391,9 @@ RA_TEST("Seq: scale smoothing matches the stateful oracle (whole + separate)")
 
 RA_TEST("Seq: output speed smoothing matches the stateful oracle (whole + separate)")
 {
-    // The output smoother (linear EMA, trend halflife 0.7) smooths the scaled
-    // output after the curve and before the output-DPI multiply: whole mode
-    // smooths the magnitude and rescales both axes, separate mode smooths each
-    // |component|. Check parity against the stateful oracle through the ramp.
+    // Output smoother (linear EMA, trend halflife 0.7) smooths the scaled output
+    // before the output-DPI multiply: whole smooths the magnitude and rescales
+    // both axes, separate smooths each |component|.
     ra::device_config dev{};
 
     {   // whole mode, diagonal hold
@@ -451,7 +422,7 @@ RA_TEST("Seq: output speed smoothing matches the stateful oracle (whole + separa
         s.prof.speed_processor_args.output_speed_smooth_halflife = 20;
         DtPackets pk;
         for (int i = 0; i < 120; ++i) pk.push_back({110.0, -70.0, 1.0});
-        for (int i = 0; i < 120; ++i) pk.push_back({-110.0, 70.0, 1.0});  // flip both signs
+        for (int i = 0; i < 120; ++i) pk.push_back({-110.0, 70.0, 1.0});  // flip signs
         auto f = run_fixed_acc(s, dev, pk);
         auto o = run_oracle_stateful(s, pk);
         for (std::size_t i = 0; i < pk.size(); ++i) {
@@ -463,8 +434,7 @@ RA_TEST("Seq: output speed smoothing matches the stateful oracle (whole + separa
 
 RA_TEST("Seq: all three smoothers together match the stateful oracle")
 {
-    // Input + scale + output smoothing stacked, the full pipeline. Parity must
-    // still hold packet for packet against the stateful common/ reference.
+    // All three smoothers stacked; parity packet for packet.
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
@@ -489,10 +459,8 @@ RA_TEST("Seq: all three smoothers together match the stateful oracle")
 
 RA_TEST("Seq: all three smoothers match the oracle at 500 Hz and 2 kHz")
 {
-    // Poll-rate correctness: the per-packet decay alpha = 1 - 2^(dt * log2coeff)
-    // must make the fixed-point smoothers track the oracle when dt is not 1 ms.
-    // Hold a diagonal step at 2 ms (500 Hz) and 0.5 ms (2 kHz); both are inside
-    // the default time clamp so no clamping diverges the two sides.
+    // Poll-rate correctness: alpha = 1 - 2^(dt * log2coeff) must track the oracle
+    // when dt != 1 ms. 2 ms (500 Hz) and 0.5 ms (2 kHz), both inside the clamp.
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
@@ -518,9 +486,8 @@ RA_TEST("Seq: all three smoothers match the oracle at 500 Hz and 2 kHz")
 
 RA_TEST("Seq: all three smoothers match the oracle under jittery dt")
 {
-    // Wireless-style irregular polling: a random dt per packet in [0.4, 2.5] ms
-    // (well inside the clamp). The exp2-derived alpha is recomputed every packet,
-    // so parity must hold for an arbitrary dt stream, not just a constant rate.
+    // Irregular polling: random dt per packet in [0.4, 2.5] ms (inside the
+    // clamp). alpha is recomputed each packet, so parity must hold for any stream.
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
@@ -547,11 +514,9 @@ RA_TEST("Seq: all three smoothers match the oracle under jittery dt")
 
 RA_TEST("Seq: long-stream parity stays bounded over 10k random-dt packets")
 {
-    // Drift guard for the __s64 Q16.16 smoother accumulators: 10k packets with
-    // jittery magnitude and dt must not let the fixed-point output wander away
-    // from the double oracle. The EMA is contractive, so a per-packet error that
-    // never grows -- and a late-window error no larger than an early-window one --
-    // proves the accumulators are not accumulating drift.
+    // Drift guard for the __s64 Q16.16 accumulators: over 10k jittery packets the
+    // fixed-point output must not wander from the oracle. The EMA is contractive,
+    // so a late-window error no larger than an early-window one proves no drift.
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
@@ -577,29 +542,27 @@ RA_TEST("Seq: long-stream parity stays bounded over 10k random-dt packets")
     for (std::size_t i = 0; i < pk.size(); ++i) {
         double ex = std::fabs(f[i].first  - o[i].first);
         double ey = std::fabs(f[i].second - o[i].second);
-        // Per-packet bound: if any accumulator drifted, late packets break this.
+        // per-packet bound: a drifted accumulator breaks this on late packets
         RA_CHECK(ex <= 2e-2 + std::fabs(o[i].first)  * 1e-2);
         RA_CHECK(ey <= 2e-2 + std::fabs(o[i].second) * 1e-2);
-        // Normalize by magnitude so the early/late comparison is scale-free.
+        // normalize by magnitude so early/late is scale-free
         double rel = std::fmax(ex / (std::fabs(o[i].first)  + 1.0),
                                ey / (std::fabs(o[i].second) + 1.0));
         if (i < 1000)            early_max = std::fmax(early_max, rel);
         else if (i >= 9000)      late_max  = std::fmax(late_max,  rel);
     }
-    // No drift: the worst late-stream error is no larger than the worst early one
-    // (small slack for the random sampling of the two windows).
+    // no drift: worst late error <= worst early (slack for random sampling)
     RA_CHECK(late_max <= early_max + 1e-3);
 }
 
 RA_TEST("Seq: idle (0,0) packets emit nothing and preserve carry")
 {
     ra::modifier_settings s{};
-    s.prof.output_dpi = 1500;  // fractional scale so carry actually matters
+    s.prof.output_dpi = 1500;  // fractional scale so carry matters
     ra::device_config dev{};
 
-    // The same motion, once dense and once with an idle after every move. Idles
-    // must emit (0,0) and leave carry untouched, so the moving packets emit the
-    // identical sub-sequence and the totals match.
+    // Same motion dense vs. with an idle after every move. Idles emit (0,0) and
+    // leave carry untouched, so the moving packets and totals match.
     Packets dense(6, {1, 0});
     Packets spaced;
     for (const auto& p : dense) {
@@ -617,7 +580,7 @@ RA_TEST("Seq: idle (0,0) packets emit nothing and preserve carry")
         if (spaced[i].first == 0 && spaced[i].second == 0) {
             RA_CHECK_EQ(fs[i].x, 0);
         } else {
-            RA_CHECK_EQ(fs[i].x, fd[di].x);  // moving slot matches the dense stream
+            RA_CHECK_EQ(fs[i].x, fd[di].x);  // moving slot matches dense stream
             ++di;
             sum_spaced += fs[i].x;
         }
