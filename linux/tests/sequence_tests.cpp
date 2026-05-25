@@ -6,8 +6,11 @@
 // This is the multi-packet, integer-emission complement to fixedpoint_tests.cpp
 // (which checks one packet's Q16.16 output). It exercises the two pieces of
 // state that only matter across packets -- the fractional carry accumulator and
-// the velocity EMA -- plus ra_emit_q16, the carry/emit/ValidCarry step the BPF
-// program (rawaccel.bpf.c) now shares with these tests instead of inlining.
+// the three dt-adaptive EMA smoothers (input speed / scale / output speed) --
+// plus ra_emit_q16, the carry/emit/ValidCarry step the BPF program
+// (rawaccel.bpf.c) now shares with these tests instead of inlining. Smoother
+// parity is checked against a stateful oracle over real per-packet dt streams
+// (constant 1 ms, 500 Hz / 2 kHz, jitter, and a 10k-packet drift guard).
 //
 // Expected values come from two sources (the "oracle + invariants" design):
 //   - parity: the authoritative double-precision common/ math run over the same
@@ -31,6 +34,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -481,6 +485,110 @@ RA_TEST("Seq: all three smoothers together match the stateful oracle")
         RA_CHECK_NEAR(f[i].first,  o[i].first,  1e-2 + std::fabs(o[i].first) * 8e-3);
         RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2 + std::fabs(o[i].second) * 8e-3);
     }
+}
+
+RA_TEST("Seq: all three smoothers match the oracle at 500 Hz and 2 kHz")
+{
+    // Poll-rate correctness: the per-packet decay alpha = 1 - 2^(dt * log2coeff)
+    // must make the fixed-point smoothers track the oracle when dt is not 1 ms.
+    // Hold a diagonal step at 2 ms (500 Hz) and 0.5 ms (2 kHz); both are inside
+    // the default time clamp so no clamping diverges the two sides.
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.speed_processor_args.input_speed_smooth_halflife = 15;
+    s.prof.speed_processor_args.scale_smooth_halflife = 20;
+    s.prof.speed_processor_args.output_speed_smooth_halflife = 10;
+    ra::device_config dev{};
+
+    for (double dt : {2.0, 0.5}) {  // 500 Hz, 2 kHz
+        DtPackets pk;
+        for (int i = 0; i < 200; ++i) pk.push_back({140.0, 90.0, dt});
+        for (int i = 0; i < 200; ++i) pk.push_back({30.0, 20.0, dt});
+        auto f = run_fixed_acc(s, dev, pk);
+        auto o = run_oracle_stateful(s, pk);
+        for (std::size_t i = 0; i < pk.size(); ++i) {
+            RA_CHECK_NEAR(f[i].first,  o[i].first,  1e-2 + std::fabs(o[i].first) * 8e-3);
+            RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2 + std::fabs(o[i].second) * 8e-3);
+        }
+    }
+}
+
+RA_TEST("Seq: all three smoothers match the oracle under jittery dt")
+{
+    // Wireless-style irregular polling: a random dt per packet in [0.4, 2.5] ms
+    // (well inside the clamp). The exp2-derived alpha is recomputed every packet,
+    // so parity must hold for an arbitrary dt stream, not just a constant rate.
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.speed_processor_args.input_speed_smooth_halflife = 15;
+    s.prof.speed_processor_args.scale_smooth_halflife = 20;
+    s.prof.speed_processor_args.output_speed_smooth_halflife = 10;
+    ra::device_config dev{};
+
+    std::mt19937 rng(12345);
+    std::uniform_real_distribution<double> dt_dist(0.4, 2.5);
+    DtPackets pk;
+    for (int i = 0; i < 250; ++i) pk.push_back({140.0, 90.0, dt_dist(rng)});
+    for (int i = 0; i < 250; ++i) pk.push_back({40.0, 25.0, dt_dist(rng)});
+
+    auto f = run_fixed_acc(s, dev, pk);
+    auto o = run_oracle_stateful(s, pk);
+    for (std::size_t i = 0; i < pk.size(); ++i) {
+        RA_CHECK_NEAR(f[i].first,  o[i].first,  1e-2 + std::fabs(o[i].first) * 8e-3);
+        RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2 + std::fabs(o[i].second) * 8e-3);
+    }
+}
+
+RA_TEST("Seq: long-stream parity stays bounded over 10k random-dt packets")
+{
+    // Drift guard for the __s64 Q16.16 smoother accumulators: 10k packets with
+    // jittery magnitude and dt must not let the fixed-point output wander away
+    // from the double oracle. The EMA is contractive, so a per-packet error that
+    // never grows -- and a late-window error no larger than an early-window one --
+    // proves the accumulators are not accumulating drift.
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.speed_processor_args.input_speed_smooth_halflife = 15;
+    s.prof.speed_processor_args.scale_smooth_halflife = 20;
+    s.prof.speed_processor_args.output_speed_smooth_halflife = 10;
+    ra::device_config dev{};
+
+    std::mt19937 rng(98765);
+    std::uniform_real_distribution<double> dt_dist(0.25, 4.0);
+    std::uniform_int_distribution<int> mag_x(20, 200), mag_y(10, 150);
+    DtPackets pk;
+    pk.reserve(10000);
+    for (int i = 0; i < 10000; ++i)
+        pk.push_back({(double)mag_x(rng), (double)mag_y(rng), dt_dist(rng)});
+
+    auto f = run_fixed_acc(s, dev, pk);
+    auto o = run_oracle_stateful(s, pk);
+
+    double early_max = 0.0, late_max = 0.0;
+    for (std::size_t i = 0; i < pk.size(); ++i) {
+        double ex = std::fabs(f[i].first  - o[i].first);
+        double ey = std::fabs(f[i].second - o[i].second);
+        // Per-packet bound: if any accumulator drifted, late packets break this.
+        RA_CHECK(ex <= 2e-2 + std::fabs(o[i].first)  * 1e-2);
+        RA_CHECK(ey <= 2e-2 + std::fabs(o[i].second) * 1e-2);
+        // Normalize by magnitude so the early/late comparison is scale-free.
+        double rel = std::fmax(ex / (std::fabs(o[i].first)  + 1.0),
+                               ey / (std::fabs(o[i].second) + 1.0));
+        if (i < 1000)            early_max = std::fmax(early_max, rel);
+        else if (i >= 9000)      late_max  = std::fmax(late_max,  rel);
+    }
+    // No drift: the worst late-stream error is no larger than the worst early one
+    // (small slack for the random sampling of the two windows).
+    RA_CHECK(late_max <= early_max + 1e-3);
 }
 
 RA_TEST("Seq: idle (0,0) packets emit nothing and preserve carry")
