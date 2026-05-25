@@ -24,22 +24,6 @@ target_compile_options(rawaccel_common INTERFACE
     -Wno-changes-meaning
 )
 
-# Cross-OS C-ABI shim over common/. Exposes the curve dispatch from
-# accel_union via an opaque handle so .NET callers P/Invoke a stable C
-# surface instead of pinning to common/'s C++ layout.
-add_library(rawaccel_common_shim SHARED
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shim/ra_curve.cpp
-)
-target_include_directories(rawaccel_common_shim PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shim
-)
-target_link_libraries(rawaccel_common_shim PRIVATE rawaccel_common)
-set_target_properties(rawaccel_common_shim PROPERTIES
-    OUTPUT_NAME rawaccel_common
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
-
 include(FetchContent)
 
 # Prefer a system-installed nlohmann_json (e.g. pacman -S nlohmann-json).
@@ -60,6 +44,26 @@ endif()
 add_library(rawaccel_json_io STATIC agent/json_io.cpp)
 target_include_directories(rawaccel_json_io PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/agent)
 target_link_libraries(rawaccel_json_io PUBLIC rawaccel_common nlohmann_json::nlohmann_json)
+# Linked into rawaccel_common_shim (a shared library), so the static objects
+# must be position-independent. Harmless for the executables that also link it.
+set_target_properties(rawaccel_json_io PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Cross-OS C-ABI shim over common/. Builds a modifier from a driver-config
+# JSON (via rawaccel_json_io) and evaluates the full modifier::modify pipeline
+# behind an opaque handle, so .NET callers P/Invoke a stable C surface and the
+# preview matches the math the agent/kernel run instead of reimplementing it.
+add_library(rawaccel_common_shim SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shim/ra_curve.cpp
+)
+target_include_directories(rawaccel_common_shim PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shim
+)
+target_link_libraries(rawaccel_common_shim PRIVATE rawaccel_common rawaccel_json_io)
+set_target_properties(rawaccel_common_shim PROPERTIES
+    OUTPUT_NAME rawaccel_common
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+)
 
 enable_testing()
 
@@ -88,6 +92,16 @@ add_executable(json_tests
 )
 target_link_libraries(json_tests PRIVATE rawaccel_json_io)
 add_test(NAME json_tests COMMAND json_tests)
+
+# Curve shim tests: exercise the C ABI the GUI preview P/Invokes, asserting it
+# faithfully runs modifier::modify (parity against a direct call).
+add_executable(shim_tests
+    tests/test_main.cpp
+    tests/shim_tests.cpp
+)
+target_include_directories(shim_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../shim)
+target_link_libraries(shim_tests PRIVATE rawaccel_common_shim rawaccel_json_io)
+add_test(NAME shim_tests COMMAND shim_tests)
 
 # Step 5/6 agent: control plane + BPF backend. The agent owns active
 # modifier_settings and the 1s WriteDelay debounce; the BPF backend owns

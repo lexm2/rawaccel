@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using RawAccel.Contracts;
 
 namespace userspace_backend.Driver.Linux
 {
@@ -14,49 +13,33 @@ namespace userspace_backend.Driver.Linux
     {
         public const string LibraryName = "rawaccel_common";
 
-        // Mirrors ra_accel_args in shim/ra_curve.h. Field order and types
-        // are the ABI contract; do not reorder. data is passed as IntPtr
-        // because the shim copies it on the C++ side; the C# caller owns
-        // the underlying float[] for the duration of ra_curve_create.
-        [StructLayout(LayoutKind.Sequential)]
-        public struct AccelArgsAbi
-        {
-            public int Mode;
-            public int Gain;
-            public double InputOffset;
-            public double OutputOffset;
-            public double Acceleration;
-            public double DecayRate;
-            public double Gamma;
-            public double Motivity;
-            public double ExponentClassic;
-            public double Scale;
-            public double ExponentPower;
-            public double Limit;
-            public double SyncSpeed;
-            public double Smooth;
-            public double CapX;
-            public double CapY;
-            public int CapMode;
-            public int Length;
-            public IntPtr Data;
-        }
+        // The shim ABI this binding targets; ra_curve_abi_version must agree.
+        public const uint ExpectedAbiVersion = 2;
 
         [DllImport(LibraryName, EntryPoint = "ra_curve_abi_version",
             CallingConvention = CallingConvention.Cdecl)]
         public static extern uint AbiVersion();
 
-        [DllImport(LibraryName, EntryPoint = "ra_curve_create",
+        // Builds a curve handle from a driver-config JSON string (the same
+        // RawAccelConfig shape the apply path sends to the agent). The shim
+        // parses the first profile and runs the full modifier pipeline, so no
+        // per-profile math is reimplemented on the managed side. Returns
+        // IntPtr.Zero on parse/allocation failure.
+        [DllImport(LibraryName, EntryPoint = "ra_curve_create_from_config_json",
             CallingConvention = CallingConvention.Cdecl)]
-        public static extern IntPtr Create(in AccelArgsAbi args);
+        public static extern IntPtr CreateFromConfigJson(
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string configJson);
 
         [DllImport(LibraryName, EntryPoint = "ra_curve_destroy",
             CallingConvention = CallingConvention.Cdecl)]
         public static extern void Destroy(IntPtr curve);
 
-        [DllImport(LibraryName, EntryPoint = "ra_curve_evaluate",
+        // Mirrors ManagedAccel.Accelerate / rawaccel::modifier::modify: one
+        // input sample (x, y) in, post-acceleration (outX, outY) out.
+        [DllImport(LibraryName, EntryPoint = "ra_curve_modify",
             CallingConvention = CallingConvention.Cdecl)]
-        public static extern double Evaluate(IntPtr curve, double speed);
+        public static extern void Modify(IntPtr curve, double x, double y,
+            double dpiFactor, double timeMs, out double outX, out double outY);
 
         private static int resolverRegistered;
 

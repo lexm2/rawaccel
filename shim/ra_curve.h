@@ -1,7 +1,15 @@
-// Cross-OS C ABI for the userspace curve preview. Wraps common/accel-*.hpp
-// in an opaque handle so .NET callers (Linux and Windows) can evaluate a
-// single curve via P/Invoke without depending on C++/CLI or the kernel
-// driver. The header is plain C; the .cpp side does the C++ dispatch.
+// Cross-OS C ABI for the userspace curve preview. Wraps the full common/
+// modifier pipeline behind an opaque handle so .NET callers (Linux and
+// Windows) can evaluate the live preview via P/Invoke without depending on
+// C++/CLI or the kernel driver. The header is plain C; the .cpp side does the
+// C++ dispatch.
+//
+// The handle is built from a driver-config JSON (the same cross-OS settings
+// shape the agent and wrapper consume) and evaluated with ra_curve_modify,
+// which runs rawaccel::modifier::modify -- the exact code path the agent's
+// LUT builder and the Windows driver use. This keeps the Linux preview in
+// lockstep with what the HID-BPF program actually applies, instead of
+// reimplementing the per-profile math (range weight, DPI, anisotropy) in C#.
 
 #ifndef RAWACCEL_SHIM_RA_CURVE_H
 #define RAWACCEL_SHIM_RA_CURVE_H
@@ -23,49 +31,35 @@
 extern "C" {
 #endif
 
-// Integer encodings mirror RawAccel.Contracts.AccelMode and the underlying
-// rawaccel::accel_mode (positional, declaration order preserved).
-//   0 classic, 1 jump, 2 natural, 3 synchronous, 4 power, 5 lookup, 6 noaccel
-//
-// cap_mode: 0 io (in_out), 1 in (input), 2 out (output).
-
-struct ra_accel_args {
-    int32_t mode;
-    int32_t gain;
-    double input_offset;
-    double output_offset;
-    double acceleration;
-    double decay_rate;
-    double gamma;
-    double motivity;
-    double exponent_classic;
-    double scale;
-    double exponent_power;
-    double limit;
-    double sync_speed;
-    double smooth;
-    double cap_x;
-    double cap_y;
-    int32_t cap_mode;
-    int32_t length;
-    // Length-prefixed LUT for accel_mode::lookup; ignored otherwise. May be
-    // null when length is 0. The shim copies length entries internally.
-    const float* data;
-};
-
 typedef struct ra_curve ra_curve_t;
 
-// Build a curve from args. Returns null on allocation failure or invalid
-// arguments. Caller owns the handle and must release with ra_curve_destroy.
-RA_API ra_curve_t* ra_curve_create(const struct ra_accel_args* args);
+// Build a curve handle from a driver-config JSON string (UTF-8). The shape is
+// RawAccel.Contracts.RawAccelConfig / the agent's rajson::driver_config: a
+// top-level object with "defaultDeviceConfig", "profiles", and "devices". The
+// handle is built from the first entry in "profiles"; the rest is ignored.
+//
+// The smoother halflives are zeroed internally so the preview reflects the
+// steady-state curve (matching the curve-only LUT the BPF program loads),
+// not any EMA warmup. Returns null on parse failure, an empty profile list,
+// or allocation failure. Caller owns the handle and must release it with
+// ra_curve_destroy.
+RA_API ra_curve_t* ra_curve_create_from_config_json(const char* config_json);
 
-// Free a curve previously returned by ra_curve_create. Null is a no-op.
+// Free a curve previously returned by ra_curve_create_from_config_json. Null
+// is a no-op.
 RA_API void ra_curve_destroy(ra_curve_t* curve);
 
-// Evaluate the curve at speed and return the raw sensitivity scale (no
-// range-weight applied; that is the caller's job per profile config).
-// Returns 1.0 if curve is null.
-RA_API double ra_curve_evaluate(const ra_curve_t* curve, double speed);
+// Evaluate the modifier at one input sample. Mirrors ManagedAccel.Accelerate
+// and rawaccel::modifier::modify: (x, y) are raw counts for this sample,
+// dpi_factor is the device DPI normalized against NORMALIZED_DPI (1.0 for the
+// device-independent chart), time_ms is the time slice (1.0 in the preview).
+// The post-acceleration components are written to out_x / out_y. If curve is
+// null the input is passed through unchanged. out_x and out_y must be
+// non-null.
+RA_API void ra_curve_modify(const ra_curve_t* curve,
+                            double x, double y,
+                            double dpi_factor, double time_ms,
+                            double* out_x, double* out_y);
 
 // ABI version. Bump if the struct layout or function signatures change in
 // a way that breaks existing callers.

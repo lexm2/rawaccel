@@ -1,13 +1,17 @@
 using System;
-using System.Runtime.InteropServices;
+using System.Collections.Generic;
+using Newtonsoft.Json;
 using RawAccel.Contracts;
 
 namespace userspace_backend.Driver.Linux
 {
-    // Curve evaluator backed by the cross-OS C-ABI shim over common/.
-    // Builds one ra_curve_t per profile from the X-axis accel args (preview
-    // is whole-mode 1D; the Y axis is not exercised) and applies range
-    // weight + DPI adjustment outside the shim to keep the ABI minimal.
+    // Curve evaluator backed by the cross-OS C-ABI shim over common/. The shim
+    // builds a full rawaccel::modifier from the profile and runs the same
+    // modifier::modify the agent's LUT builder and the Windows driver use, so
+    // the preview matches what the HID-BPF program applies. The profile is
+    // handed over as a one-profile RawAccelConfig JSON -- the identical shape
+    // (and serializer) the apply path already sends to the agent -- so there
+    // is one math path and one JSON contract, with nothing reimplemented here.
     public sealed class LinuxAccelEvaluator : IAccelEvaluator
     {
         private readonly bool shimAvailable;
@@ -17,8 +21,14 @@ namespace userspace_backend.Driver.Linux
             RaCurveNative.EnsureResolverRegistered();
             try
             {
-                _ = RaCurveNative.AbiVersion();
-                shimAvailable = true;
+                shimAvailable =
+                    RaCurveNative.AbiVersion() == RaCurveNative.ExpectedAbiVersion;
+                if (!shimAvailable)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        "[LinuxAccelEvaluator] rawaccel_common shim ABI mismatch; "
+                        + "curve preview falls back to identity.");
+                }
             }
             catch (DllNotFoundException)
             {
@@ -33,8 +43,20 @@ namespace userspace_backend.Driver.Linux
 
         public IAccelInstance CreateInstance(RawAccelProfile profile)
         {
-            if (!shimAvailable) return IdentityInstance.Instance;
-            return new ShimInstance(profile.argsX, profile);
+            if (!shimAvailable || profile == null) return IdentityInstance.Instance;
+
+            // Wrap the single profile in the same config shape the agent
+            // consumes; defaultDeviceConfig/devices use their contract
+            // defaults (irrelevant to a device-independent preview).
+            var config = new RawAccelConfig
+            {
+                profiles = new List<RawAccelProfile> { profile },
+            };
+            var json = JsonConvert.SerializeObject(config);
+
+            var handle = RaCurveNative.CreateFromConfigJson(json);
+            if (handle == IntPtr.Zero) return IdentityInstance.Instance;
+            return new ShimInstance(handle);
         }
 
         private sealed class IdentityInstance : IAccelInstance
@@ -48,81 +70,18 @@ namespace userspace_backend.Driver.Linux
         private sealed class ShimInstance : IAccelInstance, IDisposable
         {
             private readonly IntPtr handle;
-            private readonly double rangeWeightX;
-            private readonly double domainWeightX;
-            private readonly double domainWeightY;
-            private readonly double outputDpiAdjustment;
-            private readonly double yxRatio;
-            private GCHandle pinnedData;
 
-            public ShimInstance(RawAccelAccelArgs args, RawAccelProfile profile)
+            public ShimInstance(IntPtr handle)
             {
-                rangeWeightX = profile.rangeXY.x;
-                domainWeightX = profile.domainXY.x;
-                domainWeightY = profile.domainXY.y;
-                outputDpiAdjustment = profile.outputDPI / 1000.0;
-                yxRatio = profile.yxOutputDPIRatio;
-
-                IntPtr dataPtr = IntPtr.Zero;
-                if (args.data != null && args.data.Length > 0)
-                {
-                    pinnedData = GCHandle.Alloc(args.data, GCHandleType.Pinned);
-                    dataPtr = pinnedData.AddrOfPinnedObject();
-                }
-
-                var abi = new RaCurveNative.AccelArgsAbi
-                {
-                    Mode = (int)args.mode,
-                    Gain = args.gain ? 1 : 0,
-                    InputOffset = args.inputOffset,
-                    OutputOffset = args.outputOffset,
-                    Acceleration = args.acceleration,
-                    DecayRate = args.decayRate,
-                    Gamma = args.gamma,
-                    Motivity = args.motivity,
-                    ExponentClassic = args.exponentClassic,
-                    Scale = args.scale,
-                    ExponentPower = args.exponentPower,
-                    Limit = args.limit,
-                    SyncSpeed = args.syncSpeed,
-                    Smooth = args.smooth,
-                    CapX = args.cap.x,
-                    CapY = args.cap.y,
-                    CapMode = (int)args.capMode,
-                    Length = args.data?.Length ?? 0,
-                    Data = dataPtr,
-                };
-
-                handle = RaCurveNative.Create(in abi);
-
-                if (pinnedData.IsAllocated)
-                {
-                    pinnedData.Free();
-                }
-
-                if (handle == IntPtr.Zero)
-                {
-                    throw new InvalidOperationException(
-                        "ra_curve_create returned null");
-                }
+                this.handle = handle;
             }
 
             public (double x, double y) Accelerate(
                 double x, double y, double dpiFactor, double timeMs)
             {
                 if (handle == IntPtr.Zero) return (x, y);
-
-                double ipsFactor = dpiFactor / timeMs;
-                double sx = Math.Abs(x * ipsFactor * domainWeightX);
-                double sy = Math.Abs(y * ipsFactor * domainWeightY);
-                double speed = Math.Sqrt(sx * sx + sy * sy);
-
-                double raw = RaCurveNative.Evaluate(handle, speed);
-                double scale = 1.0 + (raw - 1.0) * rangeWeightX;
-
-                double dpiAdj = outputDpiAdjustment * dpiFactor;
-                double ox = x * scale * dpiAdj;
-                double oy = y * scale * dpiAdj * yxRatio;
+                RaCurveNative.Modify(handle, x, y, dpiFactor, timeMs,
+                    out double ox, out double oy);
                 return (ox, oy);
             }
 
