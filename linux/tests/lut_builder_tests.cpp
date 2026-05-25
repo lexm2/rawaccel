@@ -127,12 +127,36 @@ RA_TEST("Lut: features not yet ported throw instead of silently approximating")
     // Angle snapping.
     { ra::modifier_settings s{}; s.prof.degrees_snap = 5.0;
       RA_CHECK(throws(s)); }
-    // Whole-mode directional (asymmetric) range weighting.
-    { ra::modifier_settings s{}; s.prof.range_weights = vec2d{1.0, 0.5};
-      RA_CHECK(throws(s)); }
 
     // A plain supported profile still builds.
     { ra::modifier_settings s{}; RA_CHECK(!throws(s)); }
+}
+
+RA_TEST("Lut: whole-mode anisotropic range weights set APPLY_DIR_WEIGHT")
+{
+    ra::device_config dev{};
+
+    // Whole mode + asymmetric range weights -> directional weighting flag.
+    {
+        ra::modifier_settings s{};
+        s.prof.range_weights = vec2d{1.0, 0.5};  // whole is the default
+        auto r = build_lut(s, dev);
+        RA_CHECK((r.flags & RA_F_APPLY_DIR_WEIGHT) != 0);
+    }
+    // Symmetric weights: no directional blend needed.
+    {
+        ra::modifier_settings s{};
+        auto r = build_lut(s, dev);
+        RA_CHECK((r.flags & RA_F_APPLY_DIR_WEIGHT) == 0);
+    }
+    // Separate mode never sets it (the blend is a whole-mode construct).
+    {
+        ra::modifier_settings s{};
+        s.prof.range_weights = vec2d{1.0, 0.5};
+        s.prof.speed_processor_args.whole = false;
+        auto r = build_lut(s, dev);
+        RA_CHECK((r.flags & RA_F_APPLY_DIR_WEIGHT) == 0);
+    }
 }
 
 RA_TEST("Lut: dpi_norm is NORMALIZED_DPI/dev_dpi when dpi is set")

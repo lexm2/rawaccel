@@ -99,6 +99,11 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     if (prof.degrees_rotation != 0.0)    out.flags |= RA_F_APPLY_ROTATE;
     if (prof.speed_max > 0.0 && prof.speed_min <= prof.speed_max)
         out.flags |= RA_F_CLAMP_SPEED;
+    // Whole-mode anisotropic range weights blend by movement angle in-kernel
+    // (mirrors modifier_flags::apply_directional_weight).
+    if (prof.speed_processor_args.whole &&
+        prof.range_weights.x != prof.range_weights.y)
+        out.flags |= RA_F_APPLY_DIR_WEIGHT;
 
     // Distance mode mirrors speed_processor::init.
     const auto& spa = prof.speed_processor_args;
@@ -113,15 +118,11 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
 
     // Phase 1 in progress: refuse profiles whose features are not yet ported
     // to the kernel rather than silently approximating them. Each guard is
-    // removed as the matching step lands (Lp pow, P1.4 clamp, P1.5 directional
-    // weighting, P1.6 snap).
+    // removed as the matching step lands (Lp pow, P1.6 snap).
     if (out.dist_mode == RA_DIST_LP)
         throw std::runtime_error("rawaccel: Lp distance norm not yet supported on Linux");
     if (prof.degrees_snap != 0.0)
         throw std::runtime_error("rawaccel: angle snapping not yet supported on Linux");
-    if (spa.whole && prof.range_weights.x != prof.range_weights.y)
-        throw std::runtime_error(
-            "rawaccel: whole-mode directional range weighting not yet supported on Linux");
 
     for (int i = 0; i < RA_LUT_SIZE; ++i) {
         double v = static_cast<double>(i);

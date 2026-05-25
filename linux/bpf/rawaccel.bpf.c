@@ -168,7 +168,9 @@ int BPF_PROG(rawaccel_hid_device_event,
     __u32 ix, iy;
     __s32 fx, fy;
     __u8 single_scale;
-    ra_pre_lut(cfg, st, dx, dy, &inx, &iny, &ix, &fx, &iy, &fy, &single_scale);
+    __s32 weight;
+    ra_pre_lut(cfg, st, dx, dy, &inx, &iny, &ix, &fx, &iy, &fy,
+               &single_scale, &weight);
 
     __s32 raw_x = ra_q16_lerp(q16_lookup(&ra_lut_x, ix),
                               q16_lookup(&ra_lut_x, ix + 1), fx);
@@ -176,7 +178,8 @@ int BPF_PROG(rawaccel_hid_device_event,
                               q16_lookup(&ra_lut_y, iy + 1), fy);
 
     __s64 acc_x, acc_y;
-    ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, &acc_x, &acc_y);
+    ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, weight,
+                &acc_x, &acc_y);
 
     /* Carry-accumulated output in Q16.16. */
     __s64 out_x_q16 = acc_x + (__s64)st->carry_x_q16;

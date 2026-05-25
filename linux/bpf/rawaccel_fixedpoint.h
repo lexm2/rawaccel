@@ -123,6 +123,43 @@ RA_FP_NOINLINE __s32 ra_magnitude_q16(__s64 x_q16, __s64 y_q16)
     return x > 0x7fffffff ? 0x7fffffff : (__s32)x;
 }
 
+/* Q16.16 angle constants. */
+#define RA_PI_2_Q16        102944  /* (pi/2)  * 2^16 */
+#define RA_PI_4_Q16         51472  /* (pi/4)  * 2^16 */
+#define RA_TWO_OVER_PI_Q16  41721  /* (2/pi)  * 2^16 */
+
+/* atan(|num/den|) in Q16.16 radians, range [0, pi/2]. Mirrors modify's
+ * reference_angle: den == 0 (purely vertical) -> pi/2, num == 0 (purely
+ * horizontal) -> 0.
+ *
+ * The unit-interval atan is Rajan's minimax polynomial:
+ *   atan(r) ~= (pi/4) r - r (r - 1) (0.2447 + 0.0663 r),   r in [0, 1]
+ * accurate to < 0.0015 rad. For r > 1 the identity atan(r) = pi/2 - atan(1/r)
+ * folds the argument back into [0, 1], so one branch covers every angle and
+ * the polynomial is never evaluated outside its fit range. Operands are made
+ * non-negative and ordered lo <= hi, so the ratio division is unsigned (the
+ * verifier rejects signed division). __noinline: verified once. */
+RA_FP_NOINLINE __s32 ra_atan_ratio_q16(__s64 num, __s64 den)
+{
+    __u64 a = (__u64)(num < 0 ? -num : num);
+    __u64 b = (__u64)(den < 0 ? -den : den);
+    if (b == 0) return RA_PI_2_Q16;   /* purely vertical */
+    if (a == 0) return 0;             /* purely horizontal */
+
+    __u64 lo, hi;
+    int swap;
+    if (a <= b) { lo = a; hi = b; swap = 0; }
+    else        { lo = b; hi = a; swap = 1; }
+
+    __s32 r = (__s32)((lo << RA_Q16_SHIFT) / hi);   /* r in [0, RA_Q16_ONE] */
+
+    __s32 inner = 16038 + ra_mul_q16(4345, r);      /* 0.2447 + 0.0663 r */
+    __s32 corr  = ra_mul_q16(ra_mul_q16(r, r - RA_Q16_ONE), inner);
+    __s32 at    = ra_mul_q16(RA_PI_4_Q16, r) - corr;   /* atan(r), r in [0,1] */
+
+    return swap ? RA_PI_2_Q16 - at : at;
+}
+
 /* Speed clamp (modifier::modify): clamp the working vector's speed
  * (magnitude * dpi_norm, in/s) to [speed_min, speed_max] and rescale the
  * vector by the resulting ratio. __noinline: verified once. */
@@ -227,10 +264,10 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
                              __s32 dx, __s32 dy,
                              __s64 *inx_q16, __s64 *iny_q16,
                              __u32 *ix, __s32 *fx, __u32 *iy, __s32 *fy,
-                             __u8 *single_scale)
+                             __u8 *single_scale, __s32 *weight_q16)
 {
-    /* Working vector starts as the raw counts in Q16.16. Snap and speed clamp
-     * (later Phase 1 steps) will also transform (inx, iny) here. */
+    /* Working vector starts as the raw counts in Q16.16. Snap (a later Phase 1
+     * step) will also transform (inx, iny) here. */
     __s64 inx = (__s64)dx << RA_Q16_SHIFT;
     __s64 iny = (__s64)dy << RA_Q16_SHIFT;
 
@@ -238,6 +275,20 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
      * curve index are derived from the rotated vector. */
     if (cfg->flags & RA_F_APPLY_ROTATE)
         ra_rotate_q16(&inx, &iny, cfg->rot_cos_q16, cfg->rot_sin_q16);
+
+    /* Whole-mode directional weighting: the per-vector range weight is blended
+     * between range_weights.x and .y by the movement's reference angle (modify
+     * lines 383-388: weight = range_w_x + (2/pi)*ref_angle*(range_w_y -
+     * range_w_x), a lerp keyed on (2/pi)*ref_angle). Taken from the rotated
+     * vector, before the angle-preserving speed clamp, matching modify's order.
+     * Defaults to range_w_x; only the whole branch consumes it. */
+    __s32 weight = cfg->range_w_x_q16;
+    if (cfg->flags & RA_F_APPLY_DIR_WEIGHT) {
+        __s32 ang = ra_atan_ratio_q16(iny, inx);            /* [0, pi/2] */
+        __s32 t   = ra_mul_q16(RA_TWO_OVER_PI_Q16, ang);    /* [0, 1] */
+        weight = ra_q16_lerp(cfg->range_w_x_q16, cfg->range_w_y_q16, t);
+    }
+    *weight_q16 = weight;
 
     /* Speed clamp acts on the (rotated) vector before the curve. */
     if (cfg->flags & RA_F_CLAMP_SPEED)
@@ -279,17 +330,20 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
 /* Stage 2: working vector + raw per-axis curve scales -> output vector in
  * Q16.16 (before fractional carry, which the caller owns). Applies range
  * weighting, output-DPI scaling, and the directional output-DPI multipliers.
- * In a whole mode (single_scale) both axes use the accel_x curve and
- * range_weights.x, matching modify; separate mode uses each axis's own. */
+ * In a whole mode (single_scale) both axes use the accel_x curve and the single
+ * blended weight_q16 (range_weights.x when directional weighting is off),
+ * matching modify; separate mode uses each axis's own raw curve and weight. */
 RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
                               __s64 inx_q16, __s64 iny_q16,
                               __s32 raw_x, __s32 raw_y, __u8 single_scale,
+                              __s32 weight_q16,
                               __s64 *out_x_q16, __s64 *out_y_q16)
 {
     __s32 ry = single_scale ? raw_x : raw_y;
-    __s32 wy = single_scale ? cfg->range_w_x_q16 : cfg->range_w_y_q16;
+    __s32 wx = single_scale ? weight_q16 : cfg->range_w_x_q16;
+    __s32 wy = single_scale ? weight_q16 : cfg->range_w_y_q16;
 
-    __s32 eff_x = ra_axis_eff_scale(raw_x, cfg->range_w_x_q16,
+    __s32 eff_x = ra_axis_eff_scale(raw_x, wx,
                                     cfg->output_dpi_adj_q16, RA_Q16_ONE);
     __s32 eff_y = ra_axis_eff_scale(ry, wy,
                                     cfg->output_dpi_adj_q16, cfg->yx_ratio_q16);
@@ -320,12 +374,15 @@ RA_FP_INLINE void ra_modify_q16_flat(const struct ra_bpf_config *cfg,
     __u32 ix, iy;
     __s32 fx, fy;
     __u8 single_scale;
-    ra_pre_lut(cfg, st, dx, dy, &inx, &iny, &ix, &fx, &iy, &fy, &single_scale);
+    __s32 weight;
+    ra_pre_lut(cfg, st, dx, dy, &inx, &iny, &ix, &fx, &iy, &fy,
+               &single_scale, &weight);
 
     __s32 raw_x = ra_lut_sample(lut_x, ix, fx);
     __s32 raw_y = ra_lut_sample(lut_y, iy, fy);
 
-    ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, out_x_q16, out_y_q16);
+    ra_post_lut(cfg, inx, iny, raw_x, raw_y, single_scale, weight,
+                out_x_q16, out_y_q16);
 }
 
 #endif /* RAWACCEL_FIXEDPOINT_H */

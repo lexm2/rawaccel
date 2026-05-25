@@ -172,6 +172,27 @@ RA_TEST("Fixed: whole euclidean curve matches oracle on diagonals")
     check_axis(s, 200, 200);
 }
 
+RA_TEST("Fixed: whole-mode directional weighting blends range_weights by angle")
+{
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;       // whole mode uses accel_x for both
+    s.prof.range_weights = vec2d{0.5, 1.5};  // asymmetric -> angular blend
+    // default speed_processor_args: whole, euclidean magnitude.
+
+    // The reference angle drives the blend from range_w_x (horizontal) to
+    // range_w_y (vertical); the in-kernel atan must track the oracle's.
+    check_axis(s, 100, 0);    // 0 deg   -> weight 0.5
+    check_axis(s, 0, 100);    // 90 deg  -> weight 1.5
+    check_axis(s, 100, 100);  // 45 deg  -> weight 1.0
+    check_axis(s, 150, 50);   // shallow
+    check_axis(s, 50, 150);   // steep
+    check_axis(s, -120, 90);  // negative quadrant, angle unaffected by sign
+    check_axis(s, 200, 200);
+}
+
 RA_TEST("Fixed: separate mode curve matches oracle on diagonals")
 {
     ra::modifier_settings s{};
