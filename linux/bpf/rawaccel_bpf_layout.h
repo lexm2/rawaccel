@@ -143,12 +143,17 @@ struct ra_bpf_config {
     /* scale_smoother (simple EMA) coefficients, from scale_smooth_halflife.
      * Used only when RA_F_SMOOTH_SCALE is set. */
     struct ra_simple_ema_coeffs scale_coeffs;
+
+    /* output_speed_smoother (linear EMA) coefficients, from
+     * output_speed_smooth_halflife and the fixed output trend halflife (0.7).
+     * Used only when RA_F_SMOOTH_OUTPUT is set. */
+    struct ra_linear_ema_coeffs out_coeffs;
 };
 
 #ifndef __BPF__
 /* Host side is always C++ (agent + tests); BPF side skips this. Catches
  * accidental padding/layout drift between agent and kernel. */
-static_assert(sizeof(struct ra_bpf_config) == 116,
+static_assert(sizeof(struct ra_bpf_config) == 132,
               "ra_bpf_config layout changed; update kernel + agent in lockstep");
 #endif
 
@@ -185,10 +190,15 @@ struct ra_bpf_state {
      * sc_x; separate mode uses sc_x for X and sc_y for Y. */
     struct ra_simple_ema_state sc_x;
     struct ra_simple_ema_state sc_y;
+
+    /* output_speed_smoother state, per axis. Whole mode smooths the output
+     * magnitude via out_x; separate mode uses out_x for X and out_y for Y. */
+    struct ra_linear_ema_state out_x;
+    struct ra_linear_ema_state out_y;
 };
 
 #ifndef __BPF__
-static_assert(sizeof(struct ra_bpf_state) == 112,
+static_assert(sizeof(struct ra_bpf_state) == 176,
               "ra_bpf_state layout changed; update kernel + agent in lockstep");
 #endif
 

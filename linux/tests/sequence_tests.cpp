@@ -413,6 +413,76 @@ RA_TEST("Seq: scale smoothing matches the stateful oracle (whole + separate)")
     }
 }
 
+RA_TEST("Seq: output speed smoothing matches the stateful oracle (whole + separate)")
+{
+    // The output smoother (linear EMA, trend halflife 0.7) smooths the scaled
+    // output after the curve and before the output-DPI multiply: whole mode
+    // smooths the magnitude and rescales both axes, separate mode smooths each
+    // |component|. Check parity against the stateful oracle through the ramp.
+    ra::device_config dev{};
+
+    {   // whole mode, diagonal hold
+        ra::modifier_settings s{};
+        s.prof.accel_x.mode = ra::accel_mode::classic;
+        s.prof.accel_x.acceleration = 0.05;
+        s.prof.accel_x.exponent_classic = 2.0;
+        s.prof.accel_y = s.prof.accel_x;
+        s.prof.speed_processor_args.output_speed_smooth_halflife = 20;
+        DtPackets pk;
+        for (int i = 0; i < 250; ++i) pk.push_back({90.0, 120.0, 1.0});
+        auto f = run_fixed_acc(s, dev, pk);
+        auto o = run_oracle_stateful(s, pk);
+        for (std::size_t i = 0; i < pk.size(); ++i) {
+            RA_CHECK_NEAR(f[i].first,  o[i].first,  1e-2 + std::fabs(o[i].first) * 5e-3);
+            RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2 + std::fabs(o[i].second) * 5e-3);
+        }
+    }
+    {   // separate mode, per-axis output smoothing with sign changes
+        ra::modifier_settings s{};
+        s.prof.accel_x.mode = ra::accel_mode::classic;
+        s.prof.accel_x.acceleration = 0.05;
+        s.prof.accel_x.exponent_classic = 2.0;
+        s.prof.accel_y = s.prof.accel_x;
+        s.prof.speed_processor_args.whole = false;
+        s.prof.speed_processor_args.output_speed_smooth_halflife = 20;
+        DtPackets pk;
+        for (int i = 0; i < 120; ++i) pk.push_back({110.0, -70.0, 1.0});
+        for (int i = 0; i < 120; ++i) pk.push_back({-110.0, 70.0, 1.0});  // flip both signs
+        auto f = run_fixed_acc(s, dev, pk);
+        auto o = run_oracle_stateful(s, pk);
+        for (std::size_t i = 0; i < pk.size(); ++i) {
+            RA_CHECK_NEAR(f[i].first,  o[i].first,  1e-2 + std::fabs(o[i].first) * 5e-3);
+            RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2 + std::fabs(o[i].second) * 5e-3);
+        }
+    }
+}
+
+RA_TEST("Seq: all three smoothers together match the stateful oracle")
+{
+    // Input + scale + output smoothing stacked, the full pipeline. Parity must
+    // still hold packet for packet against the stateful common/ reference.
+    ra::modifier_settings s{};
+    s.prof.accel_x.mode = ra::accel_mode::classic;
+    s.prof.accel_x.acceleration = 0.05;
+    s.prof.accel_x.exponent_classic = 2.0;
+    s.prof.accel_y = s.prof.accel_x;
+    s.prof.speed_processor_args.input_speed_smooth_halflife = 15;
+    s.prof.speed_processor_args.scale_smooth_halflife = 20;
+    s.prof.speed_processor_args.output_speed_smooth_halflife = 10;
+    ra::device_config dev{};
+
+    DtPackets pk;
+    for (int i = 0; i < 200; ++i) pk.push_back({140.0, 90.0, 1.0});
+    for (int i = 0; i < 200; ++i) pk.push_back({30.0, 20.0, 1.0});
+
+    auto f = run_fixed_acc(s, dev, pk);
+    auto o = run_oracle_stateful(s, pk);
+    for (std::size_t i = 0; i < pk.size(); ++i) {
+        RA_CHECK_NEAR(f[i].first,  o[i].first,  1e-2 + std::fabs(o[i].first) * 8e-3);
+        RA_CHECK_NEAR(f[i].second, o[i].second, 1e-2 + std::fabs(o[i].second) * 8e-3);
+    }
+}
+
 RA_TEST("Seq: idle (0,0) packets emit nothing and preserve carry")
 {
     ra::modifier_settings s{};

@@ -523,14 +523,44 @@ RA_FP_INLINE void ra_post_lut(const struct ra_bpf_config *cfg,
         }
     }
 
-    /* Output-DPI scaling then the per-axis trailing factor (yx_output_dpi_ratio
-     * on Y), following the (smoothed) scale, matching modify's order. */
-    __s32 eff_x = ra_mul_q16(ws_x, cfg->output_dpi_adj_q16);
-    __s32 eff_y = ra_mul_q16(ra_mul_q16(ws_y, cfg->output_dpi_adj_q16),
-                             cfg->yx_ratio_q16);
+    /* Apply the (smoothed) scale to the working vector -> output in count units,
+     * the value the output-speed smoother operates on (modify smooths in AFTER
+     * the scale multiply and BEFORE the output-DPI adjustment). */
+    __s64 sx = (inx_q16 * (__s64)ws_x) >> RA_Q16_SHIFT;
+    __s64 sy = (iny_q16 * (__s64)ws_y) >> RA_Q16_SHIFT;
 
-    __s64 ox = (inx_q16 * (__s64)eff_x) >> RA_Q16_SHIFT;
-    __s64 oy = (iny_q16 * (__s64)eff_y) >> RA_Q16_SHIFT;
+    if (cfg->flags & RA_F_SMOOTH_OUTPUT) {
+        if (single_scale) {
+            /* Whole mode: smooth the output magnitude and rescale both axes by
+             * smoothed/mag (modify lines 400-409). */
+            __s32 mag = ra_magnitude_q16(sx, sy);
+            if (mag > 0) {
+                __s32 sm = ra_linear_ema_step(&st->out_x, &cfg->out_coeffs,
+                                              mag, dt_ms_q16);
+                __s32 ratio = ra_div_q16(sm, mag);
+                sx = (sx * (__s64)ratio) >> RA_Q16_SHIFT;
+                sy = (sy * (__s64)ratio) >> RA_Q16_SHIFT;
+            }
+        } else {
+            /* Separate mode: smooth |component| and reapply the sign
+             * (copysign(smooth(fabs(in)), in)). */
+            __s32 ax = ra_sat_s32(sx < 0 ? -sx : sx);
+            __s32 ay = ra_sat_s32(sy < 0 ? -sy : sy);
+            __s32 smx = ra_linear_ema_step(&st->out_x, &cfg->out_coeffs,
+                                           ax, dt_ms_q16);
+            __s32 smy = ra_linear_ema_step(&st->out_y, &cfg->out_coeffs,
+                                           ay, dt_ms_q16);
+            sx = sx < 0 ? -(__s64)smx : (__s64)smx;
+            sy = sy < 0 ? -(__s64)smy : (__s64)smy;
+        }
+    }
+
+    /* Output-DPI scaling then the per-axis trailing factor (yx_output_dpi_ratio
+     * on Y), following the (smoothed) output, matching modify's order. */
+    __s32 dpi_x = cfg->output_dpi_adj_q16;
+    __s32 dpi_y = ra_mul_q16(cfg->output_dpi_adj_q16, cfg->yx_ratio_q16);
+    __s64 ox = (sx * (__s64)dpi_x) >> RA_Q16_SHIFT;
+    __s64 oy = (sy * (__s64)dpi_y) >> RA_Q16_SHIFT;
 
     /* Directional output DPI (modifier::modify): scale a component only when
      * its post-scale output is negative. */

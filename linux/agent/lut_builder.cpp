@@ -94,6 +94,24 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         }
     }
 
+    // output_speed_smoother coefficients (linear_ema_smoother::init): same
+    // shape as the input smoother but with the fixed output trend halflife
+    // (0.7 = speed_processor::output_trend_halflife). RA_F_SMOOTH_OUTPUT gates.
+    {
+        double hl = settings.prof.speed_processor_args.output_speed_smooth_halflife;
+        if (hl > 0.0) {
+            constexpr double kOutputTrendHalflife = 0.7;  // speed_processor::output_trend_halflife
+            double win = std::pow(0.5, 1.0 / hl);
+            double cut = 1.0 - std::sqrt(1.0 - win);
+            double trw = std::pow(0.5, 1.0 / kOutputTrendHalflife);
+            double trc = 1.0 - std::sqrt(1.0 - trw);
+            out.out_log2_win_q16 = q16_round(std::log2(win));
+            out.out_log2_cut_q16 = q16_round(std::log2(cut));
+            out.out_log2_trw_q16 = q16_round(std::log2(trw));
+            out.out_log2_trc_q16 = q16_round(std::log2(trc));
+        }
+    }
+
     // Weighting / output scaling, applied in-kernel around the raw curve.
     out.range_w_x_q16      = q16_round(prof.range_weights.x);
     out.range_w_y_q16      = q16_round(prof.range_weights.y);
@@ -148,6 +166,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         out.flags |= RA_F_SMOOTH_INPUT;
     if (settings.prof.speed_processor_args.scale_smooth_halflife > 0.0)
         out.flags |= RA_F_SMOOTH_SCALE;
+    if (settings.prof.speed_processor_args.output_speed_smooth_halflife > 0.0)
+        out.flags |= RA_F_SMOOTH_OUTPUT;
 
     // Distance mode mirrors speed_processor::init.
     const auto& spa = prof.speed_processor_args;
@@ -217,6 +237,10 @@ ra_bpf_config to_bpf_config(const LutBuildResult& lut,
     cfg.in_coeffs.log2_trc = lut.in_log2_trc_q16;
     cfg.scale_coeffs.log2_win = lut.sc_log2_win_q16;
     cfg.scale_coeffs.log2_cut = lut.sc_log2_cut_q16;
+    cfg.out_coeffs.log2_win = lut.out_log2_win_q16;
+    cfg.out_coeffs.log2_cut = lut.out_log2_cut_q16;
+    cfg.out_coeffs.log2_trw = lut.out_log2_trw_q16;
+    cfg.out_coeffs.log2_trc = lut.out_log2_trc_q16;
 
     return cfg;
 }
