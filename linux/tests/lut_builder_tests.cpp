@@ -6,10 +6,12 @@
 //   scale = lut_x[idx] (or lut_y[idx])
 //   out   = (raw_count * scale + carry) >> 16
 //
-// So a correct LUT for a noaccel profile is the identity; for an
-// output_dpi-scaled profile it is a flat scaled constant; for a classic
-// accel profile it is monotone increasing from 1.0; for an asymmetric
-// range_weights profile lut_x and lut_y diverge.
+// The LUT now holds the RAW per-axis curve f(speed); range/domain weighting
+// and output-DPI scaling are emitted as config fields and applied in-kernel.
+// So a correct LUT for a noaccel profile is the identity; for a classic accel
+// profile it is monotone increasing from 1.0; output_dpi and range_weights no
+// longer change the LUT (they show up in output_dpi_adj_q16 / range_w_*_q16),
+// and fixedpoint_tests checks the kernel math composes them correctly.
 
 #include "lut_builder.hpp"
 #include "test_harness.hpp"
@@ -46,17 +48,19 @@ RA_TEST("Lut: noaccel profile produces identity LUT on both axes")
     RA_CHECK_EQ(bad, 0);
 }
 
-RA_TEST("Lut: output_dpi 2000 is a flat 2.0x scale across the table")
+RA_TEST("Lut: output_dpi 2000 leaves the raw LUT at 1.0 and sets adj to 2.0x")
 {
     ra::modifier_settings s{};
     s.prof.output_dpi = 2000;  // 2x NORMALIZED_DPI (=1000)
     ra::device_config dev{};
     auto r = build_lut(s, dev);
 
+    // output_dpi now scales in-kernel via output_dpi_adj_q16, not in the LUT.
     for (int i = 0; i < RA_LUT_SIZE; ++i) {
-        RA_CHECK(q16_near(r.lut_x[i], 2.0, 1e-4));
-        RA_CHECK(q16_near(r.lut_y[i], 2.0, 1e-4));
+        RA_CHECK_EQ(r.lut_x[i], RA_Q16_ONE);
+        RA_CHECK_EQ(r.lut_y[i], RA_Q16_ONE);
     }
+    RA_CHECK(q16_near(r.output_dpi_adj_q16, 2.0, 1e-9));
 }
 
 RA_TEST("Lut: classic accel is monotone increasing from 1.0")
@@ -83,31 +87,28 @@ RA_TEST("Lut: classic accel is monotone increasing from 1.0")
     RA_CHECK(r.lut_x[200] > RA_Q16_ONE);
 }
 
-RA_TEST("Lut: anisotropic range_weights split lut_x and lut_y")
+RA_TEST("Lut: anisotropic range_weights live in config, not the raw LUT")
 {
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y = s.prof.accel_x;
-    // X gets full curve effect; Y is dampened. With whole-mode the modifier
-    // interpolates the scale by the weighted-by-direction range_weights
-    // (modifier.modify lines 383-388). At ref_angle 0 (X-only input) and
-    // pi/2 (Y-only input) the two paths use range_weights.x and .y
-    // respectively, so the LUTs differ at non-trivial speeds.
+    // Same curve on both axes; only the range weight differs. Weighting is
+    // applied in-kernel now, so the raw per-axis LUTs are identical and the
+    // asymmetry lives in range_w_*_q16. (fixedpoint_tests confirms the kernel
+    // math then diverges X vs Y.)
     s.prof.range_weights = vec2d{1.0, 0.5};
 
     ra::device_config dev{};
     auto r = build_lut(s, dev);
 
-    // Same at v == 0 (curve scale is 1.0 there regardless of weight).
-    RA_CHECK_EQ(r.lut_x[0], r.lut_y[0]);
-
-    bool diverged = false;
-    for (int i = 64; i < 256 && !diverged; ++i) {
-        if (r.lut_x[i] != r.lut_y[i]) diverged = true;
+    for (int i = 0; i < RA_LUT_SIZE; ++i) {
+        RA_CHECK_EQ(r.lut_x[i], r.lut_y[i]);
     }
-    RA_CHECK(diverged);
+    RA_CHECK(q16_near(r.range_w_x_q16, 1.0, 1e-9));
+    RA_CHECK(q16_near(r.range_w_y_q16, 0.5, 1e-9));
+    RA_CHECK(r.range_w_x_q16 != r.range_w_y_q16);
 }
 
 RA_TEST("Lut: dpi_norm is NORMALIZED_DPI/dev_dpi when dpi is set")

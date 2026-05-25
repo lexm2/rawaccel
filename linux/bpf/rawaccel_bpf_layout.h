@@ -27,7 +27,34 @@
  * gives a quantization step <= 0.025 in/s at typical NORMALIZED_DPI. */
 #define RA_LUT_SIZE 4096
 
-/* Per-axis lookup tables (anisotropy). The agent fills these at apply-time. */
+/* Bumped whenever ra_bpf_config / ra_bpf_state layout or semantics change so
+ * a stale agent and a freshly built object cannot silently disagree. */
+#define RA_CONFIG_VERSION 1
+
+/* modifier_flags / speed_processor_flags mirror (see common/rawaccel.hpp).
+ * Reserved bits are emitted as 0 by the agent until the matching kernel path
+ * lands; Phase 0 reads none of them. */
+#define RA_F_APPLY_ROTATE        (1u << 0)
+#define RA_F_COMPUTE_REF_ANGLE   (1u << 1)
+#define RA_F_APPLY_SNAP          (1u << 2)
+#define RA_F_CLAMP_SPEED         (1u << 3)
+#define RA_F_APPLY_DIR_WEIGHT    (1u << 4)
+#define RA_F_APPLY_DIR_MUL_X     (1u << 5)
+#define RA_F_APPLY_DIR_MUL_Y     (1u << 6)
+#define RA_F_SMOOTH_INPUT        (1u << 7)
+#define RA_F_SMOOTH_SCALE        (1u << 8)
+#define RA_F_SMOOTH_OUTPUT       (1u << 9)
+
+/* dist_mode values mirror common/rawaccel.hpp's distance_mode. */
+#define RA_DIST_EUCLIDEAN 0
+#define RA_DIST_SEPARATE  1
+#define RA_DIST_MAX       2
+#define RA_DIST_LP        3
+
+/* The two per-axis lookup tables (anisotropy) store the RAW curve scale
+ * f(speed) in Q16.16. Range/domain weighting, output-DPI scaling, and the
+ * directional multipliers live in ra_bpf_config and are applied in-kernel
+ * around the LUT, mirroring common/rawaccel.hpp's modifier::modify. */
 struct ra_bpf_config {
     /* HID report layout, copied verbatim from
      * linux/agent/hid_descriptor.hpp's BpfMouseLayout. */
@@ -43,7 +70,30 @@ struct ra_bpf_config {
     __s32 smooth_alpha_q16; /* per-packet EMA coefficient, 0..RA_Q16_ONE */
     __s32 lut_step_q16;     /* velocity per LUT step, in/s in Q16.16 */
     __s32 lut_max_q16;      /* clamp velocities at or above this value */
+
+    /* modifier_flags bitfield + distance mode. Reserved for Phase 1; the
+     * agent fills them now so the layout is stable. */
+    __u32 flags;
+    __u8  dist_mode;
+    __u8  config_version;   /* RA_CONFIG_VERSION */
+    __u8  _pad2[2];
+
+    /* Per-axis weighting and output scaling, all Q16.16. Moved out of the
+     * LUT (which now holds the raw curve) and applied in-kernel. */
+    __s32 range_w_x_q16;    /* range_weights.x */
+    __s32 range_w_y_q16;    /* range_weights.y */
+    __s32 domain_w_x_q16;   /* domain_weights.x (pre-curve speed scale) */
+    __s32 domain_w_y_q16;   /* domain_weights.y */
+    __s32 output_dpi_adj_q16; /* output_dpi / NORMALIZED_DPI */
+    __s32 yx_ratio_q16;     /* yx_output_dpi_ratio (applied to Y) */
 };
+
+#ifndef __BPF__
+/* Host side is always C++ (agent + tests); BPF side skips this. Catches
+ * accidental padding/layout drift between agent and kernel. */
+static_assert(sizeof(struct ra_bpf_config) == 56,
+              "ra_bpf_config layout changed; update kernel + agent in lockstep");
+#endif
 
 /* Per-device runtime state. One instance per BPF object load. */
 struct ra_bpf_state {

@@ -267,16 +267,9 @@ bool BpfBackend::populate_maps(Slot& slot,
 {
     auto lut = build_lut(s, c);
 
-    ra_bpf_config cfg{};
-    cfg.report_id      = slot.layout.report_id;
-    cfg.dx_byte_offset = slot.layout.dx_byte_offset;
-    cfg.dx_byte_size   = slot.layout.dx_byte_size;
-    cfg.dy_byte_offset = slot.layout.dy_byte_offset;
-    cfg.dy_byte_size   = slot.layout.dy_byte_size;
-    cfg.dpi_norm_q16   = lut.dpi_norm_q16;
-    cfg.smooth_alpha_q16 = lut.smooth_alpha_q16;
-    cfg.lut_step_q16   = lut.lut_step_q16;
-    cfg.lut_max_q16    = lut.lut_max_q16;
+    // The raw curve lives in lut_x/lut_y; weighting, output-DPI scaling, and
+    // the HID layout are folded into the config struct by to_bpf_config.
+    ra_bpf_config cfg = to_bpf_config(lut, slot.layout);
 
     int cfg_fd = bpf_map__fd(slot.config_map);
     int lutx_fd = bpf_map__fd(slot.lut_x_map);

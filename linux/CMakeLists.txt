@@ -180,6 +180,7 @@ add_custom_command(
     OUTPUT ${RA_BPF_OBJ}
     DEPENDS ${RA_BPF_DIR}/rawaccel.bpf.c
             ${RA_BPF_DIR}/rawaccel_bpf_layout.h
+            ${RA_BPF_DIR}/rawaccel_fixedpoint.h
             ${RA_VMLINUX_H}
     COMMAND ${CLANG_EXE}
             -O2 -g -Wall
@@ -220,3 +221,14 @@ add_executable(agent_tests
 )
 target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
 add_test(NAME agent_tests COMMAND agent_tests)
+
+# Fixed-point parity tests: drive rawaccel_fixedpoint.h (the exact in-kernel
+# math) and assert it matches the double-precision common/ modifier. Links
+# rawaccel_agent for build_lut / to_bpf_config; the bpf/ include path (and the
+# common/ headers + win_compat force-include) come transitively from it.
+add_executable(fixedpoint_tests
+    tests/test_main.cpp
+    tests/fixedpoint_tests.cpp
+)
+target_link_libraries(fixedpoint_tests PRIVATE rawaccel_agent)
+add_test(NAME fixedpoint_tests COMMAND fixedpoint_tests)

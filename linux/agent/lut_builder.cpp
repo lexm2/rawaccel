@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 
 namespace rawaccel_agent {
@@ -19,19 +20,17 @@ std::int32_t q16_round(double d)
     return static_cast<std::int32_t>(std::lround(v));
 }
 
-// time=1 and dpi_factor=1 -> modifier's ips_factor = 1, so the speed seen
-// by the curve equals v. Sample at a tiny epsilon at v=0 to capture the
-// v->0+ limit (not 1.0 for output_dpi-scaled or weighted profiles).
-double scale_at(const ra::modifier& mod,
-                const ra::modifier_settings& stateless,
-                double v, bool along_x)
+// Evaluate the RAW per-axis acceleration curve f(speed) -- the bare
+// accel_union, with no range_weight wrap (callback_template's
+// 1 + (f-1)*weight), no domain weighting, and no output-DPI scaling. Those
+// are applied in-kernel around the LUT. Sample at a tiny epsilon at v=0 to
+// capture the v->0+ limit (gain curves divide by speed).
+double raw_curve_at(ra::modifier_settings& s, double v, bool along_x)
 {
-    double sample_v = v > 0.0 ? v : 1e-9;
-    vec2d in = along_x ? vec2d{sample_v, 0.0} : vec2d{0.0, sample_v};
-    ra::speed_processor sp{};
-    sp.init(stateless.prof.speed_processor_args);
-    mod.modify(in, sp, stateless, 1.0, 1.0);
-    return (along_x ? in.x : in.y) / sample_v;
+    double sample = v > 0.0 ? v : 1e-9;
+    const ra::accel_args& args = along_x ? s.prof.accel_x : s.prof.accel_y;
+    ra::accel_union& u = along_x ? s.data.accel_x : s.data.accel_y;
+    return u.visit([&](auto& impl) -> double { return impl(sample, args); }, args);
 }
 
 } // namespace
@@ -40,13 +39,14 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
                          const ra::device_config& dev_config)
 {
     // The BPF program runs its own EMA via smooth_alpha_q16; zero the
-    // userspace smoother halflives so the LUT does not double-count.
+    // userspace smoother halflives so the LUT reflects only the curve.
     ra::modifier_settings stateless = settings;
     stateless.prof.speed_processor_args.input_speed_smooth_halflife = 0;
     stateless.prof.speed_processor_args.scale_smooth_halflife = 0;
     stateless.prof.speed_processor_args.output_speed_smooth_halflife = 0;
     ra::init_data(stateless);
-    ra::modifier mod(stateless);
+
+    const auto& prof = stateless.prof;
 
     LutBuildResult out{};
     out.lut_step_q16 = RA_Q16_ONE;
@@ -73,12 +73,53 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         out.smooth_alpha_q16 = RA_Q16_ONE;
     }
 
+    // Weighting / output scaling, applied in-kernel around the raw curve.
+    out.range_w_x_q16      = q16_round(prof.range_weights.x);
+    out.range_w_y_q16      = q16_round(prof.range_weights.y);
+    out.domain_w_x_q16     = q16_round(prof.domain_weights.x);
+    out.domain_w_y_q16     = q16_round(prof.domain_weights.y);
+    out.output_dpi_adj_q16 = q16_round(prof.output_dpi / ra::NORMALIZED_DPI);
+    out.yx_ratio_q16       = q16_round(prof.yx_output_dpi_ratio);
+
+    // flags / dist_mode are reserved for Phase 1; left at 0 for now.
+
     for (int i = 0; i < RA_LUT_SIZE; ++i) {
         double v = static_cast<double>(i);
-        out.lut_x[i] = q16_round(scale_at(mod, stateless, v, true));
-        out.lut_y[i] = q16_round(scale_at(mod, stateless, v, false));
+        out.lut_x[i] = q16_round(raw_curve_at(stateless, v, true));
+        out.lut_y[i] = q16_round(raw_curve_at(stateless, v, false));
     }
     return out;
+}
+
+ra_bpf_config to_bpf_config(const LutBuildResult& lut,
+                            const BpfMouseLayout& layout)
+{
+    ra_bpf_config cfg{};
+    std::memset(&cfg, 0, sizeof(cfg));
+
+    cfg.report_id      = layout.report_id;
+    cfg.dx_byte_offset = layout.dx_byte_offset;
+    cfg.dx_byte_size   = layout.dx_byte_size;
+    cfg.dy_byte_offset = layout.dy_byte_offset;
+    cfg.dy_byte_size   = layout.dy_byte_size;
+
+    cfg.dpi_norm_q16     = lut.dpi_norm_q16;
+    cfg.smooth_alpha_q16 = lut.smooth_alpha_q16;
+    cfg.lut_step_q16     = lut.lut_step_q16;
+    cfg.lut_max_q16      = lut.lut_max_q16;
+
+    cfg.flags          = lut.flags;
+    cfg.dist_mode      = lut.dist_mode;
+    cfg.config_version = RA_CONFIG_VERSION;
+
+    cfg.range_w_x_q16     = lut.range_w_x_q16;
+    cfg.range_w_y_q16     = lut.range_w_y_q16;
+    cfg.domain_w_x_q16    = lut.domain_w_x_q16;
+    cfg.domain_w_y_q16    = lut.domain_w_y_q16;
+    cfg.output_dpi_adj_q16 = lut.output_dpi_adj_q16;
+    cfg.yx_ratio_q16      = lut.yx_ratio_q16;
+
+    return cfg;
 }
 
 } // namespace rawaccel_agent
