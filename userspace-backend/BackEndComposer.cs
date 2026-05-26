@@ -505,6 +505,7 @@ namespace userspace_backend
                 return devicesModel;
             });
 
+            // TODO: HWID should never be exposed to user.
             services.AddTransient<IDeviceModel, DeviceModel>();
             services.AddKeyedTransient<IEditableSettingSpecific<string>>(
                 DeviceModel.NameDIKey, (IServiceProvider services, object? key) =>
@@ -599,8 +600,13 @@ namespace userspace_backend
             return services.BuildServiceProvider();
         }
 
-        // Per-OS driver/evaluator/device-enumeration registration. Runtime
-        // probe (not #if WINDOWS) so the same assembly runs everywhere.
+         
+        // TODO: This reflection-based registration exists only because wrapper.dll
+        // is .NET Framework 4.7.2 mixed-mode C++/CLI (cannot be loaded
+        // in process by net8.0), and Driver/Windows/*.cs is Compile-Removed on
+        // non-Windows. Once wrapper is migrated to net8.0-windows
+        // (<CLRSupport>NetCore</CLRSupport>), replace this with
+        // compile safe registration and delete RegisterWindowsServicesByReflection
         private static void RegisterPlatformServices(IServiceCollection services)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

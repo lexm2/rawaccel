@@ -5,9 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RawAccel.Contracts;
-using userspace_backend.Data.Profiles;
 using userspace_backend.Driver;
-using userspace_backend.IO;
 using userspace_backend.Model;
 using DATA = userspace_backend.Data;
 using Profile = RawAccel.Contracts.RawAccelProfile;
@@ -82,11 +80,6 @@ namespace userspace_backend
 
             DATA.MappingSet mappingData = BackEndLoader.LoadMappings();
 
-            // DeviceGroups.DeviceGroupModels is the master list the UI and
-            // MappingModel.TryAddMapping look up against. It is not serialized
-            // directly: group names live implicitly inside devices.json (per
-            // device) and mappings.json (as map keys). Restore the list before
-            // applying mappings so non-Default rows are not silently dropped.
             RestoreDeviceGroupsFromData(devicesData, mappingData);
 
             LoadMappingsFromData(mappingData);
@@ -135,7 +128,7 @@ namespace userspace_backend
 
         protected void LoadMappingsFromData(DATA.MappingSet mappingData)
         {
-            // Clear existing mappings and reload from data
+            // Clear existing mappings and reload
             Mappings.Mappings.Clear();
             foreach (var mapping in mappingData.Mappings)
             {
@@ -145,7 +138,6 @@ namespace userspace_backend
 
         protected void EnsureDefaultDeviceGroupExists()
         {
-            // If no device groups exist, create a "Default" group
             if (Devices.DeviceGroups.DeviceGroupModels.Count == 0)
             {
                 Devices.DeviceGroups.AddOrGetDeviceGroup(DeviceGroups.DefaultDeviceGroup);
@@ -166,12 +158,13 @@ namespace userspace_backend
                 return;
             }
 
+            // TODO: This case is very niche, considering just not adding a
+            // default at all to show that something is wrong.
             var defaultDevice = ServiceProvider.GetRequiredService<IDeviceModel>();
             defaultDevice.Name.TryUpdateModelDirectly("Default");
             defaultDevice.HardwareID.TryUpdateModelDirectly("DEFAULT_DEVICE_ID");
             defaultDevice.DeviceGroup.TryUpdateModelDirectly(DeviceGroups.DefaultDeviceGroup);
-            // DPI, PollRate, and Ignore already have sensible defaults from DI (1000, 1000, false)
-
+            
             Devices.TryInsert(0, defaultDevice);
         }
 
@@ -184,6 +177,7 @@ namespace userspace_backend
                     continue;
                 }
 
+                // When reloading new devices list this will trigger
                 bool alreadyPresent = Devices.Elements.Any(d =>
                     string.Equals(d.HardwareID.ModelValue, systemDevice.HWID, StringComparison.OrdinalIgnoreCase));
                 if (alreadyPresent)
@@ -195,7 +189,7 @@ namespace userspace_backend
                 device.Name.TryUpdateModelDirectly(systemDevice.Name);
                 device.HardwareID.TryUpdateModelDirectly(systemDevice.HWID);
                 device.DeviceGroup.TryUpdateModelDirectly(DeviceGroups.DefaultDeviceGroup);
-                // DPI / PollRate / Ignore keep their DI-provided defaults.
+                // DPI / PollRate / Use their DI-provided defaults.
                 Devices.TryAdd(device);
             }
         }
@@ -224,7 +218,6 @@ namespace userspace_backend
 
         protected void EnsureDefaultProfileExists()
         {
-            // If no profiles exist, create a default profile
             if (Profiles.Elements.Count == 0)
             {
                 var defaultProfile = ServiceProvider.GetRequiredService<IProfileModel>();
@@ -235,20 +228,18 @@ namespace userspace_backend
 
         protected void EnsureDefaultMappingExists()
         {
-            // Ensure a Default mapping object exists in the list.
-            if (!Mappings.TryGetMapping("Default", out _))
+            if (Mappings.Mappings.Count == 0)
             {
                 Mappings.TryAddMapping(new DATA.Mapping
                 {
                     Name = "Default",
                     GroupsToProfiles = new DATA.Mapping.GroupsToProfilesMapping(),
                 });
-            }
 
-            // Explicitly wire the DefaultDeviceGroup to "Default" profile entry.
-            if (Mappings.TryGetMapping("Default", out MappingModel? defaultMapping) && defaultMapping != null)
-            {
-                defaultMapping.TryAddMapping(DeviceGroups.DefaultDeviceGroup, "Default");
+                if (Mappings.TryGetMapping("Default", out MappingModel? defaultMapping) && defaultMapping != null)
+                {
+                    defaultMapping.TryAddMapping(DeviceGroups.DefaultDeviceGroup, "Default");
+                }
             }
 
             // Ensure at least one mapping is active.
@@ -265,7 +256,7 @@ namespace userspace_backend
             MappingModel? mappingToApply = Mappings.GetMappingToSetActive();
             if (mappingToApply == null)
             {
-                logger.LogWarning("Apply: no active mapping to apply");
+                logger.LogError("Apply: Invalid state, no active mapping to apply");
                 WriteSettingsToDisk();
                 return false;
             }
@@ -350,6 +341,8 @@ namespace userspace_backend
             }
         }
 
+        // TODO: These functions can be factored out later
+        // Leave here for test/debug
         protected void WriteSettingsToDisk()
         {
             BackEndLoader.WriteSettingsToDisk(

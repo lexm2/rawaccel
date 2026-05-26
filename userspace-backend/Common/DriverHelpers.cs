@@ -19,12 +19,7 @@ namespace userspace_backend.Common
                 name = model.Name.ModelValue,
                 outputDPI = model.OutputDPI.ModelValue,
                 yxOutputDPIRatio = model.YXRatio.ModelValue,
-                // The model exposes a single acceleration curve, so it must drive
-                // BOTH axes. In by-component (combineMagnitudes == false) mode the
-                // native math indexes Y through argsY; leaving it at the noaccel
-                // default kills vertical acceleration while X still accelerates.
-                // Mirror the curve onto argsY, matching the old grapher's XY lock
-                // (grapher/Models/Options/ApplyOptions.cs SetArgsFromActiveValues).
+
                 argsX = model.Acceleration.MapToDriver(),
                 argsY = model.Acceleration.MapToDriver(),
                 domainXY = new Vec2D

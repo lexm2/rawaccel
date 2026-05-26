@@ -1,0 +1,70 @@
+RawAccel.Contracts/ (new project)
+  - Constants.cs, Enums.cs, RawAccel.Contracts.csproj, RawAccelAccelArgs.cs, RawAccelConfig.cs, RawAccelDeviceConfig.cs,
+  RawAccelDeviceSettings.cs, RawAccelProfile.cs, RawAccelSpeedArgs.cs, Vec2.cs
+  
+  linux/agent/
+  - .gitkeep, agent.cpp, agent.hpp, backend.hpp, bpf_backend.cpp, bpf_backend.hpp, bpf_capability.cpp, bpf_capability.hpp,
+  control_server.cpp, control_server.hpp, hid_descriptor.cpp, hid_descriptor.hpp, json_io.cpp, json_io.hpp,
+  lut_builder.cpp, lut_builder.hpp, main.cpp, win_compat.hpp
+
+  linux/bpf/
+  - .gitkeep, rawaccel.bpf.c, rawaccel_bpf_layout.h, rawaccel_fixedpoint.h
+
+  linux/cli/ (Rust)   
+  - .gitignore, Cargo.lock, Cargo.toml, build.rs, src/client.rs, src/daemon.rs, src/main.rs
+
+  linux/ (other)
+  - CMakeLists.txt, run-dev-agent.sh, packaging/.gitkeep, packaging/rawaccel-agentd.service.in
+
+  linux/tests/
+  - agent_tests.cpp, bpf_backend_tests.cpp, compile_check.cpp, control_server_socket_tests.cpp, control_server_tests.cpp,
+  lut_builder.hpp, main.cpp, win_compat.hpp
+
+  linux/bpf/
+  - .gitkeep, rawaccel.bpf.c, rawaccel_bpf_layout.h, rawaccel_fixedpoint.h
+
+  linux/cli/ (Rust)
+  - .gitignore, Cargo.lock, Cargo.toml, build.rs, src/client.rs, src/daemon.rs, src/main.rs
+
+  linux/ (other)
+  - CMakeLists.txt, run-dev-agent.sh, packaging/.gitkeep, packaging/rawaccel-agentd.service.in
+
+  linux/tests/
+  - agent_tests.cpp, bpf_backend_tests.cpp, compile_check.cpp, control_server_socket_tests.cpp, control_server_tests.cpp,end_to_end_tests.cpp, fixedpoint_tests.cpp, hid_descriptor_tests.cpp, json_roundtrip_tests.cpp, lut_builder_tests.cpp,
+  sequence_tests.cpp, shim_tests.cpp, speed_tests.cpp, synchronous_accel_tests.cpp, test_harness.hpp, test_main.cpp
+
+  linux/tools/
+  - rawaccel-bpf-verify.cpp, rawaccel-hid-probe.cpp
+
+  shim/
+  - ra_curve.cpp, ra_curve.h
+
+  userinterface/
+  - Services/MouseSpeedPollingService.cs
+
+  userspace-backend/Driver/ (new)
+  - IAccelEvaluator.cs, IRawAccelDriver.cs, MouseSpeedSample.cs
+  - Linux/: AgentClient.cs, LinuxAccelEvaluator.cs, LinuxAgentDriver.cs, LinuxSystemDevicesRetriever.cs, ProcInputParser.cs, RaCurveNative.cs
+  - Windows/: ManagedAccelEvaluator.cs, WindowsRawAccelDriver.cs, WindowsSystemDevicesRetriever.cs
+
+  userspace-backend-tests/
+  - IOTests/BackEndLoaderRoundTripTests.cs, ModelTests/WindowsSystemDevicesTests.cs
+
+  Modified (M) - existing files edited
+
+  Top level
+  - .gitignore
+
+  userinterface/
+  - App.axaml.cs, Properties/Resources/Strings.Designer.cs, Properties/Resources/Strings.ja-JP.resx, Properties/Resources/Strings.resx, Services/SettingsService.cs, ViewModels/Controls/EditableBoolViewModel.cs, ViewModels/MainWindowViewModel.cs,
+  ViewModels/Profile/AnisotropyProfileSettingsViewModel.cs, ViewModels/Profile/ProfileChartViewModel.cs, Views/MainWindow.axaml.cs, Views/Profile/AnisotropyProfileSettingsView.axaml, Views/Profile/ProfileChartView.axaml, userinterface.csproj
+
+  userspace-backend/
+  - BackEnd.cs, BackEndComposer.cs, Common/DriverHelpers.cs, Display/Calculations/CurveCalculationHelpers.cs, Display/CurvePreview.cs, IO/ProfileReaderWriter.cs, IO/Serialization/AccelerationJsonConverter.cs, userspace-backend.csproj
+  - Model/AccelDefinitions/: AccelDefinitionModel.cs, AccelerationModel.cs, FormulaAccelModel.cs, LookupTableDefinitionModel.cs, NoAccelDefinitionModel.cs, Formula/{Classic,Jump,Linear,Natural,Power,Synchronous}AccelerationDefinitionModel.cs
+  - Model/EditableSettings/EditableSettingsSelector.cs, Model/ProfileComponents/AnisotropyModel.cs, Model/ProfileModel.cs,Model/SystemDevices.cs
+
+  userspace-backend-tests/
+  - IOTests/{DevicesReaderWriter,MappingReaderWriter,ProfileReaderWriter}Tests.cs, ModelTests/{BackEndApply,SystemDevices}Tests.cs, SerializationTests/AccelerationSerializationTests.cs, userspace-backend-tests.csproj
+
+  Note: this is ...HEAD (committed changes vs the merge-base). You also have one uncommitted modification in your workingtree: linux/agent/bpf_backend.cpp.
