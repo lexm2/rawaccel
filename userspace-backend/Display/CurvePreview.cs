@@ -53,7 +53,7 @@ namespace userspace_backend.Display
 
         private void InitPoints()
         {
-            ICollection<double> speeds = CurveCalculationHelpers.CalculateCurvePointSpeeds();
+            IReadOnlyList<double> speeds = CurveCalculationHelpers.CalculateCurvePointSpeeds();
             
             foreach (double speed in speeds)
             {
