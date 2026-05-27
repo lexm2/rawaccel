@@ -98,8 +98,6 @@ namespace userspace_backend.Model
         [Obsolete("Use XCurvePreview instead")]
         public ICurvePreview CurvePreview => XCurvePreview;
 
-        protected IModelValueValidator<string> NameValidator { get; }
-
         public override DATA.Profile MapToData()
         {
             return new DATA.Profile()

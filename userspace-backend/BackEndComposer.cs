@@ -32,9 +32,9 @@ namespace userspace_backend
             services.AddSingleton<IUserInputParser<int>, IntParser>();
             services.AddSingleton<IUserInputParser<double>, DoubleParser>();
             services.AddSingleton<IUserInputParser<bool>, BoolParser>();
-            services.AddSingleton<IUserInputParser<AccelerationDefinitionType>, AccelerationDefinitionTypeParser>();
-            services.AddSingleton<IUserInputParser<AccelerationFormulaType>, AccelerationFormulaTypeParser>();
-            services.AddSingleton<IUserInputParser<LookupTableType>, LookupTableTypeParser>();
+            services.AddSingleton<IUserInputParser<AccelerationDefinitionType>, EnumParser<AccelerationDefinitionType>>();
+            services.AddSingleton<IUserInputParser<AccelerationFormulaType>, EnumParser<AccelerationFormulaType>>();
+            services.AddSingleton<IUserInputParser<LookupTableType>, EnumParser<LookupTableType>>();
             services.AddSingleton<IUserInputParser<LookupTableData>, LookupTableDataParser>();
 
             #endregion Parsers
@@ -66,15 +66,18 @@ namespace userspace_backend
             AddEditableSetting<double>(services, HiddenModel.LeftRightRatioDIKey, "L/R Ratio", 1);
             AddEditableSetting<double>(services, HiddenModel.UpDownRatioDIKey, "U/D Ratio", 1);
             AddEditableSetting<double>(services, HiddenModel.SpeedCapDIKey, "Speed Cap", 0);
-            AddEditableSetting<double>(services, HiddenModel.OutputSmoothingHalfLifeDIKey, "Output Smoothing Half-Life", 0);
+            AddEditableSetting<double>(services, HiddenModel.OutputSmoothingHalfLifeDIKey, "Output Smoothing Half-Life", 0,
+                validatorFactory: sp => new RangeValidator<double>(min: 0));
 
             #endregion Hidden
 
             #region Coalescion
 
             services.AddTransient<ICoalescionModel, CoalescionModel>();
-            AddEditableSetting<double>(services, CoalescionModel.InputSmoothingHalfLifeDIKey, "Input Smoothing Half-Life", 0);
-            AddEditableSetting<double>(services, CoalescionModel.ScaleSmoothingHalfLifeDIKey, "Scale Smoothing Half-Life", 0);
+            AddEditableSetting<double>(services, CoalescionModel.InputSmoothingHalfLifeDIKey, "Input Smoothing Half-Life", 0,
+                validatorFactory: sp => new RangeValidator<double>(min: 0));
+            AddEditableSetting<double>(services, CoalescionModel.ScaleSmoothingHalfLifeDIKey, "Scale Smoothing Half-Life", 0,
+                validatorFactory: sp => new RangeValidator<double>(min: 0));
 
             #endregion Coalescion
 
@@ -85,7 +88,8 @@ namespace userspace_backend
             AddEditableSetting<double>(services, AnisotropyModel.DomainYDIKey, "Domain Y", 1);
             AddEditableSetting<double>(services, AnisotropyModel.RangeXDIKey, "Range X", 1);
             AddEditableSetting<double>(services, AnisotropyModel.RangeYDIKey, "Range Y", 1);
-            AddEditableSetting<double>(services, AnisotropyModel.LPNormDIKey, "LP Norm", 2);
+            AddEditableSetting<double>(services, AnisotropyModel.LPNormDIKey, "LP Norm", 2,
+                validatorFactory: sp => new RangeValidator<double>(min: 0, minInclusive: false));
             AddEditableSetting<bool>(services, AnisotropyModel.CombineXYComponentsDIKey, "Combine X and Y Components", false,
                 localizationKey: "AnisotropyCombineXY");
 
@@ -250,8 +254,10 @@ namespace userspace_backend
             services.AddTransient<IDeviceModel, DeviceModel>();
             AddEditableSetting<string>(services, DeviceModel.NameDIKey, "Name", "name");
             AddEditableSetting<string>(services, DeviceModel.HardwareIDDIKey, "Hardware ID", "hwid");
-            AddEditableSetting<int>(services, DeviceModel.DPIDIKey, "DPI", 1000);
-            AddEditableSetting<int>(services, DeviceModel.PollRateDIKey, "Polling Rate", 1000);
+            AddEditableSetting<int>(services, DeviceModel.DPIDIKey, "DPI", 1000,
+                validatorFactory: sp => new RangeValidator<int>(min: 1));
+            AddEditableSetting<int>(services, DeviceModel.PollRateDIKey, "Polling Rate", 1000,
+                validatorFactory: sp => new RangeValidator<int>(min: 1));
             AddEditableSetting<bool>(services, DeviceModel.IgnoreDIKey, "Ignore", false);
             AddEditableSetting<string>(services, DeviceModel.DeviceGroupDIKey, "Device Group", "default");
 

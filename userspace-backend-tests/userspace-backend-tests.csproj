@@ -38,16 +38,6 @@
     <Compile Remove="ModelTests\WindowsSystemDevicesTests.cs" />
   </ItemGroup>
 
-  <!--
-    These tests reference UserInputParsers / ModelValueValidators, static helpers
-    removed during the DI refactor.They currently don't compile.
-  -->
-  <ItemGroup>
-    <Compile Remove="ModelTests\EditableSettingsTests.cs" />
-    <Compile Remove="ModelTests\EditableSettingsCollectionTests.cs" />
-    <Compile Remove="ModelTests\EditableSettingsSelectorTests.cs" />
-    <Compile Remove="ModelTests\EditableSettingsListTests.cs" />
-  </ItemGroup>
 
   <ItemGroup>
     <None Update="TestFiles\DevicesReaderWriter\ExpectedOutputs\expectedOverwriteOutput.json">

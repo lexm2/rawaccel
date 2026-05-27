@@ -720,7 +720,7 @@ namespace userinterface.ViewModels.Profile
 
         private void OnYXRatioChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(EditableSetting<double>.CurrentValidatedValue))
+            if (e.PropertyName == nameof(IEditableSettingSpecific<double>.CurrentValidatedValue))
             {
                 CreateSeries();
                 OnPropertyChanged(nameof(Series));
