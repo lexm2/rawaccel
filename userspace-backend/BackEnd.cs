@@ -218,6 +218,7 @@ namespace userspace_backend
 
         protected void EnsureDefaultMappingExists()
         {
+            // Create a Default mapping when none exist at all (fresh install).
             if (Mappings.Mappings.Count == 0)
             {
                 Mappings.TryAddMapping(new DATA.Mapping
@@ -225,11 +226,14 @@ namespace userspace_backend
                     Name = "Default",
                     GroupsToProfiles = new DATA.Mapping.GroupsToProfilesMapping(),
                 });
+            }
 
-                if (Mappings.TryGetMapping("Default", out MappingModel? defaultMapping) && defaultMapping != null)
-                {
-                    defaultMapping.TryAddMapping(DeviceGroups.DefaultDeviceGroup, "Default");
-                }
+            // Self-heal: a Default mapping that exists but lacks the DefaultDeviceGroup
+            // entry (e.g. a stale mappings.json with an empty GroupsToProfiles) must get
+            // one. TryAddMapping is idempotent, so this no-ops when it is already mapped.
+            if (Mappings.TryGetMapping("Default", out MappingModel? defaultMapping) && defaultMapping != null)
+            {
+                defaultMapping.TryAddMapping(DeviceGroups.DefaultDeviceGroup, "Default");
             }
 
             // Ensure at least one mapping is active.
