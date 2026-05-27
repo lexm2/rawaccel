@@ -73,10 +73,10 @@ namespace userspace_backend
         public void Load()
         {
             List<DATA.Device> devicesData = BackEndLoader.LoadDevices().ToList();
-            LoadDevicesFromData(devicesData);
+            Devices.TryMapFromData(devicesData);
 
-            IEnumerable<DATA.Profile> profilesData = BackEndLoader.LoadProfiles();
-            LoadProfilesFromData(profilesData);
+            List<DATA.Profile> profilesData = BackEndLoader.LoadProfiles().ToList();
+            Profiles.TryMapFromData(profilesData);
 
             DATA.MappingSet mappingData = BackEndLoader.LoadMappings();
 
@@ -114,16 +114,6 @@ namespace userspace_backend
                     }
                 }
             }
-        }
-
-        protected void LoadDevicesFromData(IEnumerable<DATA.Device> devicesData)
-        {
-            Devices.TryMapFromData(devicesData);
-        }
-
-        protected void LoadProfilesFromData(IEnumerable<DATA.Profile> profileData)
-        {
-            Profiles.TryMapFromData(profileData);
         }
 
         protected void LoadMappingsFromData(DATA.MappingSet mappingData)
@@ -276,14 +266,21 @@ namespace userspace_backend
             bool driverApplied = false;
             if (config != null)
             {
-                driverApplied = driver.Apply(config);
-                if (driverApplied)
+                try
                 {
-                    logger.LogInformation("Apply: driver.Apply() succeeded");
+                    driverApplied = driver.Apply(config);
+                    if (driverApplied)
+                    {
+                        logger.LogInformation("Apply: driver.Apply() succeeded");
+                    }
+                    else
+                    {
+                        logger.LogError("Apply: driver.Apply() failed");
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    logger.LogError("Apply: driver.Apply() failed");
+                    logger.LogError(ex, "Apply: driver.Apply() threw");
                 }
             }
 
@@ -410,6 +407,11 @@ namespace userspace_backend
                     disable = deviceModel.Ignore.ModelValue,
                     dpi = deviceModel.DPI.ModelValue,
                     pollingRate = deviceModel.PollRate.ModelValue,
+                    // Not yet surfaced in the UI/device model: these are the driver's
+                    // expected defaults for poll-time clamping and extra-info passthrough.
+                    // maximumTime/minimumTime bound the per-packet time delta (ms) the
+                    // driver will trust. Keep in sync with the driver-side defaults if
+                    // they ever become user-configurable.
                     pollTimeLock = false,
                     setExtraInfo = false,
                     maximumTime = 200,

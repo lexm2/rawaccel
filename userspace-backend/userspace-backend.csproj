@@ -31,7 +31,6 @@
 
   <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
     <Compile Remove="Driver\Windows\**\*.cs" />
-    <Compile Remove="DriverConfigActivator.cs" />
   </ItemGroup>
 
 </Project>
