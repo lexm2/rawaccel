@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Runtime.InteropServices;
 using DATA = userspace_backend.Data;
@@ -329,7 +330,9 @@ namespace userspace_backend
                         ? sp.GetRequiredService<IModelValueValidator<T>>()
                         : validatorFactory(sp),
                     autoUpdateFromInterface: autoUpdateFromInterface,
-                    localizationKey: localizationKey!));
+                    localizationKey: localizationKey!,
+                    logger: sp.GetService<ILoggerFactory>()
+                        ?.CreateLogger(EditableSettingV2<T>.LoggerCategoryName)));
         }
 
         // TODO: This reflection-based registration exists only because wrapper.dll

@@ -132,8 +132,6 @@ public partial class App : Application
 
         Services = BackEndComposer.Compose(services);
 
-        EditableSettingLog.Configure(Services.GetRequiredService<ILoggerFactory>());
-
         IBackEnd backEnd = Services.GetRequiredService<IBackEnd>();
         backEnd.Load();
         backEnd.ImportSystemDevices();

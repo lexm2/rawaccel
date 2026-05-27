@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
-using userspace_backend.Logging;
 
 namespace userspace_backend.Model.EditableSettings
 {
@@ -21,13 +21,18 @@ namespace userspace_backend.Model.EditableSettings
 
         public T CurrentValidatedValue => ModelValue;
 
+        public const string LoggerCategoryName = "userspace_backend.EditableSetting";
+
+        private readonly ILogger logger;
+
         public EditableSettingV2(
             string displayName,
             T initialValue,
             IUserInputParser<T> parser,
             IModelValueValidator<T> validator,
             bool autoUpdateFromInterface = false,
-            string localizationKey = null)
+            string localizationKey = null,
+            ILogger? logger = null)
         {
             DisplayName = displayName;
             LocalizationKey = localizationKey;
@@ -37,6 +42,7 @@ namespace userspace_backend.Model.EditableSettings
             UpdateModelValueFromLastKnown();
             SetInterfaceToModel();
             AutoUpdateFromInterface = autoUpdateFromInterface;
+            this.logger = logger ?? NullLogger.Instance;
         }
 
         /// <summary>
@@ -88,7 +94,7 @@ namespace userspace_backend.Model.EditableSettings
 
             if (string.IsNullOrEmpty(InterfaceValue))
             {
-                EditableSettingLog.Logger.LogDebug(
+                logger.LogDebug(
                     "Setting '{Name}' ({Type}) commit skipped: InterfaceValue is empty",
                     DisplayName, typeof(T).Name);
                 return false;
@@ -96,7 +102,7 @@ namespace userspace_backend.Model.EditableSettings
 
             if (!Parser.TryParse(InterfaceValue.Trim(), out T parsedValue))
             {
-                EditableSettingLog.Logger.LogDebug(
+                logger.LogDebug(
                     "Setting '{Name}' ({Type}) commit rejected: parser could not parse '{Value}'",
                     DisplayName, typeof(T).Name, InterfaceValue);
                 return false;
@@ -150,7 +156,7 @@ namespace userspace_backend.Model.EditableSettings
             if (!Validator.Validate(data))
             {
                 editedInterfaceNeedsReset = true;
-                EditableSettingLog.Logger.LogDebug(
+                logger.LogDebug(
                     "Setting '{Name}' ({Type}) rejected direct update: value {Value} failed validation",
                     DisplayName, typeof(T).Name, data);
                 return false;
@@ -159,7 +165,7 @@ namespace userspace_backend.Model.EditableSettings
             T previous = ModelValue;
             UpdateModeValue(data);
             SetInterfaceToModel();
-            EditableSettingLog.Logger.LogDebug(
+            logger.LogDebug(
                 "Setting '{Name}' ({Type}) changed: {Old} -> {New}",
                 DisplayName, typeof(T).Name, previous, data);
             return true;
