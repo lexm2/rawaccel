@@ -1,11 +1,8 @@
 namespace userspace_backend.Driver
 {
-    // Telemetry snapshot of current input speed in chart X-axis units:
-    // normalized in/s (counts/ms at NORMALIZED_DPI = 1000), so a value plots
-    // directly as a vertical line on the acceleration chart.
-    // Combined is the lp-norm / hypot magnitude used when X and Y are combined;
-    // X and Y are the per-axis speeds used when anisotropy runs in separate mode.
-    // All-zero means "no data" (backend idle or telemetry unsupported).
+    // Live input speed reported by the driver/agent, in counts/ms normalized to
+    // 1000 DPI (the same units the curve math consumes). X and Y are per-axis;
+    // Combined is the magnitude the agent computed (not necessarily hypot(X, Y)).
     public readonly record struct MouseSpeedSample(double X, double Y, double Combined)
     {
         public static readonly MouseSpeedSample Zero = new(0, 0, 0);

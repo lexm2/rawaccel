@@ -8,9 +8,6 @@ using RawAccel.Contracts;
 
 namespace userspace_backend.Driver.Linux
 {
-    // IRawAccelDriver over a unix domain socket. Serializes RawAccelConfig
-    // with Newtonsoft (as wrapper.cpp does on Windows) so the wire JSON matches
-    // what the agent's nlohmann::json parser expects.
     public sealed class LinuxAgentDriver : IRawAccelDriver
     {
         private const string EnvSocketPath = "RAWACCEL_SOCKET";

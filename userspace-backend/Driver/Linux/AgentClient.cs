@@ -8,8 +8,6 @@ using System.Threading.Tasks;
 
 namespace userspace_backend.Driver.Linux
 {
-    // Thrown when the agent socket file is missing (daemon not running);
-    // distinct from transport errors so callers can hint "start the daemon".
     public sealed class AgentUnavailableException : Exception
     {
         public AgentUnavailableException(string message) : base(message) { }
@@ -42,8 +40,7 @@ namespace userspace_backend.Driver.Linux
                     $"request frame too large: {requestBytes.Length} > {MaxFrameBytes}");
             }
 
-            // Fast-fail when missing: an AF_UNIX connect to a nonexistent path
-            // otherwise surfaces a misleading EADDRNOTAVAIL.
+            // Fast-fail when missing: an AF_UNIX connect
             if (!File.Exists(socketPath))
             {
                 throw new AgentUnavailableException(

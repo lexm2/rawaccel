@@ -32,7 +32,7 @@ namespace userspace_backend.Display
 
         public void GeneratePoints(Profile profile)
         {
-            IAccelInstance instance = evaluator.CreateInstance(profile);
+            using IAccelInstance instance = evaluator.CreateInstance(profile);
 
             foreach (CurvePoint point in Points)
             {

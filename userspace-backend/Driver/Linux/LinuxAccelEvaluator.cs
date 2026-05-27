@@ -5,11 +5,7 @@ using RawAccel.Contracts;
 
 namespace userspace_backend.Driver.Linux
 {
-    // Curve evaluator backed by the cross-OS C-ABI shim over common/. Runs the
-    // same modifier::modify the agent and Windows driver use, so the preview
-    // matches what HID-BPF applies. The profile is passed as a one-profile
-    // RawAccelConfig JSON (same shape and serializer the apply path uses), so
-    // there is one math path and one JSON contract.
+    // Runs the same modifier::modify the agent and Windows driver use.
     public sealed class LinuxAccelEvaluator : IAccelEvaluator
     {
         private readonly bool shimAvailable;
@@ -41,7 +37,8 @@ namespace userspace_backend.Driver.Linux
 
         public IAccelInstance CreateInstance(RawAccelProfile profile)
         {
-            if (!shimAvailable || profile == null) return IdentityInstance.Instance;
+            if (profile == null) throw new ArgumentNullException(nameof(profile));
+            if (!shimAvailable) return IdentityInstance.Instance;
 
             // wrap the profile in the config shape the agent consumes;
             // device fields use contract defaults (irrelevant to preview)
@@ -62,11 +59,14 @@ namespace userspace_backend.Driver.Linux
             public (double x, double y) Accelerate(
                 double x, double y, double dpiFactor, double timeMs)
                 => (x, y);
+
+            public void Dispose() { }
         }
 
-        private sealed class ShimInstance : IAccelInstance, IDisposable
+        private sealed class ShimInstance : IAccelInstance
         {
             private readonly IntPtr handle;
+            private bool disposed;
 
             public ShimInstance(IntPtr handle)
             {
@@ -84,10 +84,13 @@ namespace userspace_backend.Driver.Linux
 
             public void Dispose()
             {
+                if (disposed) return;
+                disposed = true;
                 if (handle != IntPtr.Zero)
                 {
                     RaCurveNative.Destroy(handle);
                 }
+                GC.SuppressFinalize(this);
             }
 
             ~ShimInstance() => Dispose();
