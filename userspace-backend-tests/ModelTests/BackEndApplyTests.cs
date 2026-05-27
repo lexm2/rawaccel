@@ -364,7 +364,7 @@ namespace userspace_backend_tests.ModelTests
         [TestMethod]
         public void Apply_SingleCurve_PopulatesBothAxes()
         {
-            // Regression: MapProfileModelToDriver used to set only argsX, leaving argsY
+            // Regression: ProfileModel.MapToDriver used to set only argsX, leaving argsY
             // at its noaccel default. With the default by-component anisotropy mode
             // (CombineXYComponents == false) the native math indexes Y through argsY,
             // so vertical acceleration was silently dead while horizontal worked and
