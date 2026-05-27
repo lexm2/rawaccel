@@ -43,8 +43,8 @@ RA_API ra_curve_t* ra_curve_create_from_config_json(const char* config_json);
 RA_API void ra_curve_destroy(ra_curve_t* curve);
 
 // Evaluate the modifier at one sample. Mirrors ManagedAccel.Accelerate /
-// rawaccel::modifier::modify: (x, y) raw counts, dpi_factor = device DPI /
-// NORMALIZED_DPI (1.0 for the device-independent chart), time_ms the time slice
+// rawaccel::modifier::modify: (x, y) raw counts, dpi_factor = NORMALIZED_DPI /
+// device DPI (1.0 for the device-independent chart), time_ms the time slice
 // (1.0 in preview). Result written to out_x/out_y (both must be non-null);
 // null curve passes input through.
 RA_API void ra_curve_modify(const ra_curve_t* curve,

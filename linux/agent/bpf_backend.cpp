@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -438,8 +439,9 @@ SpeedSample BpfBackend::current_speed_sample() const
                         static_cast<std::uint64_t>(now_ts.tv_nsec);
     if (now > best_ts && now - best_ts > STALE_NS) return {};
 
-    // Kernel telemetry is Q16.16 in/s, domain-weighted. Chart X is normalized
-    // in/s, so divide out the domain weight: chart_x = awv_q16 / domain_w_q16.
+    // Kernel telemetry is Q16.16 in/s, each axis weighted by its OWN domain
+    // weight (awv = |comp| * eff_dpi_norm * domain_w). Chart X is normalized
+    // in/s, so each axis divides out its own weight: chart_x = awv_x / domain_w_x.
     const double dw_x = best->domain_w_x_q16 ? static_cast<double>(best->domain_w_x_q16)
                                              : static_cast<double>(RA_Q16_ONE);
     const double dw_y = best->domain_w_y_q16 ? static_cast<double>(best->domain_w_y_q16)
@@ -453,7 +455,11 @@ SpeedSample BpfBackend::current_speed_sample() const
     SpeedSample out;
     out.x = static_cast<double>(best_state.tele_speed_x_q16) / dw_x;
     out.y = static_cast<double>(best_state.tele_speed_y_q16) / dw_y;
-    out.combined = static_cast<double>(best_state.tele_speed_combined_q16) / dw_x;
+    // Combined is the magnitude of the per-axis chart speeds. Deriving it from
+    // the already-unweighted out.x/out.y removes each axis's own domain weight;
+    // dividing the kernel's combined (which mixes domain_w_x and domain_w_y) by
+    // dw_x alone is only correct when the weights are equal (isotropic).
+    out.combined = std::hypot(out.x, out.y);
     return out;
 }
 
