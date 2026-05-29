@@ -6,7 +6,7 @@ namespace userspace_backend.Driver
     // Separate from IRawAccelDriver: preview is pure math, doesn't touch the backend.
     //
     // Windows: wraps wrapper.ManagedAccel.CreateStatelessCopy over the same common/ math.
-    // Linux: P/Invokes a stripped libcommon.so (deferred); identity stub for now.
+    // Linux: P/Invokes the rawaccel_common shim for the same common/ math; identity fallback if absent.
     public interface IAccelEvaluator
     {
         IAccelInstance CreateInstance(RawAccelProfile profile);
