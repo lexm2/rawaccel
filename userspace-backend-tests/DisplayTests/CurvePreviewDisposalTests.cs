@@ -111,10 +111,7 @@ namespace userspace_backend_tests.DisplayTests
         [TestMethod]
         public void AccelInstance_DisposeIsIdempotent()
         {
-            // Guards the ShimInstance double-free guard. With the native shim
-            // present this disposes a real ra_curve handle; without it, the
-            // evaluator returns the identity instance. Either way a second
-            // Dispose() must be a safe no-op (no double native Destroy).
+            // A second Dispose() must be a safe no-op (no double native Destroy).
             var evaluator = new LinuxAccelEvaluator();
             IAccelInstance instance = evaluator.CreateInstance(new RawAccelProfile());
 

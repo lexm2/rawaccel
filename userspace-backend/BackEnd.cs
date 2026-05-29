@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,9 +8,9 @@ using RawAccel.Contracts;
 using userspace_backend.Driver;
 using userspace_backend.Model;
 using DATA = userspace_backend.Data;
-using Profile = RawAccel.Contracts.RawAccelProfile;
-using DeviceSettings = RawAccel.Contracts.RawAccelDeviceSettings;
-using DeviceConfig = RawAccel.Contracts.RawAccelDeviceConfig;
+using RaProfile = RawAccel.Contracts.RawAccelProfile;
+using RaDeviceSettings = RawAccel.Contracts.RawAccelDeviceSettings;
+using RaDeviceConfig = RawAccel.Contracts.RawAccelDeviceConfig;
 
 namespace userspace_backend
 {
@@ -141,15 +141,15 @@ namespace userspace_backend
                 return;
             }
 
-            // When the OS reports connected input devices, skip the placeholder:
-            // ImportSystemDevices will populate real devices instead.
+            // OS reported devices => skip the placeholder; ImportSystemDevices
+            // populates real ones.
             if (Devices.SystemDevices.SystemDevices.Count > 0)
             {
                 return;
             }
 
-            // TODO: This case is very niche, considering just not adding a
-            // default at all to show that something is wrong.
+            // TODO: Niche case -- maybe skip the default entirely to surface
+            // that something is wrong.
             var defaultDevice = ServiceProvider.GetRequiredService<IDeviceModel>();
             defaultDevice.Name.TryUpdateModelDirectly("Default");
             defaultDevice.HardwareID.TryUpdateModelDirectly("DEFAULT_DEVICE_ID");
@@ -228,9 +228,8 @@ namespace userspace_backend
                 });
             }
 
-            // Self-heal: a Default mapping that exists but lacks the DefaultDeviceGroup
-            // entry (e.g. a stale mappings.json with an empty GroupsToProfiles) must get
-            // one. TryAddMapping is idempotent, so this no-ops when it is already mapped.
+            // Self-heal: an existing Default mapping missing the DefaultDeviceGroup
+            // entry (e.g. stale mappings.json) gets one. TryAddMapping is idempotent.
             if (Mappings.TryGetMapping("Default", out MappingModel? defaultMapping) && defaultMapping != null)
             {
                 defaultMapping.TryAddMapping(DeviceGroups.DefaultDeviceGroup, "Default");
@@ -305,7 +304,7 @@ namespace userspace_backend
 
             if (config.profiles != null)
             {
-                foreach (Profile p in config.profiles)
+                foreach (RaProfile p in config.profiles)
                 {
                     logger.LogInformation(
                         "  profile: name={Name} outputDPI={OutputDPI} yxRatio={YxRatio} rotation={Rotation} " +
@@ -318,7 +317,7 @@ namespace userspace_backend
 
             if (config.devices != null)
             {
-                foreach (DeviceSettings d in config.devices)
+                foreach (RaDeviceSettings d in config.devices)
                 {
                     logger.LogInformation(
                         "  device: id={Id} name={Name} profile={Profile} disable={Disable} dpi={Dpi} pollingRate={PollingRate}",
@@ -369,53 +368,52 @@ namespace userspace_backend
 
         protected RawAccelConfig MapToDriverConfig(MappingModel mappingModel)
         {
-            IEnumerable<DeviceSettings> configDevices = MapToDriverDevices(mappingModel);
-            IEnumerable<Profile> configProfiles = MapToDriverProfiles(mappingModel);
+            IEnumerable<RaDeviceSettings> configDevices = MapToDriverDevices(mappingModel);
+            IEnumerable<RaProfile> configProfiles = MapToDriverProfiles(mappingModel);
 
             return new RawAccelConfig
             {
                 version = RawAccelConstants.VersionString,
-                defaultDeviceConfig = new DeviceConfig(),
+                defaultDeviceConfig = new RaDeviceConfig(),
                 profiles = configProfiles.ToList(),
                 devices = configDevices.ToList(),
             };
         }
 
-        protected IEnumerable<DeviceSettings> MapToDriverDevices(MappingModel mapping)
+        protected IEnumerable<RaDeviceSettings> MapToDriverDevices(MappingModel mapping)
         {
             return mapping.IndividualMappings.SelectMany(
                 dg => MapToDriverDevices(dg.DeviceGroup, dg.Profile.Name.ModelValue));
         }
 
-        protected IEnumerable<Profile> MapToDriverProfiles(MappingModel mapping)
+        protected IEnumerable<RaProfile> MapToDriverProfiles(MappingModel mapping)
         {
             IEnumerable<IProfileModel> ProfilesToMap = mapping.IndividualMappings.Select(m => m.Profile).Distinct();
             return ProfilesToMap.Select(p => p.CurrentValidatedDriverProfile);
         }
 
-        protected IEnumerable<DeviceSettings> MapToDriverDevices(string dg, string profileName)
+        protected IEnumerable<RaDeviceSettings> MapToDriverDevices(string dg, string profileName)
         {
             IEnumerable<IDeviceModel> deviceModels = Devices.Elements.Where(d => d.DeviceGroup.ModelValue.Equals(dg));
             return deviceModels.Select(dm => MapToDriverDevice(dm, profileName));
         }
 
-        protected DeviceSettings MapToDriverDevice(IDeviceModel deviceModel, string profileName)
+        protected RaDeviceSettings MapToDriverDevice(IDeviceModel deviceModel, string profileName)
         {
-            return new DeviceSettings()
+            return new RaDeviceSettings()
             {
                 id = deviceModel.HardwareID.ModelValue,
                 name = deviceModel.Name.ModelValue,
                 profile = profileName,
-                config = new DeviceConfig()
+                config = new RaDeviceConfig()
                 {
                     disable = deviceModel.Ignore.ModelValue,
                     dpi = deviceModel.DPI.ModelValue,
                     pollingRate = deviceModel.PollRate.ModelValue,
-                    // Not yet surfaced in the UI/device model: these are the driver's
-                    // expected defaults for poll-time clamping and extra-info passthrough.
-                    // maximumTime/minimumTime bound the per-packet time delta (ms) the
-                    // driver will trust. Keep in sync with the driver-side defaults if
-                    // they ever become user-configurable.
+                    // Driver defaults for poll-time clamping + extra-info passthrough,
+                    // not yet exposed in the UI. maximumTime/minimumTime bound the
+                    // per-packet time delta (ms) the driver trusts. Keep in sync if
+                    // these ever become user-configurable.
                     pollTimeLock = false,
                     setExtraInfo = false,
                     maximumTime = 200,

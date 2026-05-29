@@ -54,8 +54,9 @@ namespace userspace_backend
             services.AddKeyedSingleton<IModelValueValidator<string>, DefaultModelValueValidator<string>>(
                 DefaultModelValueValidator<string>.AllChangeInvalidDIKey);
 
-            services.AddKeyedSingleton<IModelValueValidator<string>, MaxNameLengthValidator>(
-                ProfileModel.NameDIKey);
+            services.AddKeyedSingleton<IModelValueValidator<string>>(
+                ProfileModel.NameDIKey,
+                (sp, key) => new ProfileNameValidator(sp.GetRequiredService<IProfilesModel>()));
 
             #endregion Validators
 
@@ -307,9 +308,8 @@ namespace userspace_backend
             return services.BuildServiceProvider();
         }
 
-        // Registers a keyed EditableSettingV2<T> built from the DI-provided parser and
-        // validator. Collapses the dozens of otherwise-identical registration blocks.
-        // Pass validatorFactory to override the default (type-keyed) validator.
+        // Registers a keyed EditableSettingV2<T> with DI-supplied parser and validator.
+        // Override the type-keyed default validator with validatorFactory.
         private static void AddEditableSetting<T>(
             IServiceCollection services,
             object diKey,
@@ -335,21 +335,23 @@ namespace userspace_backend
                         ?.CreateLogger(EditableSettingV2<T>.LoggerCategoryName)));
         }
 
-        // TODO: This reflection-based registration exists only because wrapper.dll
-        // is .NET Framework 4.7.2 mixed-mode C++/CLI (cannot be loaded
-        // in process by net8.0), and Driver/Windows/*.cs is Compile-Removed on
-        // non-Windows. Once wrapper is migrated to net8.0-windows
-        // (<CLRSupport>NetCore</CLRSupport>), replace this with
-        // compile safe registration and delete RegisterWindowsServicesByReflection
+        // TODO: Reflection because wrapper.dll is .NET Framework 4.7.2 C++/CLI
+        // (net8.0 can't load it in-proc) and Driver/Windows/*.cs is Compile-Removed
+        // off Windows. After wrapper moves to net8.0-windows, reference directly
+        // and delete RegisterWindowsServicesByReflection.
+        //
+        // TODO: While migrating wrapper, namespace its public C++/CLI types
+        // (Profile, AccelArgs, DeviceSettings, DeviceConfig, AccelMode, CapMode,
+        // SpeedArgs) -- they sit in the global namespace, collide with Contracts
+        // on Windows (CS0576), and force the Ra-prefixed aliases. Update consumers
+        // (grapher, writer, wrapper-tests, wrapper-deps, this backend) so the
+        // aliases can revert.
         private static void RegisterPlatformServices(IServiceCollection services)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                // Windows-side impls (WindowsRawAccelDriver, ManagedAccelEvaluator,
-                // WindowsSystemDevicesRetriever) live under Driver/Windows/ and
-                // are excluded from non-Windows builds via csproj. They depend
-                // on wrapper.dll (C++/CLI). Registered via reflection so this
-                // method can compile on Linux where those types do not exist.
+                // Windows impls live under Driver/Windows/ and depend on wrapper.dll;
+                // reflection so this method compiles where those types are absent.
                 RegisterWindowsServicesByReflection(services);
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))

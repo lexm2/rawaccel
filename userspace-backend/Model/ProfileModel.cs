@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -11,8 +11,8 @@ using userspace_backend.Model.AccelDefinitions;
 using userspace_backend.Model.EditableSettings;
 using userspace_backend.Model.ProfileComponents;
 using DATA = userspace_backend.Data;
-using Profile = RawAccel.Contracts.RawAccelProfile;
-using SpeedArgs = RawAccel.Contracts.RawAccelSpeedArgs;
+using RaProfile = RawAccel.Contracts.RawAccelProfile;
+using RaSpeedArgs = RawAccel.Contracts.RawAccelSpeedArgs;
 
 namespace userspace_backend.Model
 {
@@ -37,7 +37,7 @@ namespace userspace_backend.Model
 
         string CurrentNameForDisplay { get; }
 
-        Profile CurrentValidatedDriverProfile { get; }
+        RaProfile CurrentValidatedDriverProfile { get; }
     }
 
     public class ProfileModel : NamedEditableSettingsCollection<DATA.Profile>, IProfileModel
@@ -67,11 +67,11 @@ namespace userspace_backend.Model
             XCurvePreview = xCurvePreview;
             YCurvePreview = yCurvePreview;
 
-            // Name and Output DPI do not need to generate a new curve preview
+            // Name + OutputDPI don't affect the curve preview.
             Name!.PropertyChanged += AnyNonPreviewPropertyChangedEventHandler;
             OutputDPI.PropertyChanged += AnyNonPreviewPropertyChangedEventHandler;
 
-            // The rest of settings should generate a new curve preview
+            // Everything else does.
             YXRatio.PropertyChanged += AnyCurvePreviewPropertyChangedEventHandler;
             Acceleration.AnySettingChanged += AnyCurveSettingCollectionChangedEventHandler;
             Hidden.AnySettingChanged += AnyCurveSettingCollectionChangedEventHandler;
@@ -89,7 +89,7 @@ namespace userspace_backend.Model
 
         public IHiddenModel Hidden { get; set; }
 
-        public Profile CurrentValidatedDriverProfile { get; protected set; }
+        public RaProfile CurrentValidatedDriverProfile { get; protected set; }
 
         public ICurvePreview XCurvePreview { get; protected set; }
 
@@ -110,18 +110,18 @@ namespace userspace_backend.Model
             };
         }
 
-        public Profile MapToDriver()
+        public RaProfile MapToDriver()
         {
-            return new Profile()
+            return new RaProfile()
             {
                 name = Name.ModelValue,
                 outputDPI = OutputDPI.ModelValue,
                 yxOutputDPIRatio = YXRatio.ModelValue,
 
-                // Both axes get the same single UI curve, but argsX and argsY MUST be independent
-                // instances: the native wrapper mutates each axis's data array separately, so sharing
-                // one reference would corrupt it. Do not collapse these two calls into a shared
-                // variable. Pinned by BackEndApplyTests.Apply_SingleCurve_PopulatesBothAxes.
+                // Both axes use the same UI curve, but argsX and argsY MUST be distinct
+                // instances -- the native wrapper mutates each axis's data array in place.
+                // Don't collapse to a shared variable. Pinned by
+                // BackEndApplyTests.Apply_SingleCurve_PopulatesBothAxes.
                 argsX = Acceleration.MapToDriver(),
                 argsY = Acceleration.MapToDriver(),
 
@@ -133,10 +133,10 @@ namespace userspace_backend.Model
                 snap = Hidden.AngleSnappingDegrees.ModelValue,
                 maximumSpeed = Hidden.SpeedCap.ModelValue,
 
-                // The driver supports a speed floor (common/rawaccel-base.hpp), but the UI
-                // deliberately does not expose one; keep it pinned at 0.
+                // Driver supports a speed floor (common/rawaccel-base.hpp); UI doesn't
+                // expose one, keep pinned at 0.
                 minimumSpeed = 0,
-                inputSpeedArgs = new SpeedArgs
+                inputSpeedArgs = new RaSpeedArgs
                 {
                     combineMagnitudes = Acceleration.Anisotropy.CombineXYComponents.ModelValue,
                     lpNorm = Acceleration.Anisotropy.LPNorm.ModelValue,
@@ -168,7 +168,7 @@ namespace userspace_backend.Model
         protected void AnyCurveSettingCollectionChangedEventHandler(object? sender, EventArgs e)
         {
             logger.LogDebug("Curve-setting collection changed: {Sender}", sender?.GetType().Name);
-            // All settings collections currently require curve preview to be re-generated
+            // All settings collections currently force a preview regen.
             RecalculateDriverDataAndCurvePreview();
         }
 
@@ -187,10 +187,8 @@ namespace userspace_backend.Model
         {
             RecalculateDriverData();
 
-            // Generate X curve points (original behavior)
             XCurvePreview.GeneratePoints(CurrentValidatedDriverProfile);
-
-            // Generate Y curve points by multiplying X curve outputs by YX ratio
+            // Y points = X outputs * YX ratio.
             GenerateYCurvePoints();
         }
 

@@ -84,6 +84,19 @@ namespace userspace_backend_tests.ModelTests
             public MouseSpeedSample GetCurrentMouseSpeedSample() => MouseSpeedSample.Zero;
         }
 
+        private sealed class FakeAccelEvaluator : IAccelEvaluator
+        {
+            public IAccelInstance CreateInstance(RawAccelProfile profile) => new IdentityInstance();
+
+            private sealed class IdentityInstance : IAccelInstance
+            {
+                public (double x, double y) Accelerate(
+                    double x, double y, double dpiFactor, double timeMs) => (x, y);
+
+                public void Dispose() { }
+            }
+        }
+
         private static (IBackEnd backEnd, CapturingDriver driver) BuildBackEndWithDefaults(
             IList<ISystemDevice>? systemDevices = null)
         {
@@ -97,6 +110,7 @@ namespace userspace_backend_tests.ModelTests
             var driver = new CapturingDriver();
             services.AddSingleton<IRawAccelDriver>(driver);
 
+            services.AddSingleton<IAccelEvaluator>(new FakeAccelEvaluator());
             var sp = BackEndComposer.Compose(services);
             var backEnd = sp.GetRequiredService<IBackEnd>();
             backEnd.Load();
@@ -131,6 +145,7 @@ namespace userspace_backend_tests.ModelTests
             services.AddSingleton<IBackEndLoader>(new StubBackEndLoader());
             services.AddSingleton<ISystemDevicesRetriever>(new StubSystemDevicesRetriever());
             services.AddSingleton<IRawAccelDriver>(new CapturingDriver());
+            services.AddSingleton<IAccelEvaluator>(new FakeAccelEvaluator());
             var sp = BackEndComposer.Compose(services);
 
             var classicExponent = sp.GetRequiredKeyedService<IEditableSettingSpecific<double>>(
@@ -167,6 +182,39 @@ namespace userspace_backend_tests.ModelTests
         }
 
         [TestMethod]
+        public void RenamingProfileToExistingName_IsRejected_CaseInsensitive()
+        {
+            // ProfileNameValidator enforces uniqueness across profiles. A "Default"
+            // profile already exists after Load.
+            var (backEnd, _) = BuildBackEndWithDefaults();
+            Assert.IsTrue(backEnd.Profiles.TryAddNewDefaultProfile("Gaming"));
+            Assert.IsTrue(backEnd.Profiles.TryGetProfile("Gaming", out IProfileModel? gaming) && gaming != null);
+
+            Assert.IsFalse(gaming!.Name.TryUpdateModelDirectly("Default"), "Renaming onto an existing name must be rejected.");
+            Assert.IsFalse(gaming.Name.TryUpdateModelDirectly("default"), "Uniqueness must be case-insensitive.");
+            Assert.AreEqual("Gaming", gaming.Name.ModelValue);
+
+            // A genuinely unique name is still accepted.
+            Assert.IsTrue(gaming.Name.TryUpdateModelDirectly("Gaming2"));
+            Assert.AreEqual("Gaming2", gaming.Name.ModelValue);
+        }
+
+        [TestMethod]
+        public void ProfileName_EmptyOrTooLong_IsRejected()
+        {
+            // ProfileNameValidator keeps the prior non-empty / max-length guard.
+            var (backEnd, _) = BuildBackEndWithDefaults();
+            Assert.IsTrue(backEnd.Profiles.TryAddNewDefaultProfile("Gaming"));
+            Assert.IsTrue(backEnd.Profiles.TryGetProfile("Gaming", out IProfileModel? gaming) && gaming != null);
+
+            Assert.IsFalse(gaming!.Name.TryUpdateModelDirectly(string.Empty), "Empty name must be rejected.");
+            Assert.IsFalse(
+                gaming.Name.TryUpdateModelDirectly(new string('a', MaxNameLengthValidator.MaxNameLength + 1)),
+                "Name longer than the max length must be rejected.");
+            Assert.AreEqual("Gaming", gaming.Name.ModelValue);
+        }
+
+        [TestMethod]
         public void EnsureDefaultMapping_FreshInstall_CreatesMappingWithDefaultEntry()
         {
             var (backEnd, driver) = BuildBackEndWithDefaults();
@@ -195,6 +243,7 @@ namespace userspace_backend_tests.ModelTests
             services.AddSingleton<ISystemDevicesRetriever>(new StubSystemDevicesRetriever());
             var driver = new CapturingDriver();
             services.AddSingleton<IRawAccelDriver>(driver);
+            services.AddSingleton<IAccelEvaluator>(new FakeAccelEvaluator());
             var sp = BackEndComposer.Compose(services);
             var backEnd = sp.GetRequiredService<IBackEnd>();
             backEnd.Load();
@@ -354,6 +403,7 @@ namespace userspace_backend_tests.ModelTests
             services.AddSingleton<ISystemDevicesRetriever>(retrieverStub);
             services.AddSingleton<IRawAccelDriver>(new CapturingDriver());
 
+            services.AddSingleton<IAccelEvaluator>(new FakeAccelEvaluator());
             var sp = BackEndComposer.Compose(services);
             var backEnd = sp.GetRequiredService<IBackEnd>();
             backEnd.Load();
@@ -410,7 +460,7 @@ namespace userspace_backend_tests.ModelTests
                 "Classic.Acceleration update should succeed.");
 
             var cfg = ApplyAndCapture(backEnd, driver);
-            Assert.AreEqual(AccelMode.classic, cfg.profiles[0].argsX.mode,
+            Assert.AreEqual(RawAccel.Contracts.AccelMode.classic, cfg.profiles[0].argsX.mode,
                 "DriverConfig should reflect the chosen Classic formula.");
             Assert.AreEqual(expectedAcceleration, cfg.profiles[0].argsX.acceleration,
                 "DriverConfig should reflect the tweaked Classic.Acceleration coefficient. " +
@@ -454,7 +504,7 @@ namespace userspace_backend_tests.ModelTests
             var cfg = ApplyAndCapture(backEnd, driver);
 
             // X is the historically-tested axis; Y is the regression guard.
-            Assert.AreEqual(AccelMode.classic, cfg.profiles[0].argsY.mode,
+            Assert.AreEqual(RawAccel.Contracts.AccelMode.classic, cfg.profiles[0].argsY.mode,
                 "argsY must carry the same accel mode as argsX, or vertical acceleration " +
                 "is dead in by-component mode (argsY left at the noaccel default).");
             Assert.AreEqual(expectedAcceleration, cfg.profiles[0].argsY.acceleration,
@@ -508,6 +558,7 @@ namespace userspace_backend_tests.ModelTests
             services.AddSingleton<IBackEndLoader>(new ClassicAccelLoader());
             services.AddSingleton<ISystemDevicesRetriever>(new StubSystemDevicesRetriever());
             services.AddSingleton<IRawAccelDriver>(new CapturingDriver());
+            services.AddSingleton<IAccelEvaluator>(new FakeAccelEvaluator());
             var sp = BackEndComposer.Compose(services);
             var backEnd = sp.GetRequiredService<IBackEnd>();
 
@@ -579,6 +630,7 @@ namespace userspace_backend_tests.ModelTests
             services.AddSingleton<IBackEndLoader>(new ZeroAnisotropyLoader());
             services.AddSingleton<ISystemDevicesRetriever>(new StubSystemDevicesRetriever());
             services.AddSingleton<IRawAccelDriver>(new CapturingDriver());
+            services.AddSingleton<IAccelEvaluator>(new FakeAccelEvaluator());
             var sp = BackEndComposer.Compose(services);
             var backEnd = sp.GetRequiredService<IBackEnd>();
 
@@ -690,6 +742,7 @@ namespace userspace_backend_tests.ModelTests
             services.AddSingleton<IBackEndLoader>(new CustomDeviceGroupLoader());
             services.AddSingleton<ISystemDevicesRetriever>(new StubSystemDevicesRetriever());
             services.AddSingleton<IRawAccelDriver>(new CapturingDriver());
+            services.AddSingleton<IAccelEvaluator>(new FakeAccelEvaluator());
             var sp = BackEndComposer.Compose(services);
             var backEnd = sp.GetRequiredService<IBackEnd>();
 
