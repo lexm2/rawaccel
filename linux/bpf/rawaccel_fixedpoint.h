@@ -86,7 +86,8 @@ RA_FP_NOINLINE __s32 ra_exp2_q16(__s32 x_q16)
 {
     if (x_q16 >= 0) return RA_Q16_ONE;            /* domain is x <= 0; 2^0 = 1 */
     __s32 ipart = x_q16 >> RA_Q16_SHIFT;          /* floor toward -inf, <= -1 */
-    __s32 frac  = x_q16 - (ipart << RA_Q16_SHIFT);/* in [0, RA_Q16_ONE) */
+    /* shift unsigned (ipart < 0) to dodge UB; same two's-complement result. */
+    __s32 frac  = x_q16 - (__s32)((__u32)ipart << RA_Q16_SHIFT); /* [0, RA_Q16_ONE) */
     int shift = -ipart;                            /* >= 1 right shifts */
     if (shift >= 32) return 0;
 
@@ -330,9 +331,10 @@ RA_FP_INLINE void ra_pre_lut(const struct ra_bpf_config *cfg,
                              __u32 *ix, __s32 *fx, __u32 *iy, __s32 *fy,
                              __u8 *single_scale, __s32 *weight_q16)
 {
-    /* Working vector: raw counts in Q16.16, transformed toward the LUT stage. */
-    __s64 inx = (__s64)dx << RA_Q16_SHIFT;
-    __s64 iny = (__s64)dy << RA_Q16_SHIFT;
+    /* Working vector: raw counts in Q16.16, transformed toward the LUT stage.
+     * Shift unsigned (dx/dy may be < 0) to dodge UB; result is unchanged. */
+    __s64 inx = (__s64)((__u64)(__s64)dx << RA_Q16_SHIFT);
+    __s64 iny = (__s64)((__u64)(__s64)dy << RA_Q16_SHIFT);
 
     /* Fold per-packet dt into velocity normalization: eff_dpi_norm =
      * dpi_norm / dt_ms gives in/s at the real polling interval (a 1 ms packet
@@ -517,8 +519,9 @@ RA_FP_INLINE int ra_emit_q16(struct ra_bpf_state *st,
     __s32 ix = (__s32)(out_x_q16 >> RA_Q16_SHIFT);
     __s32 iy = (__s32)(out_y_q16 >> RA_Q16_SHIFT);
 
-    __s32 new_carry_x = (__s32)(out_x_q16 - ((__s64)ix << RA_Q16_SHIFT));
-    __s32 new_carry_y = (__s32)(out_y_q16 - ((__s64)iy << RA_Q16_SHIFT));
+    /* shift unsigned (ix/iy may be < 0) to dodge UB; same result. */
+    __s32 new_carry_x = (__s32)(out_x_q16 - (__s64)((__u64)(__s64)ix << RA_Q16_SHIFT));
+    __s32 new_carry_y = (__s32)(out_y_q16 - (__s64)((__u64)(__s64)iy << RA_Q16_SHIFT));
 
     if (new_carry_x >= RA_Q16_ONE || new_carry_x <= -RA_Q16_ONE) return 0;
     if (new_carry_y >= RA_Q16_ONE || new_carry_y <= -RA_Q16_ONE) return 0;
