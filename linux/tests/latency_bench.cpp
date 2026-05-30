@@ -110,18 +110,36 @@ void time_config(const char* what, const Bench& b)
     (void)sink;
 
     std::sort(samples.begin(), samples.end());
-    long mn = samples.front();
-    long mx = samples.back();
-    long p99 = samples[static_cast<size_t>(samples.size() * 0.99)];
+    const size_t n = samples.size();
+    const long mn  = samples.front();
+    const long med = samples[n / 2];
+
+    // Wall-clock timing bills OS preemption (scheduler tick, IRQ, C-state
+    // wakeup) to whichever sample it lands on, so a descheduled call reads
+    // far above its true cost. On a shared (non-isolated) core that noise has
+    // no clean lower bound, so the raw max is meaningless -- it just tracks
+    // the worst preemption seen. We therefore report the compute distribution
+    // by percentile (robust to a sparse preempted tail) and gate on p99.9,
+    // which stays clean as long as far fewer than 0.1% of samples preempt.
+    // The over-cutoff count is disclosed (never silently capped); if it ever
+    // approaches 0.1%, pin/isolate the core (chrt -f / isolcpus) for a true
+    // max instead of trusting these numbers.
+    const long cutoff = std::max(800L, med * 8);
+    size_t preempted = 0;
+    for (size_t i = n; i-- > 0 && samples[i] > cutoff; ) ++preempted;
+
+    const long p99  = samples[static_cast<size_t>(n * 0.99)];
+    const long p999 = samples[static_cast<size_t>(n * 0.999)];
     long long sum = 0;
-    for (long v : samples) sum += v;
-    double mean = static_cast<double>(sum) / samples.size();
+    for (size_t i = 0; i < n - preempted; ++i) sum += samples[i];
+    const double mean = static_cast<double>(sum) / (n - preempted);
 
-    std::printf("    %-28s min=%ldns mean=%.0fns p99=%ldns max=%ldns\n",
-                what, mn, mean, p99, mx);
+    std::printf("    %-28s min=%ldns mean=%.0fns p99=%ldns p99.9=%ldns"
+                " (compute; %zu/%d preempted >%ldns excluded)\n",
+                what, mn, mean, p99, p999, preempted, ITERS, cutoff);
 
-    // p99 is the gate (robust to scheduling outliers); max is informational.
-    RA_CHECK(p99 < BUDGET_NS);
+    // Gate on the compute p99.9 (preempted tail is past p99.9, so it is clean).
+    RA_CHECK(p999 < BUDGET_NS);
 }
 
 // Configure accel_x as a given curve mode with sensible defaults; mirror to Y.
