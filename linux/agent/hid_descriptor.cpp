@@ -187,6 +187,7 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
             if (i + 1 >= len) return std::nullopt;
             std::size_t dsize = descriptor[i++];
             ++i;  // long tag
+            if (i + dsize > len) return std::nullopt;  // match short-item bound
             i += dsize;
             continue;
         }
@@ -205,9 +206,13 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
                 case TAG_USAGE_PAGE:   g.usage_page  = uv; break;
                 case TAG_LOG_MIN:      g.logical_min = sv; break;
                 case TAG_LOG_MAX:      g.logical_max = sv; break;
-                case TAG_REPORT_SIZE:  g.report_size = uv; break;
+                case TAG_REPORT_SIZE:
+                    if (uv == 0) return std::nullopt;  // spec-invalid (HID 1.11 6.2.2.7)
+                    g.report_size = uv;
+                    break;
                 case TAG_REPORT_COUNT: g.report_count = uv; break;
                 case TAG_REPORT_ID:
+                    if (uv > 0xFF) return std::nullopt;  // Report ID is one byte (HID 1.11 6.2.2.7)
                     g.has_report_id = true;
                     g.report_id = static_cast<std::uint8_t>(uv);
                     // new Report ID resets the cursor; commit the prior report
@@ -267,7 +272,8 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
                 }
                 flush_locals();
             } else if (btag == TAG_END_COLLEC) {
-                if (!coll_usages.empty()) coll_usages.pop_back();
+                if (coll_usages.empty()) return std::nullopt;  // unmatched End Collection
+                coll_usages.pop_back();
                 if (coll_usages.empty()) {
                     commit_report_if_complete();
                     if (in_mouse_collection && result) return result;

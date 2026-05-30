@@ -166,6 +166,43 @@ RA_TEST("HID: empty descriptor returns no mouse")
     RA_CHECK(!md.has_value());
 }
 
+RA_TEST("HID: Report Size 0 is rejected (spec-invalid)")
+{
+    std::vector<std::uint8_t> bad = {
+        0x05, 0x01, 0x09, 0x02, 0xA1, 0x01,
+        0x75, 0x00,        // Report Size (0)
+        0xC0,
+    };
+    auto md = parse_mouse_descriptor(bad.data(), bad.size());
+    RA_CHECK(!md.has_value());
+}
+
+RA_TEST("HID: Report ID > 255 is rejected")
+{
+    std::vector<std::uint8_t> bad = {
+        0x05, 0x01, 0x09, 0x02, 0xA1, 0x01,
+        0x86, 0x00, 0x01,  // Report ID (256) via 2-byte item
+        0xC0,
+    };
+    auto md = parse_mouse_descriptor(bad.data(), bad.size());
+    RA_CHECK(!md.has_value());
+}
+
+RA_TEST("HID: unmatched End Collection is rejected")
+{
+    std::vector<std::uint8_t> bad = { 0xC0 };  // End Collection, empty stack
+    auto md = parse_mouse_descriptor(bad.data(), bad.size());
+    RA_CHECK(!md.has_value());
+}
+
+RA_TEST("HID: truncated long item does not over-read")
+{
+    // long-item prefix claiming 5 data bytes in a 4-byte buffer
+    std::vector<std::uint8_t> bad = { 0xFE, 0x05, 0x00, 0xAA };
+    auto md = parse_mouse_descriptor(bad.data(), bad.size());
+    RA_CHECK(!md.has_value());
+}
+
 RA_TEST("HID: descriptor without X/Y is rejected")
 {
     // buttons-only, no relative axes
