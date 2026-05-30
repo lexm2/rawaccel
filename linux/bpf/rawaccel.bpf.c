@@ -1,9 +1,7 @@
-/* Rawaccel HID-BPF kernel program. Rewrites the dx/dy bytes of a mouse HID
- * report via a Q16.16 LUT + fixed-point velocity EMA. One BPF object per
- * device, each bound to a single hid_id. Pipeline mirrors driver.cpp in
- * fixed point: parse -> |v| -> EMA -> LUT scale -> carry-accumulate -> write.
- * Verifier defenses: no floats, no dynamic loops, masked LUT indices,
- * bounded hid_bpf_get_data() reads. */
+/* Rawaccel HID-BPF program: rewrites a mouse report's dx/dy via a Q16.16 LUT +
+ * velocity EMA. One BPF object per device (one hid_id). Mirrors driver.cpp:
+ * parse -> |v| -> EMA -> LUT scale -> carry-accumulate -> write.
+ * Verifier-safe: no floats, no dynamic loops, masked indices, bounded reads. */
 
 /* clang -target bpf defines __BPF__; the layout header tests it. */
 #include "vmlinux.h"
@@ -51,9 +49,7 @@ struct {
 
 /* ---- Helpers -------------------------------------------------------- */
 
-/* Scalar math lives in rawaccel_fixedpoint.h (shared with host tests). The
- * one kernel-specific piece is the LUT fetch: a BPF array-map pointer can't
- * stride, so each entry is looked up on its own and fed to ra_q16_lerp. */
+/* Kernel-specific LUT fetch: array-map pointers can't stride, so each entry is looked up alone. */
 static __always_inline __s32 q16_lookup(void *map, __u32 idx)
 {
     __u32 k = idx & (RA_LUT_SIZE - 1);
@@ -113,9 +109,7 @@ int BPF_PROG(rawaccel_hid_device_event,
     if (cfg->dx_byte_size != 1 && cfg->dx_byte_size != 2) return 0;
     if (cfg->dy_byte_size != 1 && cfg->dy_byte_size != 2) return 0;
 
-    /* Mask offsets for the verifier, then tighten to VIEW-2: it tracks
-     * dx_off independently of dx_byte_size, so reserve room for two bytes
-     * always. Harmless: X/Y sit near the report start, never at byte 15. */
+    /* Mask offsets for the verifier, then check <= VIEW-2 to always reserve 2 bytes. */
     __u32 dx_off = cfg->dx_byte_offset & (RA_REPORT_VIEW_BYTES - 1);
     __u32 dy_off = cfg->dy_byte_offset & (RA_REPORT_VIEW_BYTES - 1);
     if (dx_off > RA_REPORT_VIEW_BYTES - 2) return 0;
@@ -128,16 +122,13 @@ int BPF_PROG(rawaccel_hid_device_event,
         return 0;  /* idle packet, no carry update */
     }
 
-    /* read_signed's 8/16-bit branches leave dx/dy with different ranges that
-     * never merge, doubling verifier state downstream. The barrier collapses
-     * them to one scalar (dx/dy are only scaled, never pointer offsets). */
+    /* Collapse read_signed's 8/16-bit range branches to one scalar so verifier state
+     * doesn't double downstream (dx/dy are only scaled, never pointer offsets). */
     RA_BARRIER(dx);
     RA_BARRIER(dy);
 
-    /* Per-packet dt. last_ts_ns == 0 (first packet after a config load) ->
-     * assume 1 ms to match the host oracle. Elapsed ns capped at 1 s (keeps
-     * << 16 in u64), then clamped to [time_min, time_max]; a long idle gap
-     * collapses to time_max. Computed here since bpf_ktime_get_ns is kernel-only. */
+    /* Per-packet dt: first packet (last_ts_ns == 0) assumes 1 ms. Elapsed ns capped at 1 s
+     * (keeps <<16 in u64), then clamped to [time_min, time_max]. */
     __u64 now = bpf_ktime_get_ns();
     __s32 dt_ms_q16;
     if (st->last_ts_ns == 0) {

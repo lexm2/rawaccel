@@ -24,7 +24,7 @@
 
 /* modifier_flags / speed_processor_flags mirror (common/rawaccel.hpp). */
 #define RA_F_APPLY_ROTATE        (1u << 0)
-#define RA_F_COMPUTE_REF_ANGLE   (1u << 1)
+/* bit 1 reserved (was RA_F_COMPUTE_REF_ANGLE) */
 #define RA_F_APPLY_SNAP          (1u << 2)
 #define RA_F_CLAMP_SPEED         (1u << 3)
 #define RA_F_APPLY_DIR_WEIGHT    (1u << 4)
@@ -155,10 +155,9 @@ struct ra_bpf_state {
     struct ra_linear_ema_state out_x;
     struct ra_linear_ema_state out_y;
 
-    /* Telemetry: the exact speed (Q16.16 in/s, domain-weighted) the kernel just
-     * handed to the LUT index, written every packet for the agent's stats RPC.
-     * Separate mode -> tele_speed_x/y per axis; whole mode -> tele_speed_combined
-     * is the aggregate S. Read-only for the kernel; never feeds the math. */
+    /* Telemetry: speed (Q16.16 in/s, domain-weighted) handed to the LUT index, all three
+     * written every packet for the agent's stats RPC. Separate: x/y per axis, combined =
+     * magnitude; whole: combined = aggregate S, x/y = pre-combine components. Read-only here. */
     __s32 tele_speed_x_q16;
     __s32 tele_speed_y_q16;
     __s32 tele_speed_combined_q16;
