@@ -196,6 +196,27 @@ bool BpfBackend::attach_node(const std::string& sysname)
     std::uint32_t hid_id = 0;
     if (!parse_hid_device_name(dev_sysname, hid_id)) return false;
 
+    const DeviceId id = hash_id(dev_sysname);
+    if (!attach_prepared(id, hid_id, sysname, *dec.layout)) return false;
+
+    DeviceInfo info;
+    info.id = id;
+    info.sysname = sysname;
+    info.device_sysname = dev_sysname;
+    auto ident = read_hidraw_identity(syspath);
+    info.vendor_id = ident.vendor_id;
+    info.product_id = ident.product_id;
+    info.name = std::move(ident.name);
+
+    // notify outside attach_prepared's lock: on_device_added re-enters bind_device
+    if (listener_) listener_->on_device_added(info);
+    return true;
+}
+
+bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
+                                 const std::string& sysname,
+                                 const BpfMouseLayout& layout)
+{
     bpf_object* obj = bpf_object__open_file(object_path_.c_str(), nullptr);
     if (!obj) {
         std::fprintf(stderr, "bpf backend: open_file(%s) errno=%d\n",
@@ -233,10 +254,10 @@ bool BpfBackend::attach_node(const std::string& sysname)
     }
 
     auto slot = std::make_unique<Slot>();
-    slot->id = hash_id(dev_sysname);
+    slot->id = id;
     slot->sysname = sysname;
     slot->hid_id = hid_id;
-    slot->layout = *dec.layout;
+    slot->layout = layout;
     slot->obj = obj;
     slot->ops_map = ops;
     slot->config_map = bpf_object__find_map_by_name(obj, "ra_config");
@@ -282,22 +303,8 @@ bool BpfBackend::attach_node(const std::string& sysname)
         // keep the unattached slot so health()/apply can report the failure
     }
 
-    DeviceInfo info;
-    info.id = slot->id;
-    info.sysname = sysname;
-    info.device_sysname = dev_sysname;
-    auto ident = read_hidraw_identity(syspath);
-    info.vendor_id = ident.vendor_id;
-    info.product_id = ident.product_id;
-    info.name = std::move(ident.name);
-
-    {
-        std::lock_guard<std::mutex> lock(mu_);
-        slots_.emplace(slot->id, std::move(slot));
-    }
-
-    // notify outside the lock: on_device_added re-enters bind_device (takes mu_)
-    if (listener_) listener_->on_device_added(info);
+    std::lock_guard<std::mutex> lock(mu_);
+    slots_.emplace(slot->id, std::move(slot));
     return true;
 }
 

@@ -295,6 +295,31 @@ void device_settings_from(const json& j, ra::device_settings& out)
 
 } // anonymous
 
+json modifier_settings_to_jobject(const ra::modifier_settings& m)
+{
+    return profile_to(m.prof);
+}
+
+ra::modifier_settings modifier_settings_from_jobject(const json& j)
+{
+    ra::modifier_settings mod{};
+    profile_from(j, mod.prof);
+    ra::init_data(mod);
+    return mod;
+}
+
+json device_config_to_jobject(const ra::device_config& c)
+{
+    return device_config_to(c);
+}
+
+ra::device_config device_config_from_jobject(const json& j)
+{
+    ra::device_config c{};
+    device_config_from(j, c);
+    return c;
+}
+
 json to_jobject(const driver_config& cfg)
 {
     // banners first to match the Windows AddFirst order (byte-stable cross-OS diffs)

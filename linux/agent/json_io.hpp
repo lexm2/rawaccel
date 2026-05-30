@@ -115,6 +115,14 @@ driver_config from_jobject(const nlohmann::json& j);
 std::string to_string(const driver_config& cfg, int indent = 2);
 driver_config from_string(const std::string& s);
 
+// Per-type (de)serializers for the backend's resolved-config FFI. `j` is a
+// single profile / device_config object (the same shape used inside profiles[]
+// and config). modifier_settings_from runs init_data, matching from_jobject.
+nlohmann::json modifier_settings_to_jobject(const ra::modifier_settings& m);
+ra::modifier_settings modifier_settings_from_jobject(const nlohmann::json& j);
+nlohmann::json device_config_to_jobject(const ra::device_config& c);
+ra::device_config device_config_from_jobject(const nlohmann::json& j);
+
 const char* accel_mode_to_string(ra::accel_mode m);
 ra::accel_mode accel_mode_from_string(const std::string& s);
 const char* cap_mode_to_string(ra::cap_mode m);

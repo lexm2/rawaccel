@@ -38,6 +38,12 @@ public:
     bool start();
     void stop();
 
+    // libbpf attach core for a device whose descriptor was already parsed into
+    // `layout` (id pre-hashed by the caller). No listener notify; the C ABI and
+    // attach_node share this. Eager identity populate -> attach_struct_ops.
+    bool attach_prepared(DeviceId id, std::uint32_t hid_id,
+                         const std::string& sysname, const BpfMouseLayout& layout);
+
     void bind_device(DeviceId,
                      const ra::modifier_settings&,
                      const ra::device_config&) override;

@@ -127,6 +127,24 @@ target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io PkgConfig::LIBBPF)
 add_executable(rawaccel-agentd agent/main.cpp)
 target_link_libraries(rawaccel-agentd PRIVATE rawaccel_agent)
 
+# C ABI over the HID-BPF data plane + curve math for the Rust daemon. The Rust
+# side (linux/cli workspace) owns discovery/parsing/state and calls down here;
+# libbpf and the LUT/curve math stay in C++. Default visibility during the
+# migration so the C++ classes stay linkable; tighten to the C ABI at cutover.
+add_library(ra_backend SHARED
+    agent/ra_backend.cpp
+    agent/bpf_backend.cpp
+    agent/bpf_capability.cpp
+    agent/lut_builder.cpp
+    agent/hid_descriptor.cpp
+)
+target_include_directories(ra_backend PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/agent
+    ${CMAKE_CURRENT_SOURCE_DIR}/bpf
+)
+target_link_libraries(ra_backend PUBLIC rawaccel_json_io PkgConfig::LIBBPF)
+install(TARGETS ra_backend LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
 # Install rules. `cmake --install build` deploys the daemon, the curve
 # shim, and a systemd unit pointing at the installed binary path. The
 # systemd unit dir is queried via pkg-config when present, otherwise
