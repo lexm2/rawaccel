@@ -1,7 +1,6 @@
-//! Cross-language contract test: the resolved-settings JSON built by the Rust
-//! config layer must be parseable by the real C++ json_io via the FFI. Uses an
-//! unknown device id so ra_backend_bind only exercises the JSON parse path
-//! (bind_device no-ops on a missing slot) - no libbpf/kernel interaction.
+//! Contract test: Rust-built resolved JSON must parse in the real C++ json_io
+//! via FFI. Unknown device id exercises only the parse path (bind no-ops on a
+//! missing slot), so no libbpf/kernel interaction.
 
 use std::ffi::CString;
 
@@ -18,8 +17,7 @@ fn cpp_backend_accepts_rust_resolved_json() {
     let path = CString::new("/nonexistent.bpf.o").unwrap();
     let rj_c = CString::new(rj).unwrap();
 
-    // SAFETY: create/bind/destroy on a single handle; bind with an unknown id
-    // only parses the JSON then no-ops (no slot), so no kernel calls happen.
+    // SAFETY: create/bind/destroy on one handle; unknown id only parses JSON, no kernel calls.
     unsafe {
         let be = sys::ra_backend_create(path.as_ptr());
         assert!(!be.is_null(), "ra_backend_create returned null");
@@ -31,9 +29,8 @@ fn cpp_backend_accepts_rust_resolved_json() {
 
 #[test]
 fn cpp_backend_accepts_embedded_defaults() {
-    // The deactivate path and the no-matching-profile fallback hand the backend
-    // the embedded canonical defaults; json_io uses .at() everywhere, so these
-    // must be field-complete or bind would throw -> rc != 0.
+    // deactivate / no-match fallback feed the backend embedded defaults; json_io's
+    // .at() requires them field-complete or bind throws -> rc != 0.
     let rj = config::resolved_json(&config::default_profile(), &config::default_device_config());
 
     let path = CString::new("/nonexistent.bpf.o").unwrap();

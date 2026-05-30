@@ -1,7 +1,6 @@
-// Lock the daemon version to the same common/rawaccel-version.h the C++ side
-// uses (mirrors cli/build.rs). Also embed the rpath to libra_backend.so so the
-// dev binary finds it without LD_LIBRARY_PATH (rustc-link-arg-bins applies to
-// this package's binaries; the dependency build script can't emit it).
+// Lock the daemon version to common/rawaccel-version.h (mirrors cli/build.rs).
+// Also embed the rpath to libra_backend.so so the dev binary finds it without
+// LD_LIBRARY_PATH (the dependency build script can't emit rustc-link-arg-bins).
 
 use std::env;
 use std::fs;
@@ -44,7 +43,7 @@ fn main() {
 fn extract_min_version(src: &str) -> (i32, i32, i32) {
     let line = src
         .lines()
-        .find(|l| l.contains("min_driver_version"))
+        .find(|l| l.contains("min_driver_version") && l.contains('{'))
         .unwrap_or_else(|| panic!("missing min_driver_version in rawaccel-version.h"));
     let braces = line
         .split_once('{')
@@ -61,16 +60,17 @@ fn extract_min_version(src: &str) -> (i32, i32, i32) {
     }
 }
 
+// Match on the name token, not a fixed-space needle, so tabs/aligned spaces still parse.
 fn extract_int(src: &str, name: &str) -> i32 {
-    let needle = format!("#define {name} ");
     let line = src
         .lines()
-        .find(|l| l.trim_start().starts_with(&needle))
+        .find(|l| {
+            let mut t = l.split_whitespace();
+            t.next() == Some("#define") && t.next() == Some(name)
+        })
         .unwrap_or_else(|| panic!("missing #define {name} in rawaccel-version.h"));
-    line.trim_start()
-        .trim_start_matches(&needle)
-        .split_whitespace()
-        .next()
+    line.split_whitespace()
+        .nth(2)
         .and_then(|s| s.parse().ok())
         .unwrap_or_else(|| panic!("could not parse int for {name}"))
 }

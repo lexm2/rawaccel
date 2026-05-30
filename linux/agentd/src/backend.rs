@@ -124,9 +124,12 @@ pub fn probe_capability() -> ProbeResult {
 }
 
 fn cstr_to_string(buf: &[std::os::raw::c_char]) -> String {
-    // SAFETY: the C side always NUL-terminates these fixed buffers.
-    let bytes = unsafe { CStr::from_ptr(buf.as_ptr()) };
-    bytes.to_string_lossy().into_owned()
+    // SAFETY: reinterpret the fixed buffer as bytes; the scan is bounded by buf.len().
+    let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len()) };
+    match CStr::from_bytes_until_nul(bytes) {
+        Ok(c) => c.to_string_lossy().into_owned(),
+        Err(_) => String::from_utf8_lossy(bytes).into_owned(),
+    }
 }
 
 /// Owns a `ra_backend_t*`; destroyed on drop. Drives the C++ HID-BPF data plane.
@@ -174,8 +177,7 @@ impl Backend for FfiBackend {
     fn bind_device(&mut self, id: u64, profile: &Value, config: &Value) {
         let rj = config::resolved_json(profile, config);
         let Ok(rj_c) = CString::new(rj) else { return };
-        // SAFETY: valid handle; rj_c outlives the call. -1 (unknown id / parse /
-        // map-write) is non-fatal here; health() surfaces a dead data plane.
+        // SAFETY: valid handle; rj_c outlives the call. -1 is non-fatal here; health() surfaces a dead data plane.
         unsafe { sys::ra_backend_bind(self.raw, id, rj_c.as_ptr()) };
     }
 

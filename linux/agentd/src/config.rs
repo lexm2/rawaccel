@@ -8,9 +8,7 @@
 use anyhow::{anyhow, Context, Result};
 use serde_json::{Map, Value};
 
-/// Canonical default profile (noaccel) and device_config, generated from the C++
-/// json_io serializer (`ra-config-dump`) so they are guaranteed `.at()`-complete
-/// when the backend reparses them. Used as the resolve fallback and on deactivate.
+/// Canonical default profile (noaccel) + device_config from the C++ serializer (`ra-config-dump`), `.at()`-complete; used as resolve fallback and on deactivate.
 pub const DEFAULT_PROFILE_JSON: &str = include_str!("../assets/default_profile.json");
 pub const DEFAULT_DEVICE_CONFIG_JSON: &str = include_str!("../assets/default_device_config.json");
 
@@ -131,9 +129,7 @@ impl DriverConfig {
         })
     }
 
-    /// Empty/default config: no profiles or devices, embedded default
-    /// device_config. Mirrors a default-constructed C++ `driver_config` and is
-    /// the active state before the first apply and after a deactivate.
+    /// Empty config (no profiles/devices, embedded default device_config); mirrors a default C++ `driver_config`, the active state pre-first-apply and post-deactivate.
     pub fn empty() -> Self {
         let default_device_config = default_device_config();
         let mut m = Map::new();

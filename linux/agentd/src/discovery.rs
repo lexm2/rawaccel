@@ -59,13 +59,17 @@ fn resolve_device_sysname(syspath: &Path) -> Option<String> {
         .map(|s| s.to_string_lossy().into_owned())
 }
 
-/// Read `<syspath>/device/report_descriptor` (capped). None if empty/too large.
-fn read_descriptor(syspath: &Path) -> Option<Vec<u8>> {
-    let bytes = std::fs::read(syspath.join("device/report_descriptor")).ok()?;
-    if bytes.is_empty() || bytes.len() > MAX_DESCRIPTOR {
-        return None;
+/// Read `<syspath>/device/report_descriptor` (capped); Err carries a distinct skip reason.
+fn read_descriptor(syspath: &Path) -> Result<Vec<u8>, &'static str> {
+    let bytes = std::fs::read(syspath.join("device/report_descriptor"))
+        .map_err(|_| "cannot read report descriptor")?;
+    if bytes.is_empty() {
+        return Err("empty report descriptor");
     }
-    Some(bytes)
+    if bytes.len() > MAX_DESCRIPTOR {
+        return Err("report descriptor exceeds MAX_DESCRIPTOR");
+    }
+    Ok(bytes)
 }
 
 /// Parse the `HID_NAME=` line of `<syspath>/device/uevent`.
@@ -131,8 +135,12 @@ fn discover_in<B: Backend>(agent: &mut Agent<B>, root: &Path) -> usize {
 
 fn try_attach<B: Backend>(agent: &mut Agent<B>, root: &Path, node: &HidrawNode) -> bool {
     let syspath = root.join(&node.sysname);
-    let Some(desc) = read_descriptor(&syspath) else {
-        return false;
+    let desc = match read_descriptor(&syspath) {
+        Ok(d) => d,
+        Err(reason) => {
+            eprintln!("rawaccel: skipping {}: {reason}", node.sysname);
+            return false;
+        }
     };
     let Some(md) = hid::parse_mouse_descriptor(&desc) else {
         return false;
@@ -182,13 +190,14 @@ fn probe_in(root: &Path) -> Vec<ProbeEntry> {
         .into_iter()
         .map(|node| {
             let syspath = root.join(&node.sysname);
-            let decision = match read_descriptor(&syspath)
-                .and_then(|d| hid::parse_mouse_descriptor(&d))
-            {
-                None => Err("no mouse X/Y in report descriptor".to_string()),
-                Some(md) => match hid::validate_for_bpf(&md) {
-                    BpfDecision::Accept(l) => Ok(l),
-                    BpfDecision::Reject(r) => Err(r),
+            let decision = match read_descriptor(&syspath) {
+                Err(reason) => Err(reason.to_string()),
+                Ok(d) => match hid::parse_mouse_descriptor(&d) {
+                    None => Err("no mouse X/Y in report descriptor".to_string()),
+                    Some(md) => match hid::validate_for_bpf(&md) {
+                        BpfDecision::Accept(l) => Ok(l),
+                        BpfDecision::Reject(r) => Err(r),
+                    },
                 },
             };
             ProbeEntry {

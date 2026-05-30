@@ -18,8 +18,7 @@ use crate::agent::{Agent, VersionStatus};
 use crate::backend::Backend;
 use crate::config::DriverConfig;
 
-/// 64 KiB: above any real driver_config, below the JSON parser stack-OOM risk.
-/// Matches the C++ server (the CLI client tolerates a larger ceiling).
+/// 64 KiB: above any real driver_config, below JSON parser stack-OOM. Matches the C++ server.
 pub const MAX_FRAME_BYTES: u32 = 64 * 1024;
 
 fn read_exact_or_none(stream: &mut UnixStream, buf: &mut [u8]) -> bool {
@@ -102,8 +101,7 @@ pub fn dispatch<B: Backend>(agent: &mut Agent<B>, request_json: &str, now: Insta
                 Ok(c) => c,
                 Err(e) => return error_response(&format!("apply: invalid config: {e}")),
             };
-            // Fail loudly when devices exist but none attached: the write would
-            // no-op and the apply would otherwise report a false success.
+            // Fail loudly when devices exist but none attached, else apply reports false success.
             if let Some(err) = agent.data_plane_failure() {
                 return error_response(&format!("apply: {err}"));
             }
@@ -186,8 +184,7 @@ impl<B: Backend> ControlServer<B> {
             Err(_) => {}
         }
 
-        // umask 0177 around bind() (widen to 0660 after chown) closes the
-        // bind()/chmod() race where a peer could connect with world-write perms.
+        // umask 0177 around bind() (widened to 0660 after chown) closes the bind()/chmod() world-write race.
         // SAFETY: umask is process-global but we restore it immediately.
         let prev_umask = unsafe { libc::umask(0o177) };
         let bind_result = UnixListener::bind(&self.socket_path);
@@ -230,7 +227,7 @@ impl<B: Backend> ControlServer<B> {
             if !poll_readable(listener_fd, poll_interval) {
                 continue;
             }
-            // Take ownership of the listener briefly to accept without holding &self.
+            // Re-borrow the listener here so handle_client can take &mut self below.
             let accepted = self.listener.as_ref().unwrap().accept();
             match accepted {
                 Ok((stream, _)) => {
@@ -264,6 +261,10 @@ impl<B: Backend> ControlServer<B> {
         // one request per connection (CLI opens a fresh socket per command)
         stream
             .set_read_timeout(Some(Duration::from_secs(5)))
+            .ok();
+        // write timeout too: a peer that never reads must not wedge the single-threaded loop
+        stream
+            .set_write_timeout(Some(Duration::from_secs(5)))
             .ok();
         let Some(req) = read_frame(&mut stream) else {
             return;

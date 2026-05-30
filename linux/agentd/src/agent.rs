@@ -61,8 +61,7 @@ pub struct Agent<B: Backend> {
     backend: B,
     active: DriverConfig,
     has_active: bool,
-    pending: Option<DriverConfig>,
-    pending_at: Option<Instant>,
+    pending: Option<(DriverConfig, Instant)>,
     last_apply_unix_ms: i64,
     known_devices: HashMap<u64, DeviceInfo>,
 }
@@ -74,7 +73,6 @@ impl<B: Backend> Agent<B> {
             active: DriverConfig::empty(),
             has_active: false,
             pending: None,
-            pending_at: None,
             last_apply_unix_ms: 0,
             known_devices: HashMap::new(),
         }
@@ -113,38 +111,35 @@ impl<B: Backend> Agent<B> {
 
     /// Stage a config; calls within WRITE_DELAY collapse to the latest, tick() commits.
     pub fn schedule_apply(&mut self, cfg: DriverConfig, now: Instant) {
-        self.pending = Some(cfg);
-        self.pending_at = Some(now + WRITE_DELAY);
+        self.pending = Some((cfg, now + WRITE_DELAY));
     }
 
     /// Commit a pending apply once its deadline passes; rebinds known devices.
     /// Returns true if it fired.
     pub fn tick(&mut self, now: Instant) -> bool {
-        match (self.pending_at, &self.pending) {
-            (Some(at), Some(_)) if now >= at => {}
+        match &self.pending {
+            Some((_, at)) if now >= *at => {}
             _ => return false,
         }
-        let cfg = self.pending.take().unwrap();
-        self.pending_at = None;
+        let (cfg, _) = self.pending.take().unwrap();
         self.apply(cfg);
+        self.last_apply_unix_ms = unix_now_ms();
         self.rebind_all();
         true
     }
 
-    /// Reset to the embedded default (noaccel) immediately, bypassing WRITE_DELAY.
-    /// Preserves the has_active_config quirk: the agent stays "active" with a
-    /// default config rather than reporting no config.
+    /// Reset to embedded default (noaccel) now, bypassing WRITE_DELAY; stays "active" with a default config rather than reporting none.
     pub fn deactivate(&mut self) {
         self.pending = None;
-        self.pending_at = None;
         self.apply(DriverConfig::empty());
+        self.last_apply_unix_ms = unix_now_ms();
         self.rebind_all();
     }
 
+    /// Sets active state only; the apply timestamp is stamped by tick/deactivate, not by startup load (matches the C++ port).
     fn apply(&mut self, cfg: DriverConfig) {
         self.active = cfg;
         self.has_active = true;
-        self.last_apply_unix_ms = unix_now_ms();
     }
 
     fn rebind_all(&mut self) {
@@ -167,8 +162,8 @@ impl<B: Backend> Agent<B> {
     }
 
     pub fn status(&self, now: Instant) -> Status {
-        let until_apply_ms = match self.pending_at {
-            Some(at) if now < at => (at - now).as_millis() as i64,
+        let until_apply_ms = match &self.pending {
+            Some((_, at)) if now < *at => (*at - now).as_millis() as i64,
             _ => 0,
         };
         Status {
@@ -264,8 +259,7 @@ impl<B: Backend> Agent<B> {
                     profile = p.value.clone();
                 }
             }
-            // dev.config is Null when absent; verbatim can't synthesize a default
-            // device_config, so fall back to default_device_config in that case.
+            // dev.config Null when absent: fall back to default_device_config (can't synthesize one).
             let config = if dev.config.is_object() {
                 dev.config.clone()
             } else {

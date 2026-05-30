@@ -1,13 +1,9 @@
-//! HID report-descriptor parser scoped to the BPF backend's needs: the relative
-//! X/Y fields of an Input report. A faithful safe-Rust port of the C++
-//! hid_descriptor.cpp. `validate_for_bpf` enforces a conservative shape
-//! (byte-aligned, 8/16-bit signed, in a Mouse/Pointer collection); else skipped.
-//!
-//! Every descriptor byte is read through `slice::get`, so malformed/truncated
-//! input returns `None` instead of risking an out-of-bounds read.
+//! HID report-descriptor parser for the BPF backend's needs: relative X/Y Input
+//! fields. Safe-Rust port of C++ hid_descriptor.cpp; `validate_for_bpf` enforces
+//! a conservative shape (byte-aligned, 8/16-bit signed, Mouse/Pointer collection).
+//! Every byte is read via `slice::get`, so malformed input returns `None`, not OOB.
 
-// Hard caps: descriptors are untrusted; reject anything that explodes memory or
-// wraps arithmetic. Real mice fit well under all of these.
+// Hard caps: untrusted descriptors; reject anything that explodes memory or wraps arithmetic.
 const MAX_REPORT_SIZE: u32 = 64;
 const MAX_REPORT_COUNT: u32 = 1024;
 const MAX_REPORT_BITS: u32 = 1 << 16; // 8 KiB per report
@@ -191,7 +187,8 @@ pub fn parse_mouse_descriptor(desc: &[u8]) -> Option<MouseDescriptor> {
     let mut usage_max_set = false;
 
     let mut coll_usages: Vec<u32> = Vec::new();
-    let mut in_mouse_collection = false;
+    // Depth (coll_usages.len()) at which we entered a mouse/pointer collection; None when outside one.
+    let mut mouse_depth: Option<usize> = None;
     let mut rep = PerReport::default();
     let mut result: Option<MouseDescriptor> = None;
 
@@ -312,27 +309,33 @@ pub fn parse_mouse_descriptor(desc: &[u8]) -> Option<MouseDescriptor> {
             if btag == TAG_COLLECTION {
                 let coll_usage = usages.first().copied().unwrap_or(0);
                 coll_usages.push(coll_usage);
-                if g.usage_page == UP_GENERIC_DESKTOP
+                // Record only the outermost mouse/pointer collection's depth.
+                if mouse_depth.is_none()
+                    && g.usage_page == UP_GENERIC_DESKTOP
                     && (coll_usage == USAGE_MOUSE || coll_usage == USAGE_POINTER)
                 {
-                    in_mouse_collection = true;
+                    mouse_depth = Some(coll_usages.len());
                 }
                 flush_locals!();
             } else if btag == TAG_END_COLLEC {
                 coll_usages.pop()?; // None on unmatched End Collection
+                // Clear once we pop out of the collection that set the flag.
+                if matches!(mouse_depth, Some(d) if coll_usages.len() < d) {
+                    mouse_depth = None;
+                }
                 if coll_usages.is_empty() {
                     commit_if_complete(&rep, &mut result);
-                    if in_mouse_collection && result.is_some() {
+                    // result is only ever set from captures made inside a mouse collection.
+                    if result.is_some() {
                         return result;
                     }
-                    in_mouse_collection = false;
                 }
                 flush_locals!();
             } else if btag == TAG_INPUT {
                 if g.report_size > MAX_REPORT_SIZE || g.report_count > MAX_REPORT_COUNT {
                     return None;
                 }
-                if in_mouse_collection {
+                if mouse_depth.is_some() {
                     if !process_input(&g, &usages, flags, &mut rep) {
                         return None;
                     }

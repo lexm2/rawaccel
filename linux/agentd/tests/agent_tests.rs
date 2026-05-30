@@ -1,6 +1,5 @@
-//! Port of linux/tests/agent_tests.cpp: the agent state machine + RPC dispatch,
-//! exercised against a NoopBackend. Verbatim model, so resolve assertions check
-//! the bound profile/config JSON values rather than native struct fields.
+//! Port of linux/tests/agent_tests.cpp: agent state machine + RPC dispatch over
+//! a NoopBackend. Resolve assertions check bound profile/config JSON, not native structs.
 
 mod common;
 use common::*;
