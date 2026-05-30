@@ -25,12 +25,13 @@ std::string wchar_to_utf8(const wchar_t* s, std::size_t cap)
             out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
             out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
         }
-        else {
+        else if (cp <= 0x10FFFF) {
             out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
             out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
             out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
             out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
         }
+        // Above U+10FFFF is not valid Unicode; skip rather than emit garbage.
     }
     return out;
 }
@@ -151,10 +152,13 @@ json accel_args_to(const ra::accel_args& a)
     j[key::CAP]               = vec2_to(a.cap);
     j[key::CAP_MODE]          = cap_mode_to_string(a.cap_mode);
 
-    // emit LUT data only for lookup mode, only the first `length` entries
+    // LUT data only for lookup mode, first `length` entries (clamped like accel_args_from)
     json data_arr = json::array();
     if (a.mode == ra::accel_mode::lookup) {
-        for (int i = 0; i < a.length; ++i) {
+        int n = a.length < 0 ? 0
+              : (a.length > static_cast<int>(ra::LUT_RAW_DATA_CAPACITY)
+                     ? static_cast<int>(ra::LUT_RAW_DATA_CAPACITY) : a.length);
+        for (int i = 0; i < n; ++i) {
             data_arr.push_back(a.data[i]);
         }
     }
@@ -181,7 +185,7 @@ void accel_args_from(const json& j, ra::accel_args& out)
     out.cap              = vec2_from(j.at(key::CAP));
     out.cap_mode         = cap_mode_from_string(j.at(key::CAP_MODE).get<std::string>());
 
-    // array size sets `length`; zero-pad the tail for a constant binary layout
+    // array size sets `length`; zero-pad tail for constant binary layout
     const auto& data_arr = j.at(key::DATA);
     const int n = static_cast<int>(data_arr.size());
     if (n > static_cast<int>(ra::LUT_RAW_DATA_CAPACITY)) {
@@ -252,8 +256,7 @@ void profile_from(const json& j, ra::profile& out)
 
 json device_config_to(const ra::device_config& c)
 {
-    // emit optional fields only when non-default (matches C# ShouldSerialize, byte-stable diffs)
-    json j;
+    json j; // optional fields only when non-default (matches C# ShouldSerialize)
     j[key::DISABLE]        = c.disable;
     if (c.set_extra_info) j[key::SET_EXTRA_INFO] = c.set_extra_info;
     j[key::POLL_TIME_LOCK] = c.poll_time_lock;
@@ -322,8 +325,7 @@ ra::device_config device_config_from_jobject(const json& j)
 
 json to_jobject(const driver_config& cfg)
 {
-    // banners first to match the Windows AddFirst order (byte-stable cross-OS diffs)
-    json j;
+    json j; // banners first to match Windows AddFirst order
     j[key::ACCEL_MODES_BANNER] = ACCEL_MODES_JOINED;
     j[key::CAP_MODES_BANNER]   = CAP_MODES_JOINED;
     j[key::VERSION]            = cfg.version;

@@ -146,11 +146,6 @@ BpfBackend::~BpfBackend()
     stop();
 }
 
-void BpfBackend::set_listener(DeviceListener& listener)
-{
-    listener_ = &listener;
-}
-
 bool BpfBackend::start()
 {
     // Fail-open: zero matches still succeeds (hotplug later); rejects pass through.
@@ -197,20 +192,7 @@ bool BpfBackend::attach_node(const std::string& sysname)
     if (!parse_hid_device_name(dev_sysname, hid_id)) return false;
 
     const DeviceId id = hash_id(dev_sysname);
-    if (!attach_prepared(id, hid_id, sysname, *dec.layout)) return false;
-
-    DeviceInfo info;
-    info.id = id;
-    info.sysname = sysname;
-    info.device_sysname = dev_sysname;
-    auto ident = read_hidraw_identity(syspath);
-    info.vendor_id = ident.vendor_id;
-    info.product_id = ident.product_id;
-    info.name = std::move(ident.name);
-
-    // notify outside attach_prepared's lock: on_device_added re-enters bind_device
-    if (listener_) listener_->on_device_added(info);
-    return true;
+    return attach_prepared(id, hid_id, sysname, *dec.layout);
 }
 
 bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
@@ -224,8 +206,8 @@ bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
         return false;
     }
 
-    // hid_id must be patched before load() (else attach gives EINVAL);
-    // set_initial_value() refuses partial writes, so write the field directly.
+    // hid_id must be patched before load() (else attach EINVAL); write directly
+    // since set_initial_value() refuses partial writes.
     bpf_map* ops = bpf_object__find_map_by_name(obj, "rawaccel_ops");
     if (!ops) {
         bpf_object__close(obj);
@@ -280,8 +262,7 @@ bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
         unsigned(slot->layout.dy_byte_offset),
         unsigned(slot->layout.dy_byte_size));
 
-    // Eager attach with an identity config: device is live before any apply,
-    // and attach failures surface here.
+    // Eager attach with identity config so the device is live before any apply.
     if (!populate_maps(*slot, ra::modifier_settings{}, ra::device_config{})) {
         std::fprintf(stderr, "bpf backend: identity populate failed for %s\n",
                      sysname.c_str());
@@ -304,7 +285,15 @@ bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
     }
 
     std::lock_guard<std::mutex> lock(mu_);
-    slots_.emplace(slot->id, std::move(slot));
+    // Replace any stale slot for this id (re-attach without unbind) so its
+    // link+object are torn down instead of leaked by a silent emplace no-op.
+    auto existing = slots_.find(slot->id);
+    if (existing != slots_.end()) {
+        detach_slot(*existing->second);
+        existing->second = std::move(slot);
+    } else {
+        slots_.emplace(slot->id, std::move(slot));
+    }
     return true;
 }
 
@@ -325,7 +314,7 @@ bool BpfBackend::populate_maps(Slot& slot,
     // raw curve -> lut_x/lut_y; weighting, output-DPI, HID layout -> config
     ra_bpf_config cfg = to_bpf_config(lut, slot.layout);
 
-    // Cache what current_speed_sample needs to convert the kernel's telemetry.
+    // Cache for current_speed_sample telemetry conversion.
     slot.domain_w_x_q16 = cfg.domain_w_x_q16;
     slot.domain_w_y_q16 = cfg.domain_w_y_q16;
 
@@ -350,6 +339,12 @@ bool BpfBackend::populate_maps(Slot& slot,
         }
     }
     return true;
+}
+
+BpfBackend::Slot::~Slot()
+{
+    if (link) bpf_link__destroy(link);
+    if (obj) bpf_object__close(obj);
 }
 
 void BpfBackend::detach_slot(Slot& slot)
@@ -419,14 +414,12 @@ DataPlaneHealth BpfBackend::health() const
 
 SpeedSample BpfBackend::current_speed_sample() const
 {
-    // No packet within this window -> mouse stopped, GUI lines fade out.
-    // Above any inter-packet gap at >=125 Hz, still responsive.
+    // No packet within this window -> idle; above any >=125 Hz gap so responsive.
     constexpr std::uint64_t STALE_NS = 150ull * 1000 * 1000;  // 150 ms
 
     std::lock_guard<std::mutex> lock(mu_);
 
-    // Most-recently-active device wins: a multi-mouse setup reports the one the
-    // user is actually moving.
+    // Most-recently-active device wins (multi-mouse: the one being moved).
     const Slot* best = nullptr;
     ra_bpf_state best_state{};
     std::uint64_t best_ts = 0;
@@ -449,25 +442,23 @@ SpeedSample BpfBackend::current_speed_sample() const
 
     // last_ts_ns is bpf_ktime_get_ns() == CLOCK_MONOTONIC, so compare against it.
     struct timespec now_ts{};
-    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+    if (clock_gettime(CLOCK_MONOTONIC, &now_ts) != 0) return {};
     std::uint64_t now = static_cast<std::uint64_t>(now_ts.tv_sec) * 1000000000ull +
                         static_cast<std::uint64_t>(now_ts.tv_nsec);
     if (now > best_ts && now - best_ts > STALE_NS) return {};
 
-    // Kernel telemetry is Q16.16 in/s weighted by each axis's own domain
-    // weight; chart wants normalized in/s, so divide it back out.
+    // Telemetry is Q16.16 in/s weighted by each axis's domain weight; divide it
+    // back out for normalized in/s.
     const double dw_x = best->domain_w_x_q16 ? static_cast<double>(best->domain_w_x_q16)
                                              : static_cast<double>(RA_Q16_ONE);
     const double dw_y = best->domain_w_y_q16 ? static_cast<double>(best->domain_w_y_q16)
                                              : static_cast<double>(RA_Q16_ONE);
 
-    // Report distinct per-axis speeds (kernel writes awv_x/awv_y separately in
-    // every mode) plus the combined; the GUI picks. Never force x == y.
+    // Per-axis speeds plus combined; the GUI picks. Never force x == y.
     SpeedSample out;
     out.x = static_cast<double>(best_state.tele_speed_x_q16) / dw_x;
     out.y = static_cast<double>(best_state.tele_speed_y_q16) / dw_y;
-    // Combined = magnitude of the unweighted per-axis speeds (the kernel's own
-    // combined mixes both domain weights, only correct when isotropic).
+    // Combined from unweighted per-axis (kernel's own mixes both domain weights).
     out.combined = std::hypot(out.x, out.y);
     return out;
 }

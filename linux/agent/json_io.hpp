@@ -1,8 +1,7 @@
 #pragma once
 
-// Native C++ port of wrapper/wrapper.cpp's JSON layer. Field names are the
-// cross-OS settings.json contract: do NOT rename a key without changing the
-// matching JsonProperty on Windows.
+// Native C++ port of wrapper/wrapper.cpp's JSON layer. Key names are the cross-OS
+// settings.json contract: do NOT rename a key without changing the Windows JsonProperty.
 
 #include "rawaccel.hpp"
 #include "rawaccel-version.h"
@@ -115,9 +114,8 @@ driver_config from_jobject(const nlohmann::json& j);
 std::string to_string(const driver_config& cfg, int indent = 2);
 driver_config from_string(const std::string& s);
 
-// Per-type (de)serializers for the backend's resolved-config FFI. `j` is a
-// single profile / device_config object (the same shape used inside profiles[]
-// and config). modifier_settings_from runs init_data, matching from_jobject.
+// Per-type (de)serializers for the backend's resolved-config FFI. `j` is a single
+// profile / device_config object. modifier_settings_from runs init_data like from_jobject.
 nlohmann::json modifier_settings_to_jobject(const ra::modifier_settings& m);
 ra::modifier_settings modifier_settings_from_jobject(const nlohmann::json& j);
 nlohmann::json device_config_to_jobject(const ra::device_config& c);

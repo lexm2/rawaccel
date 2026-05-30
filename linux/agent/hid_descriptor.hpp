@@ -1,8 +1,7 @@
 #pragma once
 
-// HID report-descriptor parser scoped to the BPF backend's needs: the relative
-// X/Y fields of an Input report. validate_for_bpf enforces a conservative shape
-// (byte-aligned, 8/16-bit signed, in a Mouse/Pointer collection); else skipped.
+// HID report-descriptor parser for the BPF backend: finds relative X/Y Input fields.
+// validate_for_bpf enforces a conservative shape (byte-aligned, 8/16-bit signed).
 
 #include <cstddef>
 #include <cstdint>

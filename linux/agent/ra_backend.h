@@ -1,11 +1,9 @@
 #ifndef RA_BACKEND_H
 #define RA_BACKEND_H
 
-// C ABI over the HID-BPF data plane + curve math. The Rust daemon owns
-// discovery, parsing, state, and the control socket; it calls down here for the
-// libbpf attach/bind lifecycle and the LUT/curve math (which stay in C++). All
-// calls are Rust -> C++; the backend never calls back. Strings are UTF-8, NUL
-// terminated; out-params are written only on success unless noted.
+// C ABI over the HID-BPF data plane + curve math. Rust calls down here for the
+// libbpf attach/bind lifecycle and LUT/curve math; never called back. Strings
+// are UTF-8 NUL-terminated; out-params written only on success unless noted.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -14,8 +12,7 @@
 extern "C" {
 #endif
 
-// Mirrors rawaccel_agent::BpfMouseLayout (5 x u8); the one struct that crosses
-// the boundary. The kernel ra_bpf_config / ra_bpf_state never cross.
+// Mirrors rawaccel_agent::BpfMouseLayout (5 x u8); the only struct crossing the boundary.
 typedef struct {
     uint8_t report_id;       // 0 when no report ID byte is used
     uint8_t dx_byte_offset;
@@ -37,22 +34,20 @@ int ra_probe_capability(ra_probe_result* out);
 
 typedef struct ra_backend ra_backend_t;
 
-// `bpf_object_path` is the rawaccel.bpf.o to load per device. Never null-returns
-// on bad path here (open happens at attach); returns null only on OOM.
+// `bpf_object_path` is the rawaccel.bpf.o loaded per device (open at attach);
+// returns null only on OOM, not on bad path.
 ra_backend_t* ra_backend_create(const char* bpf_object_path);
 void          ra_backend_destroy(ra_backend_t*);
 
-// Open/patch hid_id/load/find-maps/identity-populate/attach_struct_ops for one
-// device. `id` is the caller's stable device id (hashed Rust-side). Returns 0
-// on success (slot live, possibly unattached if struct_ops attach failed; see
-// ra_backend_health), -1 on a hard failure (no slot kept).
+// Open/patch/load/attach the BPF for one device. `id` is the caller's stable
+// device id. Returns 0 on success (slot live, possibly unattached if struct_ops
+// attach failed; see ra_backend_health), -1 on hard failure (no slot kept).
 int  ra_backend_attach(ra_backend_t*, uint64_t id, uint32_t hid_id,
                        const char* sysname, const ra_mouse_layout* layout);
 void ra_backend_detach(ra_backend_t*, uint64_t id);
 
 // Refresh a slot's maps from resolved settings. `resolved_json` is
-// {"profile":{..profile..},"config":{..device_config..}}. Returns 0 on success,
-// -1 on unknown id / parse error / map-write failure.
+// {"profile":{..},"config":{..}}. Returns 0 on success, -1 on unknown id / parse / write failure.
 int  ra_backend_bind(ra_backend_t*, uint64_t id, const char* resolved_json);
 
 typedef struct {

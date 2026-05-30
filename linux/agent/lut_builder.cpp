@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 #include <stdexcept>
 
@@ -21,8 +20,7 @@ std::int32_t q16_round(double d)
     return static_cast<std::int32_t>(std::lround(v));
 }
 
-// RAW per-axis curve f(speed): bare accel_union, no weights/DPI (in-kernel).
-// v=0 sampled at epsilon for the v->0+ limit (gain curves divide by speed).
+// RAW per-axis curve f(speed): bare accel_union, no weights/DPI. v=0 sampled at epsilon (gain curves divide by speed).
 double raw_curve_at(ra::modifier_settings& s, double v, bool along_x)
 {
     double sample = v > 0.0 ? v : 1e-9;
@@ -36,8 +34,7 @@ double raw_curve_at(ra::modifier_settings& s, double v, bool along_x)
 LutBuildResult build_lut(const ra::modifier_settings& settings,
                          const ra::device_config& dev_config)
 {
-    // zero userspace smoothing halflives so the LUT is the raw curve;
-    // the kernel layers its own dt-adaptive smoothers
+    // zero userspace smoothing halflives so the LUT is the raw curve; kernel layers its own smoothers
     ra::modifier_settings stateless = settings;
     stateless.prof.speed_processor_args.input_speed_smooth_halflife = 0;
     stateless.prof.speed_processor_args.scale_smooth_halflife = 0;
@@ -51,19 +48,17 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.lut_max_q16  = static_cast<std::int32_t>(
         static_cast<std::int64_t>(RA_LUT_SIZE) * RA_Q16_ONE - 1);
 
-    // dpi_factor = NORMALIZED_DPI/device_dpi; scales both curve domain
-    // (rawaccel.hpp:320) and output (rawaccel.hpp:412). dpi=0 -> 1.
+    // dpi_factor = NORMALIZED_DPI/device_dpi; scales curve domain and output. dpi=0 -> 1.
     double dpi_factor = 1.0;
     if (dev_config.dpi > 0)
         dpi_factor = ra::NORMALIZED_DPI / static_cast<double>(dev_config.dpi);
     out.dpi_norm_q16 = q16_round(dpi_factor);
 
-    // input_speed_smoother: precompute log2(coeff) for level+trend window/cutoff
-    // pairs (trend halflife fixed at 1.25); RA_F_SMOOTH_INPUT gates.
+    // input_speed_smoother: log2 level+trend coeffs (trend halflife 1.25); RA_F_SMOOTH_INPUT gates.
     {
         double hl = settings.prof.speed_processor_args.input_speed_smooth_halflife;
         if (hl > 0.0) {
-            constexpr double kInputTrendHalflife = 1.25;  // speed_processor::input_trend_halflife
+            constexpr double kInputTrendHalflife = 1.25;
             double win = std::pow(0.5, 1.0 / hl);
             double cut = 1.0 - std::sqrt(1.0 - win);
             double trw = std::pow(0.5, 1.0 / kInputTrendHalflife);
@@ -86,12 +81,11 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         }
     }
 
-    // output_speed_smoother: like input, trend halflife fixed at 0.7;
-    // RA_F_SMOOTH_OUTPUT gates.
+    // output_speed_smoother: like input, trend halflife 0.7; RA_F_SMOOTH_OUTPUT gates.
     {
         double hl = settings.prof.speed_processor_args.output_speed_smooth_halflife;
         if (hl > 0.0) {
-            constexpr double kOutputTrendHalflife = 0.7;  // speed_processor::output_trend_halflife
+            constexpr double kOutputTrendHalflife = 0.7;
             double win = std::pow(0.5, 1.0 / hl);
             double cut = 1.0 - std::sqrt(1.0 - win);
             double trw = std::pow(0.5, 1.0 / kOutputTrendHalflife);
@@ -108,7 +102,7 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.range_w_y_q16      = q16_round(prof.range_weights.y);
     out.domain_w_x_q16     = q16_round(prof.domain_weights.x);
     out.domain_w_y_q16     = q16_round(prof.domain_weights.y);
-    // output_dpi_adj folds dpi_factor (rawaccel.hpp:412) to match Windows output.
+    // output_dpi_adj folds dpi_factor to match Windows output.
     out.output_dpi_adj_q16 = q16_round(prof.output_dpi / ra::NORMALIZED_DPI * dpi_factor);
     out.yx_ratio_q16       = q16_round(prof.yx_output_dpi_ratio);
     out.lr_ratio_q16       = q16_round(prof.lr_output_dpi_ratio);
@@ -120,8 +114,7 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.speed_min_q16 = q16_round(prof.speed_min);
     out.speed_max_q16 = q16_round(prof.speed_max);
 
-    // snap thresholds as tangents (kernel snaps with a multiply, not atan);
-    // q16_round saturates to INT32_MAX if tan -> inf, handled by the s64 cross-product.
+    // snap thresholds as tangents (kernel snaps with a multiply); q16_round saturates to INT32_MAX on tan -> inf.
     {
         const double kPi = 3.14159265358979323846;
         double snap_rad = prof.degrees_snap * kPi / 180.0;
@@ -129,8 +122,7 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         out.snap_hi_tan_q16 = q16_round(std::tan(kPi / 2.0 - snap_rad));
     }
 
-    // dt clamp window (device_config::clamp, default 0.0625..100 ms); kernel
-    // clamps measured dt before folding 1/dt into velocity.
+    // dt clamp window; kernel clamps measured dt before folding 1/dt into velocity.
     out.time_min_q16 = q16_round(dev_config.clamp.min);
     out.time_max_q16 = q16_round(dev_config.clamp.max);
 
@@ -180,8 +172,7 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
 ra_bpf_config to_bpf_config(const LutBuildResult& lut,
                             const BpfMouseLayout& layout)
 {
-    ra_bpf_config cfg{};
-    std::memset(&cfg, 0, sizeof(cfg));
+    ra_bpf_config cfg{};  // value-initialized: all fields zeroed
 
     cfg.report_id      = layout.report_id;
     cfg.dx_byte_offset = layout.dx_byte_offset;

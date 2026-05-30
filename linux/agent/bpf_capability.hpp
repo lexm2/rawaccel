@@ -1,8 +1,6 @@
 #pragma once
 
-// Can this kernel + process host the rawaccel HID-BPF program?
-//   1. kernel >= 6.11 (struct_ops HID-BPF the .bpf.c expects)
-//   2. bpf() callable here (CAP_BPF or root)
+// Can this kernel + process host the rawaccel HID-BPF program? (kernel >= 6.11, bpf() callable via CAP_BPF/root)
 
 #include <string>
 

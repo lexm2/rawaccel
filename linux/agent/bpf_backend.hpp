@@ -1,8 +1,7 @@
 #pragma once
 
-// HID-BPF backend: one rawaccel.bpf.o per hidraw mouse, fills config/LUT maps
-// from bind_device, registers the struct_ops link. Rejected descriptors skip
-// (stay pass-through). See rawaccel-hid-probe for diagnostics.
+// HID-BPF backend: one rawaccel.bpf.o per hidraw mouse, fills config/LUT maps,
+// registers the struct_ops link. Rejected descriptors stay pass-through.
 
 #include "backend.hpp"
 #include "hid_descriptor.hpp"
@@ -30,17 +29,12 @@ public:
     BpfBackend(const BpfBackend&) = delete;
     BpfBackend& operator=(const BpfBackend&) = delete;
 
-    // Set before start() so discoveries reach the agent's profile resolver.
-    void set_listener(DeviceListener& listener);
-
-    // Enumerate hidraw, slot per accepted mouse, eager attach (pass-through),
-    // notify the listener. Attaching at discovery surfaces failures immediately.
+    // Enumerate hidraw and slot+eager-attach each accepted mouse.
     bool start();
     void stop();
 
-    // libbpf attach core for a device whose descriptor was already parsed into
-    // `layout` (id pre-hashed by the caller). No listener notify; the C ABI and
-    // attach_node share this. Eager identity populate -> attach_struct_ops.
+    // libbpf attach core (descriptor already parsed, id pre-hashed). Shared by
+    // the C ABI and attach_node; no listener notify. Identity populate -> attach.
     bool attach_prepared(DeviceId id, std::uint32_t hid_id,
                          const std::string& sysname, const BpfMouseLayout& layout);
 
@@ -54,12 +48,15 @@ public:
     // devices = slots; attached = those with a live struct_ops link
     DataPlaneHealth health() const override;
 
-    // Reads the most-recently-active device's ra_state telemetry and converts it
-    // to chart units (normalized in/s). Zero when idle (stale) or none attached.
+    // Most-recently-active device's ra_state telemetry as normalized in/s.
+    // Zero when idle (stale) or none attached.
     SpeedSample current_speed_sample() const override;
 
 private:
     struct Slot {
+        // Closes link + object if still open, so dropping a Slot never leaks.
+        ~Slot();
+
         DeviceId id = 0;
         std::string sysname;
         std::uint32_t hid_id = 0;
@@ -74,8 +71,7 @@ private:
         bool attached = false;
         std::string attach_error;  // populated when attach failed
 
-        // Cached from the last populate_maps so current_speed_sample can convert
-        // the kernel's Q16.16 telemetry into chart units without re-reading config.
+        // Cached from last populate_maps to dequantize Q16.16 telemetry.
         std::int32_t domain_w_x_q16 = RA_Q16_ONE;
         std::int32_t domain_w_y_q16 = RA_Q16_ONE;
     };
@@ -87,7 +83,6 @@ private:
                        const ra::device_config& c);
 
     std::string object_path_;
-    DeviceListener* listener_ = nullptr;
     mutable std::mutex mu_;
     std::unordered_map<DeviceId, std::unique_ptr<Slot>> slots_;
 };

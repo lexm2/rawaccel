@@ -6,8 +6,7 @@ namespace rawaccel_agent {
 
 namespace {
 
-// Hard caps: descriptors are untrusted, reject anything that explodes memory
-// or wraps arithmetic. Real mice fit well under all of these.
+// Hard caps: descriptors are untrusted; reject anything that explodes memory or wraps.
 constexpr std::uint32_t MAX_REPORT_SIZE   = 64;
 constexpr std::uint32_t MAX_REPORT_COUNT  = 1024;
 constexpr std::uint32_t MAX_REPORT_BITS   = 1u << 16;   // 8 KiB per report.

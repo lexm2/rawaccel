@@ -1,10 +1,8 @@
 #pragma once
 
-// Precompute the per-axis Q16.16 LUTs plus the scalar config the BPF program
-// reads. LUTs hold the RAW curve scale f(speed); weighting, output-DPI, and
-// directional multipliers are config fields applied in-kernel around the LUT
-// (mirrors modifier::modify). Tables are sampled with full-precision common/
-// math and live in the kernel ra_lut_x / ra_lut_y maps.
+// Precompute the per-axis Q16.16 LUTs plus the scalar config the BPF program reads.
+// LUTs hold the RAW curve scale f(speed) sampled with full-precision common/ math;
+// weighting, output-DPI, and directional multipliers are config fields applied in-kernel.
 
 #include "hid_descriptor.hpp"   // BpfMouseLayout
 #include "rawaccel.hpp"
@@ -19,8 +17,7 @@ namespace rawaccel_agent {
 namespace ra = rawaccel;
 
 struct LutBuildResult {
-    // Per-axis RAW curve f(speed), Q16.16. Index i = speed i * lut_step
-    // (kernel maps counts into this space via dpi_norm and domain weight).
+    // Per-axis RAW curve f(speed), Q16.16. Index i = speed i * lut_step.
     std::array<std::int32_t, RA_LUT_SIZE> lut_x{};
     std::array<std::int32_t, RA_LUT_SIZE> lut_y{};
 
@@ -68,13 +65,11 @@ struct LutBuildResult {
     std::uint8_t  dist_mode = 0;
 };
 
-// Sample the per-axis curves at RA_LUT_SIZE buckets into a LutBuildResult.
-// Settings are zeroed stateless internally so the LUT is the curve only.
+// Sample the per-axis curves at RA_LUT_SIZE buckets; smoothing is zeroed so the LUT is the curve only.
 LutBuildResult build_lut(const ra::modifier_settings& settings,
                          const ra::device_config& dev_config);
 
-// Assemble the kernel config from a built LUT + HID layout. Shared by the BPF
-// backend and the host parity tests so the two never drift.
+// Assemble the kernel config from a built LUT + HID layout. Shared by the BPF backend and host parity tests.
 ra_bpf_config to_bpf_config(const LutBuildResult& lut,
                             const BpfMouseLayout& layout);
 

@@ -1,7 +1,6 @@
 #pragma once
 
-// Linux adapter for MSVC-isms in common/. Force-included by the
-// rawaccel_common target so the shared headers build under clang/gcc.
+// Linux adapter for MSVC-isms in common/. Force-included by rawaccel_common so shared headers build under clang/gcc.
 
 #include <math.h>
 
