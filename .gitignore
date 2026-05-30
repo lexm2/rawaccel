@@ -355,3 +355,6 @@ healthchecksdb
 
 # Linux build directory
 linux/build/
+
+# CTest scratch output (root and linux/)
+Testing/
