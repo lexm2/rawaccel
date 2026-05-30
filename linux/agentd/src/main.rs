@@ -2,9 +2,7 @@
 // and drives the C++ HID-BPF data plane (libra_backend.so) for discovery/parse/
 // state. Migration in progress; this entry point currently smoke-tests the FFI.
 
-mod backend;
-#[allow(dead_code)] // wired into discovery in Phase 5
-mod hid;
+use rawaccel_agentd::backend;
 
 fn main() {
     let probe = backend::probe_capability();

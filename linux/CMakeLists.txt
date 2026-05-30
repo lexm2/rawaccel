@@ -174,6 +174,11 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/rawaccel-agentd.service
 add_executable(rawaccel-hid-probe tools/rawaccel-hid-probe.cpp)
 target_link_libraries(rawaccel-hid-probe PRIVATE rawaccel_agent)
 
+# Dump a canonical driver_config via json_io. Generates the cross-OS JSON
+# contract fixture for the Rust config parser and serves as a parity reference.
+add_executable(ra-config-dump tools/ra-config-dump.cpp)
+target_link_libraries(ra-config-dump PRIVATE rawaccel_json_io)
+
 # Step 10 HID-BPF kernel program: compile rawaccel.bpf.c via clang -target bpf
 # and verifier-check it via a libbpf loader. clang + bpftool are required;
 # rawaccel-agentd cannot run without rawaccel.bpf.o.

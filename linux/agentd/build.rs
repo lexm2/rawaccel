@@ -29,7 +29,9 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|_| manifest_dir.join("..").join("build"));
     let lib_dir = lib_dir.canonicalize().unwrap_or(lib_dir);
+    // bins for the daemon, tests for the FFI contract test.
     println!("cargo:rustc-link-arg-bins=-Wl,-rpath,{}", lib_dir.display());
+    println!("cargo:rustc-link-arg-tests=-Wl,-rpath,{}", lib_dir.display());
 }
 
 fn extract_int(src: &str, name: &str) -> i32 {
