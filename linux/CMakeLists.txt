@@ -103,16 +103,15 @@ target_include_directories(shim_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../shi
 target_link_libraries(shim_tests PRIVATE rawaccel_common_shim rawaccel_json_io)
 add_test(NAME shim_tests COMMAND shim_tests)
 
-# Step 5/6 agent: control plane + BPF backend. The agent owns active
-# modifier_settings and the 1s WriteDelay debounce; the BPF backend owns
-# hidraw enumeration, HID descriptor parsing, LUT precomputation, and the
-# fmod_ret/hid_bpf_device_event program attach lifecycle.
+# C++ data-plane + math library: HID descriptor parsing, LUT precomputation,
+# the BPF attach/bind lifecycle, and the kernel-capability probe. The Rust
+# daemon (linux/agentd) owns discovery/parsing/state and drives this over the
+# C ABI; libbpf and the LUT/curve math stay in C++. Feeds the ra_backend shared
+# lib (hence PIC) and the data-plane/math test binaries.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBBPF REQUIRED IMPORTED_TARGET libbpf)
 
 add_library(rawaccel_agent STATIC
-    agent/agent.cpp
-    agent/control_server.cpp
     agent/hid_descriptor.cpp
     agent/lut_builder.cpp
     agent/bpf_capability.cpp
@@ -123,33 +122,24 @@ target_include_directories(rawaccel_agent PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/bpf
 )
 target_link_libraries(rawaccel_agent PUBLIC rawaccel_json_io PkgConfig::LIBBPF)
+set_target_properties(rawaccel_agent PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_executable(rawaccel-agentd agent/main.cpp)
-target_link_libraries(rawaccel-agentd PRIVATE rawaccel_agent)
-
-# C ABI over the HID-BPF data plane + curve math for the Rust daemon. The Rust
-# side (linux/cli workspace) owns discovery/parsing/state and calls down here;
-# libbpf and the LUT/curve math stay in C++. Default visibility during the
-# migration so the C++ classes stay linkable; tighten to the C ABI at cutover.
-add_library(ra_backend SHARED
-    agent/ra_backend.cpp
-    agent/bpf_backend.cpp
-    agent/bpf_capability.cpp
-    agent/lut_builder.cpp
-    agent/hid_descriptor.cpp
-)
+# C ABI over the HID-BPF data plane + curve math for the Rust daemon (the only
+# C++ artifact shipped at runtime). ra_backend.cpp is the C ABI shim; the math
+# and libbpf glue come from rawaccel_agent.
+add_library(ra_backend SHARED agent/ra_backend.cpp)
 target_include_directories(ra_backend PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/agent
     ${CMAKE_CURRENT_SOURCE_DIR}/bpf
 )
-target_link_libraries(ra_backend PUBLIC rawaccel_json_io PkgConfig::LIBBPF)
+target_link_libraries(ra_backend PUBLIC rawaccel_agent rawaccel_json_io PkgConfig::LIBBPF)
 install(TARGETS ra_backend LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-# Install rules. `cmake --install build` deploys the daemon, the curve
-# shim, and a systemd unit pointing at the installed binary path. The
-# systemd unit dir is queried via pkg-config when present, otherwise
-# falls back to /usr/lib/systemd/system.
-install(TARGETS rawaccel-agentd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Install rules. `cmake --install build` deploys libra_backend.so, the curve
+# shim, the BPF object, and a systemd unit pointing at the Rust binary path.
+# The daemon binary itself is built and installed separately by cargo (see the
+# packaging note below); CMake owns only the C++ artifacts. The systemd unit
+# dir is queried via pkg-config when present, else /usr/lib/systemd/system.
 install(TARGETS rawaccel_common_shim LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 pkg_check_modules(SYSTEMD systemd)
@@ -169,10 +159,7 @@ configure_file(
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/rawaccel-agentd.service
         DESTINATION ${RA_SYSTEMD_UNIT_DIR})
 
-# Step 9 diagnostic: probe every hidraw node and report whether the parser
-# accepts it for BPF rewriting. Run on a target host before enabling BPF.
-add_executable(rawaccel-hid-probe tools/rawaccel-hid-probe.cpp)
-target_link_libraries(rawaccel-hid-probe PRIVATE rawaccel_agent)
+# Diagnostic probe (`rawaccel-agentd --probe`) lives in the Rust daemon now.
 
 # Dump a canonical driver_config via json_io. Generates the cross-OS JSON
 # contract fixture for the Rust config parser and serves as a parity reference.
@@ -232,18 +219,17 @@ add_test(NAME bpf_verify
 # the verifier end to end.
 set_tests_properties(bpf_verify PROPERTIES SKIP_RETURN_CODE 77)
 
+# Data-plane tests: HID descriptor parsing, LUT precomputation, and the BPF
+# backend. The control-plane suites (agent / control_server) moved to Rust.
 find_package(Threads REQUIRED)
-add_executable(agent_tests
+add_executable(dataplane_tests
     tests/test_main.cpp
-    tests/agent_tests.cpp
-    tests/control_server_tests.cpp
-    tests/control_server_socket_tests.cpp
     tests/hid_descriptor_tests.cpp
     tests/lut_builder_tests.cpp
     tests/bpf_backend_tests.cpp
 )
-target_link_libraries(agent_tests PRIVATE rawaccel_agent Threads::Threads)
-add_test(NAME agent_tests COMMAND agent_tests)
+target_link_libraries(dataplane_tests PRIVATE rawaccel_agent Threads::Threads)
+add_test(NAME dataplane_tests COMMAND dataplane_tests)
 
 # Fixed-point parity tests: drive rawaccel_fixedpoint.h (the exact in-kernel
 # math) and assert it matches the double-precision common/ modifier. Links
