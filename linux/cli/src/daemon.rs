@@ -253,9 +253,13 @@ fn agent_binary() -> Option<PathBuf> {
         }
     }
     if let Some(repo) = crate::find_repo_root() {
-        let cand = repo.join("linux").join("build").join(SERVICE);
-        if cand.is_file() {
-            return Some(cand);
+        // Rust daemon lives in the cargo workspace target dir (release first).
+        let target = repo.join("linux").join("target");
+        for profile in ["release", "debug"] {
+            let cand = target.join(profile).join(SERVICE);
+            if cand.is_file() {
+                return Some(cand);
+            }
         }
     }
     None

@@ -8,8 +8,13 @@ set -euo pipefail
 
 LINUX_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${LINUX_DIR}/build"
-AGENT="${BUILD_DIR}/rawaccel-agentd"
+# CMake builds the C++ data-plane .so + shim + BPF object; cargo builds the
+# Rust daemon. The daemon's rpath defaults to ${BUILD_DIR}, so it finds
+# libra_backend.so there without LD_LIBRARY_PATH.
+AGENT="${LINUX_DIR}/target/release/rawaccel-agentd"
 SHIM="${BUILD_DIR}/librawaccel_common.so"
+BACKEND_LIB="${BUILD_DIR}/libra_backend.so"
+BPF_OBJ="${BUILD_DIR}/rawaccel.bpf.o"
 
 SOCKET_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 SOCKET="${SOCKET_DIR}/rawaccel.sock"
@@ -20,10 +25,14 @@ BACKEND="${1:-auto}"
 UID_NUM="$(id -u)"
 GID_NUM="$(id -g)"
 
-if [[ ! -x "${AGENT}" || ! -f "${SHIM}" ]]; then
-    echo "Building rawaccel-agentd and the curve shim..."
+if [[ ! -f "${BACKEND_LIB}" || ! -f "${SHIM}" || ! -f "${BPF_OBJ}" ]]; then
+    echo "Building libra_backend.so, the curve shim, and the BPF object..."
     cmake -S "${LINUX_DIR}" -B "${BUILD_DIR}" >/dev/null
-    cmake --build "${BUILD_DIR}" --target rawaccel-agentd rawaccel_common_shim
+    cmake --build "${BUILD_DIR}" --target ra_backend rawaccel_common_shim rawaccel_bpf_object
+fi
+if [[ ! -x "${AGENT}" ]]; then
+    echo "Building the Rust daemon (rawaccel-agentd)..."
+    cargo build --release --manifest-path "${LINUX_DIR}/Cargo.toml" -p rawaccel-agentd
 fi
 
 if [[ ! -d "${SOCKET_DIR}" ]]; then
@@ -40,21 +49,21 @@ cat <<EOF
 [run-dev-agent] shim path     : ${SHIM}
 
 The rawaccel binary launches the GUI and runs CLI commands; build it once with
-\`cargo build --release --manifest-path ${LINUX_DIR}/cli/Cargo.toml\`.
+\`cargo build --release --manifest-path ${LINUX_DIR}/Cargo.toml -p rawaccel-cli\`.
 
 For the GUI in another terminal (no args -> launches the GUI, finds the source
 tree and sets LD_LIBRARY_PATH itself):
-    RAWACCEL_SOCKET=${SOCKET} ${LINUX_DIR}/cli/target/release/rawaccel
+    RAWACCEL_SOCKET=${SOCKET} ${LINUX_DIR}/target/release/rawaccel
 
 To check the agent from the CLI:
-    RAWACCEL_SOCKET=${SOCKET} ${LINUX_DIR}/cli/target/release/rawaccel status
+    RAWACCEL_SOCKET=${SOCKET} ${LINUX_DIR}/target/release/rawaccel status
 
 EOF
 
 # Run sudo in the background and trap SIGINT/SIGTERM so Ctrl+C in this
 # terminal forwards a clean shutdown signal to the agent instead of being
 # swallowed. Using exec sudo would replace the shell and remove the trap.
-sudo "${AGENT}" --backend "${BACKEND}" --socket "${SOCKET}" &
+sudo "${AGENT}" --backend "${BACKEND}" --socket "${SOCKET}" --bpf-object "${BPF_OBJ}" &
 agent_pid=$!
 
 shutdown() {
