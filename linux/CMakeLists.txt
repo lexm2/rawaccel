@@ -150,7 +150,10 @@ if(NOT RA_SYSTEMD_UNIT_DIR)
     set(RA_SYSTEMD_UNIT_DIR /usr/lib/systemd/system)
 endif()
 
+# The Rust daemon is built+installed by cargo into bindir (see PACKAGING.md);
+# the unit points at it and at the installed BPF object (installed below).
 set(RA_AGENT_BIN ${CMAKE_INSTALL_FULL_BINDIR}/rawaccel-agentd)
+set(RA_BPF_OBJECT_PATH ${CMAKE_INSTALL_FULL_LIBDIR}/rawaccel/rawaccel.bpf.o)
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/packaging/rawaccel-agentd.service.in
     ${CMAKE_CURRENT_BINARY_DIR}/rawaccel-agentd.service
@@ -207,6 +210,10 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(rawaccel_bpf_object ALL DEPENDS ${RA_BPF_OBJ})
+
+# The daemon loads this per device; install it where the systemd unit's
+# --bpf-object (RA_BPF_OBJECT_PATH) points.
+install(FILES ${RA_BPF_OBJ} DESTINATION ${CMAKE_INSTALL_LIBDIR}/rawaccel)
 
 add_executable(rawaccel-bpf-verify tools/rawaccel-bpf-verify.cpp)
 target_link_libraries(rawaccel-bpf-verify PRIVATE PkgConfig::LIBBPF)
