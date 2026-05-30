@@ -1,0 +1,34 @@
+# cargo-fuzz package for the two untrusted-input parsers in rawaccel-agentd.
+# Not a workspace member (own [workspace] table) so the stable-toolchain build
+# is unaffected; run with `cargo +nightly fuzz run <target>` (see run-tests.sh).
+[package]
+name = "rawaccel-agentd-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.rawaccel-agentd]
+path = ".."
+
+[[bin]]
+name = "hid_descriptor"
+path = "fuzz_targets/hid_descriptor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "config_parse"
+path = "fuzz_targets/config_parse.rs"
+test = false
+doc = false
+bench = false
+
+# Isolate from the parent cargo workspace.
+[workspace]

@@ -7,6 +7,24 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(GNUInstallDirs)
 
+# Instrumented test builds. Both are global (they apply to every target defined
+# below, libs included) so the FFI boundary and data-plane internals are covered,
+# not just the test TUs. Use a dedicated build dir per mode (build-asan/,
+# build-cov/) via run-tests.sh; the default build/ stays uninstrumented.
+option(RA_SANITIZE "Build with AddressSanitizer + UBSan + LeakSanitizer" OFF)
+option(RA_COVERAGE "Build with clang source-based coverage instrumentation" OFF)
+
+if(RA_SANITIZE)
+    add_compile_options(-fsanitize=address,undefined
+                        -fno-omit-frame-pointer -fno-sanitize-recover=all)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
+if(RA_COVERAGE)
+    add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+    add_link_options(-fprofile-instr-generate -fcoverage-mapping)
+endif()
+
 # Header-only view of common/ for the Linux side. Anything that consumes
 # the shared math links to this target instead of poking at common/ directly.
 # The win_compat.hpp shim is force-included so the MSVC-isms in common/
@@ -259,3 +277,25 @@ add_executable(sequence_tests
 )
 target_link_libraries(sequence_tests PRIVATE rawaccel_agent)
 add_test(NAME sequence_tests COMMAND sequence_tests)
+
+# Per-packet latency gate: time the exact in-kernel fixed-point pipeline over the
+# full curve/distance/flag matrix and assert p99 < 125 us (the 8 kHz budget).
+# Exclude from the sanitized run (instrumentation inflates timing): the runner
+# uses `ctest -E latency_bench` in build-asan/build-cov.
+add_executable(latency_bench
+    tests/test_main.cpp
+    tests/latency_bench.cpp
+)
+target_link_libraries(latency_bench PRIVATE rawaccel_agent)
+add_test(NAME latency_bench COMMAND latency_bench)
+
+# FFI lifecycle leak test: exercise the C ABI create/bind/health/speed/detach/
+# destroy cycle (kernel-free, unknown id) in a loop. Run under RA_SANITIZE so
+# LSan proves the libbpf/Slot/JSON paths leak nothing. Links the ra_backend
+# shared lib directly (pure C++ binary -> single ASan runtime, no Rust mismatch).
+add_executable(lifecycle_tests
+    tests/test_main.cpp
+    tests/lifecycle_tests.cpp
+)
+target_link_libraries(lifecycle_tests PRIVATE ra_backend)
+add_test(NAME lifecycle_tests COMMAND lifecycle_tests)

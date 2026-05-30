@@ -1,2 +1,5 @@
 # Cargo workspace build output (cli + agentd + crates share this target dir).
 /target/
+# Instrumented test trees created by run-tests.sh.
+/build-asan/
+/build-cov/
