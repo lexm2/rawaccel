@@ -186,11 +186,12 @@ bool Agent::load_from_file(const std::string& path)
     return true;
 }
 
-void Agent::save_to_file(const std::string& path) const
+bool Agent::save_to_file(const std::string& path) const
 {
     std::lock_guard<std::mutex> lock(mu_);
     std::ofstream f(path, std::ios::trunc);
     f << rajson::to_string(active_);
+    return f.good();
 }
 
 void Agent::on_device_added(const DeviceInfo& info)

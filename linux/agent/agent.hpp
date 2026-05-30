@@ -77,7 +77,7 @@ public:
     std::optional<std::string> data_plane_failure() const;
 
     bool load_from_file(const std::string& path);
-    void save_to_file(const std::string& path) const;
+    bool save_to_file(const std::string& path) const;
 
     void on_device_added(const DeviceInfo& info) override;
     void on_device_removed(DeviceId id) override;

@@ -122,6 +122,11 @@ HidrawIdentity read_hidraw_identity(const std::string& syspath)
     parse_vid_pid(dev_sysname, out.vendor_id, out.product_id);
 
     std::ifstream f(syspath + "/device/uevent");
+    if (!f) {
+        std::fprintf(stderr, "bpf backend: cannot read %s/device/uevent (no HID_NAME)\n",
+                     syspath.c_str());
+        return out;
+    }
     std::string line;
     while (std::getline(f, line)) {
         constexpr const char* prefix = "HID_NAME=";
@@ -328,8 +333,14 @@ bool BpfBackend::populate_maps(Slot& slot,
         return false;
     }
     for (std::uint32_t i = 0; i < RA_LUT_SIZE; ++i) {
-        if (bpf_map_update_elem(lutx_fd, &i, &lut.lut_x[i], BPF_ANY) != 0) return false;
-        if (bpf_map_update_elem(luty_fd, &i, &lut.lut_y[i], BPF_ANY) != 0) return false;
+        if (bpf_map_update_elem(lutx_fd, &i, &lut.lut_x[i], BPF_ANY) != 0) {
+            std::fprintf(stderr, "bpf backend: write lut_x[%u] errno=%d\n", i, errno);
+            return false;
+        }
+        if (bpf_map_update_elem(luty_fd, &i, &lut.lut_y[i], BPF_ANY) != 0) {
+            std::fprintf(stderr, "bpf backend: write lut_y[%u] errno=%d\n", i, errno);
+            return false;
+        }
     }
     return true;
 }
