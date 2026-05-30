@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::Duration;
@@ -6,6 +6,8 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 
+// Larger than the server's own limit on purpose: the client tolerates a bigger
+// response ceiling than the server enforces on requests.
 const MAX_FRAME_BYTES: u32 = 16 * 1024 * 1024;
 
 pub struct Client {
@@ -28,22 +30,38 @@ impl Client {
     pub fn call(&mut self, request: &Value) -> Result<Value> {
         let payload = serde_json::to_vec(request)?;
         let len = u32::try_from(payload.len())
-            .map_err(|_| anyhow!("request too large"))?;
-        if len > MAX_FRAME_BYTES {
-            return Err(anyhow!("request exceeds MAX_FRAME_BYTES"));
-        }
-        self.stream.write_all(&len.to_be_bytes())?;
-        self.stream.write_all(&payload)?;
+            .ok()
+            .filter(|&n| n <= MAX_FRAME_BYTES)
+            .ok_or_else(|| anyhow!("request exceeds MAX_FRAME_BYTES"))?;
+        self.write_all(&len.to_be_bytes())?;
+        self.write_all(&payload)?;
 
         let mut len_buf = [0u8; 4];
-        self.stream.read_exact(&mut len_buf)?;
+        self.read_exact(&mut len_buf)?;
         let resp_len = u32::from_be_bytes(len_buf);
         if resp_len > MAX_FRAME_BYTES {
             return Err(anyhow!("response exceeds MAX_FRAME_BYTES"));
         }
         let mut buf = vec![0u8; resp_len as usize];
-        self.stream.read_exact(&mut buf)?;
+        self.read_exact(&mut buf)?;
 
         serde_json::from_slice(&buf).context("agent returned invalid JSON")
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> Result<()> {
+        self.stream.write_all(buf).map_err(map_io)
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
+        self.stream.read_exact(buf).map_err(map_io)
+    }
+}
+
+// Timeouts are set on the stream; surface them clearly instead of as raw I/O errors.
+fn map_io(e: std::io::Error) -> anyhow::Error {
+    if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock {
+        anyhow!("RPC timeout talking to rawaccel-agentd")
+    } else {
+        anyhow::Error::new(e).context("RPC I/O")
     }
 }

@@ -2,13 +2,9 @@
 // root (CAP_BPF/CAP_SYS_ADMIN), so starting it escalates with sudo -- terminal
 // prompt, never pkexec; failure surfaces a "run as sudo" hint.
 //
-// Two deployments:
-//   - installed: systemd unit, socket /run/rawaccel/control.sock, `systemctl start`.
-//   - dev: linux/build/rawaccel-agentd spawned via setsid, socket
-//     $XDG_RUNTIME_DIR/rawaccel.sock.
-//
-// Dev socket path mirrors run-dev-agent.sh and .NET LinuxAgentDriver, so the
-// GUI connects however the agent was started.
+// Two deployments: installed (systemd unit, socket /run/rawaccel/control.sock,
+// `systemctl start`) and dev (rawaccel-agentd spawned via setsid, socket
+// $XDG_RUNTIME_DIR/rawaccel.sock -- mirrors run-dev-agent.sh and .NET LinuxAgentDriver).
 
 use std::env;
 use std::fs;
@@ -305,6 +301,10 @@ fn wait_until_down(socket: &Path) {
     let start = Instant::now();
     while is_up(socket) {
         if start.elapsed() >= STOP_TIMEOUT {
+            eprintln!(
+                "rawaccel: warning: {SERVICE} still responding after {}s",
+                STOP_TIMEOUT.as_secs()
+            );
             return;
         }
         sleep(Duration::from_millis(150));

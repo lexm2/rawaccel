@@ -1,5 +1,4 @@
-// Parse common/rawaccel-version.h at build time so the CLI version stays
-// locked to the same RA_VER_* constants the agent uses.
+// Extract RA_VER_* constants from common/rawaccel-version.h at build time.
 
 use std::env;
 use std::fs;

@@ -134,8 +134,7 @@ fn run(cli: Cli) -> Result<()> {
     }
 }
 
-// Start the daemon, pin RAWACCEL_SOCKET to the socket it serves so the GUI and
-// its .NET backend hit that exact agent, then hand off.
+// Start daemon, pin RAWACCEL_SOCKET to its socket, then hand off to the GUI.
 fn launch_gui_with_daemon(socket: &Option<PathBuf>) -> Result<()> {
     let resolved = daemon::start(socket)
         .context("could not start rawaccel-agentd; the GUI needs it to apply settings")?;
@@ -143,11 +142,9 @@ fn launch_gui_with_daemon(socket: &Option<PathBuf>) -> Result<()> {
     launch_gui()
 }
 
-// Exec the GUI. Resolution order: $RAWACCEL_GUI, then a `rawaccel-gui` binary
-// (beside this exe or on PATH), then a dev `dotnet run --project userinterface`
-// fallback. The GUI talks to the agent itself; this path never touches the socket.
+// Exec the GUI: $RAWACCEL_GUI, then a rawaccel-gui binary, then dev dotnet fallback.
 fn launch_gui() -> Result<()> {
-    // 1. explicit override: $RAWACCEL_GUI is the command line to run
+    // explicit override: $RAWACCEL_GUI is the command line to run
     if let Some(raw) = env::var_os("RAWACCEL_GUI") {
         let cow = raw.to_string_lossy();
         let cmd = cow.trim();
@@ -161,19 +158,17 @@ fn launch_gui() -> Result<()> {
         }
     }
 
-    // 2. published GUI binary, beside this exe or on PATH
     if let Some(gui) = find_gui_binary() {
         eprintln!("rawaccel: launching GUI ({})", gui.display());
         return exec_or_err(&mut SysCommand::new(gui));
     }
 
-    // 3. dev fallback: run the source project with dotnet
     if let Some(repo) = find_repo_root() {
         let project = repo.join("userinterface");
         let mut c = SysCommand::new("dotnet");
         c.arg("run").arg("--project").arg(&project);
 
-        // let the preview P/Invoke find librawaccel_common.so in the build dir
+        // so the GUI finds librawaccel_common.so in the dev build dir
         let shim_dir = repo.join("linux").join("build");
         if shim_dir.is_dir() {
             let mut ld = shim_dir.into_os_string();
@@ -200,7 +195,6 @@ fn exec_or_err(cmd: &mut SysCommand) -> Result<()> {
     Err(cmd.exec()).context("failed to launch the GUI")
 }
 
-// `rawaccel-gui` beside this exe (installed layout) or on PATH
 fn find_gui_binary() -> Option<PathBuf> {
     if let Ok(exe) = env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -216,9 +210,7 @@ fn find_gui_binary() -> Option<PathBuf> {
         .find(|c| c.is_file())
 }
 
-// Walk up from the exe, then the cwd, for the source tree
-// (userinterface/userinterface.csproj): used by the dev fallback and to locate
-// linux/build/rawaccel-agentd.
+// Find the source-tree root (userinterface/userinterface.csproj).
 pub(crate) fn find_repo_root() -> Option<PathBuf> {
     fn search(start: &Path) -> Option<PathBuf> {
         let mut dir = Some(start);
