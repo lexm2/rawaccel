@@ -96,8 +96,8 @@ private:
 
     void apply_locked(const rajson::driver_config& cfg);
 
-    // Match by id == device_sysname, then name == name; first wins.
-    // No match -> first profile + default_device_config.
+    // First device entry whose id (== sysname) or name matches wins, in list
+    // order. No match -> first profile + default_device_config.
     void resolve_locked(const DeviceInfo& info,
                         ra::modifier_settings& out_settings,
                         ra::device_config& out_config) const;

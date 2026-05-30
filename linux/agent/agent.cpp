@@ -9,6 +9,7 @@ namespace rawaccel_agent {
 
 namespace {
 
+// True if buf holds at least one char (terminated non-empty, or fills cap).
 bool has_wchar(const wchar_t* buf, std::size_t cap)
 {
     for (std::size_t i = 0; i < cap; ++i) {
@@ -137,7 +138,6 @@ Agent::Status Agent::status(time_point now) const
     Status s{};
     s.has_active_config = has_active_;
     s.has_pending_apply = pending_.has_value();
-    s.until_apply = std::chrono::milliseconds(0);
     if (pending_ && now < pending_at_) {
         s.until_apply = std::chrono::duration_cast<std::chrono::milliseconds>(
             pending_at_ - now);
