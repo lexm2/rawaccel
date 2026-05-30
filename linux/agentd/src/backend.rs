@@ -42,6 +42,16 @@ pub struct DataPlaneHealth {
 
 /// Set/replace settings for one device, by resolved (profile, config) JSON.
 pub trait Backend {
+    /// Prepare a device slot (open/patch/load/attach). Default: no-op (Noop).
+    fn attach(
+        &mut self,
+        _id: u64,
+        _hid_id: u32,
+        _sysname: &str,
+        _layout: &MouseLayout,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
     fn bind_device(&mut self, id: u64, profile: &Value, config: &Value);
     /// Safe to call for an unknown id (no-op).
     fn unbind_device(&mut self, id: u64);
@@ -135,8 +145,10 @@ impl FfiBackend {
         Ok(Self { raw })
     }
 
-    /// Prepare a device slot (open/patch/load/attach). Returns Err on hard failure.
-    pub fn attach(
+}
+
+impl Backend for FfiBackend {
+    fn attach(
         &mut self,
         id: u64,
         hid_id: u32,
@@ -159,13 +171,6 @@ impl FfiBackend {
         Ok(())
     }
 
-    pub fn detach(&mut self, id: u64) {
-        // SAFETY: valid handle; detach on an unknown id is a no-op C-side.
-        unsafe { sys::ra_backend_detach(self.raw, id) };
-    }
-}
-
-impl Backend for FfiBackend {
     fn bind_device(&mut self, id: u64, profile: &Value, config: &Value) {
         let rj = config::resolved_json(profile, config);
         let Ok(rj_c) = CString::new(rj) else { return };
@@ -175,7 +180,8 @@ impl Backend for FfiBackend {
     }
 
     fn unbind_device(&mut self, id: u64) {
-        self.detach(id);
+        // SAFETY: valid handle; detach on an unknown id is a no-op C-side.
+        unsafe { sys::ra_backend_detach(self.raw, id) };
     }
 
     fn current_speed_sample(&self) -> SpeedSample {

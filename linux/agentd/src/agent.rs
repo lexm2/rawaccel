@@ -212,6 +212,19 @@ impl<B: Backend> Agent<B> {
         std::fs::write(path, self.active.to_pretty_string()).is_ok()
     }
 
+    /// Prepare a device's kernel slot, then register it (resolve + bind if a
+    /// config is active). Mirrors the C++ attach_node -> on_device_added flow.
+    pub fn attach_device(
+        &mut self,
+        info: DeviceInfo,
+        hid_id: u32,
+        layout: &crate::hid::MouseLayout,
+    ) -> anyhow::Result<()> {
+        self.backend.attach(info.id, hid_id, &info.sysname, layout)?;
+        self.on_device_added(info);
+        Ok(())
+    }
+
     pub fn on_device_added(&mut self, info: DeviceInfo) {
         let id = info.id;
         let resolved = self.has_active.then(|| self.resolve(&info));

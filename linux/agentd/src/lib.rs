@@ -6,5 +6,6 @@
 pub mod agent;
 pub mod backend;
 pub mod config;
+pub mod discovery;
 pub mod hid;
 pub mod server;
