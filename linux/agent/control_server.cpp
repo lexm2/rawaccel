@@ -44,9 +44,9 @@ bool write_exact(int fd, const void* buf, std::size_t n)
     const auto* p = static_cast<const unsigned char*>(buf);
     while (n) {
         ssize_t w = ::write(fd, p, n);
-        if (w < 0) {
-            if (errno == EINTR) continue;
-            return false;
+        if (w <= 0) {
+            if (w < 0 && errno == EINTR) continue;
+            return false;  // <0 error, or 0 which would otherwise spin forever
         }
         p += w;
         n -= static_cast<std::size_t>(w);
@@ -207,8 +207,13 @@ bool ControlServer::listen()
     if (listener_fd_ < 0) return false;
 
     struct stat st;
-    if (::stat(socket_path_.c_str(), &st) == 0 && S_ISSOCK(st.st_mode)) {
-        ::unlink(socket_path_.c_str());
+    if (::stat(socket_path_.c_str(), &st) == 0) {
+        if (S_ISSOCK(st.st_mode))
+            ::unlink(socket_path_.c_str());
+        else
+            std::fprintf(stderr,
+                "control: %s exists and is not a socket; bind() will fail\n",
+                socket_path_.c_str());
     }
 
     sockaddr_un addr{};
@@ -234,10 +239,21 @@ bool ControlServer::listen()
         const char* sudo_uid = std::getenv("SUDO_UID");
         const char* sudo_gid = std::getenv("SUDO_GID");
         if (sudo_uid && sudo_gid) {
-            uid_t uid = static_cast<uid_t>(std::strtoul(sudo_uid, nullptr, 10));
-            gid_t gid = static_cast<gid_t>(std::strtoul(sudo_gid, nullptr, 10));
-            if (::chown(socket_path_.c_str(), uid, gid) == 0) {
-                expected_uid_ = uid;
+            char* uend = nullptr;
+            char* gend = nullptr;
+            unsigned long uid_v = std::strtoul(sudo_uid, &uend, 10);
+            unsigned long gid_v = std::strtoul(sudo_gid, &gend, 10);
+            const bool ok = uend != sudo_uid && *uend == '\0' &&
+                            gend != sudo_gid && *gend == '\0';
+            if (ok) {
+                uid_t uid = static_cast<uid_t>(uid_v);
+                if (::chown(socket_path_.c_str(), uid,
+                            static_cast<gid_t>(gid_v)) == 0) {
+                    expected_uid_ = uid;
+                }
+            } else {
+                std::fprintf(stderr,
+                    "control: ignoring malformed SUDO_UID/SUDO_GID\n");
             }
         }
     }
@@ -263,7 +279,13 @@ void ControlServer::run(std::chrono::milliseconds poll_interval)
         if (r == 0) continue;
         if (pfd.revents & POLLIN) {
             int client = ::accept4(listener_fd_, nullptr, nullptr, SOCK_CLOEXEC);
-            if (client < 0) continue;
+            if (client < 0) {
+                // transient errors are expected; log resource-exhaustion ones
+                if (errno != EINTR && errno != ECONNABORTED &&
+                    errno != EAGAIN && errno != EWOULDBLOCK)
+                    std::fprintf(stderr, "control: accept4 errno=%d\n", errno);
+                continue;
+            }
             if (peer_allowed(client)) handle_client(client);
             ::close(client);
         }
@@ -290,7 +312,8 @@ void ControlServer::handle_client(int fd)
     std::string req;
     if (!read_frame(fd, req)) return;
     auto resp = dispatch(agent_, req, clock_type::now());
-    write_frame(fd, resp);
+    if (!write_frame(fd, resp))
+        std::fprintf(stderr, "control: write_frame failed (client gone?)\n");
 }
 
 } // namespace rawaccel_agent
