@@ -3,140 +3,14 @@
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 
-#include <dirent.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 #include <cerrno>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <fstream>
-#include <sstream>
-#include <vector>
 
 namespace rawaccel_agent {
-
-namespace {
-
-// Cap reads; kernel caps report_descriptor at 4096 but don't trust that here.
-bool read_descriptor(const std::string& syspath, std::vector<std::uint8_t>& out)
-{
-    constexpr std::size_t MAX = 8192;
-    std::ifstream f(syspath + "/device/report_descriptor", std::ios::binary);
-    if (!f) return false;
-    out.clear();
-    char buf[1024];
-    while (f.read(buf, sizeof(buf)) || f.gcount() > 0) {
-        if (out.size() + static_cast<std::size_t>(f.gcount()) > MAX) return false;
-        out.insert(out.end(), buf, buf + f.gcount());
-    }
-    return !out.empty();
-}
-
-// Reads /sys/class/hidraw/hidrawN/device -> "0003:VVVV:PPPP.IIII".
-std::string resolve_device_sysname(const std::string& syspath)
-{
-    char buf[PATH_MAX] = {};
-    ssize_t n = ::readlink((syspath + "/device").c_str(), buf, sizeof(buf) - 1);
-    if (n <= 0) return {};
-    buf[n] = 0;
-    const char* slash = std::strrchr(buf, '/');
-    return slash ? std::string(slash + 1) : std::string(buf);
-}
-
-DeviceId hash_id(const std::string& key)
-{
-    constexpr DeviceId OFFSET = 1469598103934665603ull;
-    constexpr DeviceId PRIME  = 1099511628211ull;
-    DeviceId h = OFFSET;
-    for (unsigned char c : key) { h ^= c; h *= PRIME; }
-    return h;
-}
-
-// "0003:046D:C54D.000A" -> 0x046D / 0xC54D.
-bool parse_vid_pid(const std::string& device_sysname,
-                   std::uint32_t& vid, std::uint32_t& pid)
-{
-    auto first  = device_sysname.find(':');
-    if (first == std::string::npos) return false;
-    auto second = device_sysname.find(':', first + 1);
-    if (second == std::string::npos) return false;
-    auto dot    = device_sysname.find('.', second + 1);
-    if (dot == std::string::npos) return false;
-
-    auto from_hex = [](const std::string& s, std::uint32_t& out) {
-        char* end = nullptr;
-        unsigned long v = std::strtoul(s.c_str(), &end, 16);
-        if (end == s.c_str() || *end != 0) return false;
-        out = static_cast<std::uint32_t>(v);
-        return true;
-    };
-    return from_hex(device_sysname.substr(first + 1, second - first - 1), vid)
-        && from_hex(device_sysname.substr(second + 1, dot - second - 1), pid);
-}
-
-} // namespace
-
-// "0003:046D:C54D.000A" -> trailing ".HHHHHHHH" is hid_id in hex.
-bool parse_hid_device_name(const std::string& name, std::uint32_t& hid_id_out)
-{
-    auto pos = name.find_last_of('.');
-    if (pos == std::string::npos) return false;
-    const char* tail = name.c_str() + pos + 1;
-    char* end = nullptr;
-    unsigned long v = std::strtoul(tail, &end, 16);
-    if (end == tail || *end != 0) return false;
-    hid_id_out = static_cast<std::uint32_t>(v);
-    return true;
-}
-
-std::vector<HidrawNode> enumerate_hidraw()
-{
-    std::vector<HidrawNode> out;
-    DIR* d = ::opendir("/sys/class/hidraw");
-    if (!d) return out;
-    while (auto* e = ::readdir(d)) {
-        std::string name = e->d_name;
-        if (name == "." || name == "..") continue;
-        HidrawNode n;
-        n.sysname = name;
-        std::string sp = "/sys/class/hidraw/" + name;
-        n.device_sysname = resolve_device_sysname(sp);
-        if (parse_hid_device_name(n.device_sysname, n.hid_id)) {
-            out.push_back(std::move(n));
-        }
-    }
-    ::closedir(d);
-    return out;
-}
-
-HidrawIdentity read_hidraw_identity(const std::string& syspath)
-{
-    HidrawIdentity out;
-
-    std::string dev_sysname = resolve_device_sysname(syspath);
-    parse_vid_pid(dev_sysname, out.vendor_id, out.product_id);
-
-    std::ifstream f(syspath + "/device/uevent");
-    if (!f) {
-        std::fprintf(stderr, "bpf backend: cannot read %s/device/uevent (no HID_NAME)\n",
-                     syspath.c_str());
-        return out;
-    }
-    std::string line;
-    while (std::getline(f, line)) {
-        constexpr const char* prefix = "HID_NAME=";
-        if (line.rfind(prefix, 0) == 0) {
-            out.name = line.substr(std::strlen(prefix));
-            break;
-        }
-    }
-    return out;
-}
 
 BpfBackend::BpfBackend(std::string object_path)
     : object_path_(std::move(object_path)) {}
@@ -146,21 +20,6 @@ BpfBackend::~BpfBackend()
     stop();
 }
 
-bool BpfBackend::start()
-{
-    // Fail-open: zero matches still succeeds (hotplug later); rejects pass through.
-    bool any = false;
-    for (const auto& node : enumerate_hidraw()) {
-        if (attach_node(node.sysname)) any = true;
-    }
-    if (!any) {
-        std::fprintf(stderr,
-            "bpf backend: no mouse passed validate_for_bpf at start; "
-            "use rawaccel-hid-probe to inspect attached devices\n");
-    }
-    return true;
-}
-
 void BpfBackend::stop()
 {
     std::lock_guard<std::mutex> lock(mu_);
@@ -168,31 +27,6 @@ void BpfBackend::stop()
         detach_slot(*slot);
     }
     slots_.clear();
-}
-
-bool BpfBackend::attach_node(const std::string& sysname)
-{
-    const std::string syspath = "/sys/class/hidraw/" + sysname;
-    std::vector<std::uint8_t> desc;
-    if (!read_descriptor(syspath, desc)) return false;
-
-    auto md = parse_mouse_descriptor(desc.data(), desc.size());
-    if (!md) return false;
-    auto dec = validate_for_bpf(*md);
-    if (!dec.layout) {
-        std::fprintf(stderr,
-            "bpf backend: skipping %s: %s\n",
-            sysname.c_str(),
-            dec.reject ? dec.reject->reason.c_str() : "unknown");
-        return false;
-    }
-
-    std::string dev_sysname = resolve_device_sysname(syspath);
-    std::uint32_t hid_id = 0;
-    if (!parse_hid_device_name(dev_sysname, hid_id)) return false;
-
-    const DeviceId id = hash_id(dev_sysname);
-    return attach_prepared(id, hid_id, sysname, *dec.layout);
 }
 
 bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
@@ -369,7 +203,7 @@ void BpfBackend::bind_device(DeviceId id,
     if (it == slots_.end()) return;
 
     Slot& slot = *it->second;
-    // link attaches in attach_node; bind only refreshes maps (dormant until attached).
+    // link attaches in attach_prepared; bind only refreshes maps (dormant until attached).
     if (!populate_maps(slot, s, c)) {
         std::fprintf(stderr,
             "bpf backend: populate_maps failed for %s\n",
@@ -384,16 +218,6 @@ void BpfBackend::unbind_device(DeviceId id)
     if (it == slots_.end()) return;
     detach_slot(*it->second);
     slots_.erase(it);
-}
-
-std::size_t BpfBackend::attached_count() const
-{
-    std::lock_guard<std::mutex> lock(mu_);
-    std::size_t n = 0;
-    for (const auto& [id, slot] : slots_) {
-        if (slot->attached) ++n;
-    }
-    return n;
 }
 
 DataPlaneHealth BpfBackend::health() const

@@ -130,7 +130,6 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBBPF REQUIRED IMPORTED_TARGET libbpf)
 
 add_library(rawaccel_agent STATIC
-    agent/hid_descriptor.cpp
     agent/lut_builder.cpp
     agent/bpf_capability.cpp
     agent/bpf_backend.cpp
@@ -244,12 +243,11 @@ add_test(NAME bpf_verify
 # the verifier end to end.
 set_tests_properties(bpf_verify PROPERTIES SKIP_RETURN_CODE 77)
 
-# Data-plane tests: HID descriptor parsing, LUT precomputation, and the BPF
-# backend. The control-plane suites (agent / control_server) moved to Rust.
+# Data-plane tests: LUT precomputation, the BPF backend, and the capability
+# probe. Discovery/HID parsing and the control-plane suites moved to Rust.
 find_package(Threads REQUIRED)
 add_executable(dataplane_tests
     tests/test_main.cpp
-    tests/hid_descriptor_tests.cpp
     tests/lut_builder_tests.cpp
     tests/bpf_backend_tests.cpp
 )

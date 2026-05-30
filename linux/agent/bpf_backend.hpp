@@ -29,12 +29,10 @@ public:
     BpfBackend(const BpfBackend&) = delete;
     BpfBackend& operator=(const BpfBackend&) = delete;
 
-    // Enumerate hidraw and slot+eager-attach each accepted mouse.
-    bool start();
     void stop();
 
-    // libbpf attach core (descriptor already parsed, id pre-hashed). Shared by
-    // the C ABI and attach_node; no listener notify. Identity populate -> attach.
+    // libbpf attach core (descriptor already parsed, id pre-hashed), driven by the
+    // C ABI: identity populate then attach.
     bool attach_prepared(DeviceId id, std::uint32_t hid_id,
                          const std::string& sysname, const BpfMouseLayout& layout);
 
@@ -42,8 +40,6 @@ public:
                      const ra::modifier_settings&,
                      const ra::device_config&) override;
     void unbind_device(DeviceId) override;
-
-    std::size_t attached_count() const;
 
     // devices = slots; attached = those with a live struct_ops link
     DataPlaneHealth health() const override;
@@ -76,7 +72,6 @@ private:
         std::int32_t domain_w_y_q16 = RA_Q16_ONE;
     };
 
-    bool attach_node(const std::string& sysname);
     void detach_slot(Slot& slot);
     bool populate_maps(Slot& slot,
                        const ra::modifier_settings& s,
@@ -86,20 +81,5 @@ private:
     mutable std::mutex mu_;
     std::unordered_map<DeviceId, std::unique_ptr<Slot>> slots_;
 };
-
-struct HidrawNode {
-    std::string sysname;          // hidrawN
-    std::string device_sysname;   // 0003:VVVV:PPPP.IIII
-    std::uint32_t hid_id = 0;
-};
-std::vector<HidrawNode> enumerate_hidraw();
-bool parse_hid_device_name(const std::string& name, std::uint32_t& hid_id_out);
-
-struct HidrawIdentity {
-    std::uint32_t vendor_id = 0;
-    std::uint32_t product_id = 0;
-    std::string name;
-};
-HidrawIdentity read_hidraw_identity(const std::string& syspath);
 
 } // namespace rawaccel_agent
