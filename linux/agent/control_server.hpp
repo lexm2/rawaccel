@@ -14,8 +14,7 @@
 
 namespace rawaccel_agent {
 
-// 64 KiB: above any real driver_config, below an OOM/parser-stack risk
-// (nlohmann::json recurses, but deep nesting needs proportionally large input).
+// 64 KiB: above any real driver_config, below the nlohmann::json parser-stack OOM risk.
 inline constexpr std::uint32_t MAX_FRAME_BYTES = 64u * 1024u;
 
 // Frame codec, exposed for testing.

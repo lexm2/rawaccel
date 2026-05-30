@@ -220,16 +220,15 @@ bool ControlServer::listen()
     std::strncpy(addr.sun_path, socket_path_.c_str(),
                  sizeof(addr.sun_path) - 1);
 
-    // umask 0600 before bind(), widen to 0660 after chown; closes the
-    // bind()/chmod() race where a peer could connect with world-write perms.
+    // umask 0177 before bind() (widen to 0660 after chown) closes the
+    // bind()/chmod() race where a peer connects with world-write perms.
     const mode_t prev_umask = ::umask(0177);
     int bind_rc = ::bind(listener_fd_, reinterpret_cast<sockaddr*>(&addr),
                          sizeof(addr));
     ::umask(prev_umask);
     if (bind_rc < 0) return false;
 
-    // Under sudo, chown to SUDO_UID/GID so the client can connect;
-    // SO_PEERCRED enforces who may speak.
+    // Under sudo, chown to SUDO_UID/GID so the client can connect; SO_PEERCRED enforces access.
     expected_uid_ = ::geteuid();
     if (::geteuid() == 0) {
         const char* sudo_uid = std::getenv("SUDO_UID");

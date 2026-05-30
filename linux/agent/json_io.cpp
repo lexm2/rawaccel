@@ -151,7 +151,7 @@ json accel_args_to(const ra::accel_args& a)
     j[key::CAP]               = vec2_to(a.cap);
     j[key::CAP_MODE]          = cap_mode_to_string(a.cap_mode);
 
-    // emit LUT data only for mode == lut, only the first `length` entries
+    // emit LUT data only for lookup mode, only the first `length` entries
     json data_arr = json::array();
     if (a.mode == ra::accel_mode::lookup) {
         for (int i = 0; i < a.length; ++i) {
@@ -252,8 +252,7 @@ void profile_from(const json& j, ra::profile& out)
 
 json device_config_to(const ra::device_config& c)
 {
-    // emit setExtraInfo/min/maxTime only when non-default (matches C#
-    // ShouldSerialize for byte-stable diffs)
+    // emit optional fields only when non-default (matches C# ShouldSerialize, byte-stable diffs)
     json j;
     j[key::DISABLE]        = c.disable;
     if (c.set_extra_info) j[key::SET_EXTRA_INFO] = c.set_extra_info;
@@ -298,8 +297,7 @@ void device_settings_from(const json& j, ra::device_settings& out)
 
 json to_jobject(const driver_config& cfg)
 {
-    // insertion order matters (preserved); banners first to match the Windows
-    // AddFirst for byte-stable cross-OS diffs
+    // banners first to match the Windows AddFirst order (byte-stable cross-OS diffs)
     json j;
     j[key::ACCEL_MODES_BANNER] = ACCEL_MODES_JOINED;
     j[key::CAP_MODES_BANNER]   = CAP_MODES_JOINED;

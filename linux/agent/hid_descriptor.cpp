@@ -111,8 +111,7 @@ bool process_input(const GlobalState& g, std::vector<std::uint32_t>& usages,
     if (g.report_size > MAX_REPORT_SIZE || g.report_count > MAX_REPORT_COUNT) {
         return false;
     }
-    // ReportCount fields of ReportSize bits, one Usage each; repeat the last
-    // when the list runs out (HID 1.11 6.2.2.7).
+    // ReportCount x ReportSize bits, one Usage each; repeat last (HID 1.11 6.2.2.7).
     for (std::uint32_t i = 0; i < g.report_count; ++i) {
         std::uint32_t usage = 0;
         if (!usages.empty()) {
@@ -211,10 +210,9 @@ std::optional<MouseDescriptor> parse_mouse_descriptor(
                 case TAG_REPORT_ID:
                     g.has_report_id = true;
                     g.report_id = static_cast<std::uint8_t>(uv);
-                    // a new Report ID resets the cursor
+                    // new Report ID resets the cursor; commit the prior report
                     if (rep.report_id != g.report_id ||
                         rep.has_report_id != g.has_report_id) {
-                        // commit the prior report first
                         commit_report_if_complete();
                         rep = PerReport{};
                         rep.has_report_id = g.has_report_id;

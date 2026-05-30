@@ -198,9 +198,8 @@ bool BpfBackend::attach_node(const std::string& sysname)
         return false;
     }
 
-    // hid_id (offset 0 of hid_bpf_ops) must be set before load(), else
-    // attach_struct_ops gives EINVAL. set_initial_value() refuses a partial
-    // write, so patch the field directly in the map's mutable initial value.
+    // hid_id must be patched before load() (else attach gives EINVAL);
+    // set_initial_value() refuses partial writes, so write the field directly.
     bpf_map* ops = bpf_object__find_map_by_name(obj, "rawaccel_ops");
     if (!ops) {
         bpf_object__close(obj);
@@ -357,8 +356,7 @@ void BpfBackend::bind_device(DeviceId id,
     if (it == slots_.end()) return;
 
     Slot& slot = *it->second;
-    // link is attached in attach_node; bind just refreshes the maps. If never
-    // attached, settings land in the maps but stay dormant.
+    // link attaches in attach_node; bind only refreshes maps (dormant until attached).
     if (!populate_maps(slot, s, c)) {
         std::fprintf(stderr,
             "bpf backend: populate_maps failed for %s\n",
@@ -403,9 +401,8 @@ DataPlaneHealth BpfBackend::health() const
 
 SpeedSample BpfBackend::current_speed_sample() const
 {
-    // No packet within this window -> the mouse is effectively stopped, so the
-    // GUI's indicator lines fade out. Larger than any inter-packet gap during
-    // continuous motion (>=125 Hz), small enough to feel responsive.
+    // No packet within this window -> mouse stopped, GUI lines fade out.
+    // Above any inter-packet gap at >=125 Hz, still responsive.
     constexpr std::uint64_t STALE_NS = 150ull * 1000 * 1000;  // 150 ms
 
     std::lock_guard<std::mutex> lock(mu_);
@@ -439,26 +436,20 @@ SpeedSample BpfBackend::current_speed_sample() const
                         static_cast<std::uint64_t>(now_ts.tv_nsec);
     if (now > best_ts && now - best_ts > STALE_NS) return {};
 
-    // Kernel telemetry is Q16.16 in/s, each axis weighted by its OWN domain
-    // weight (awv = |comp| * eff_dpi_norm * domain_w). Chart X is normalized
-    // in/s, so each axis divides out its own weight: chart_x = awv_x / domain_w_x.
+    // Kernel telemetry is Q16.16 in/s weighted by each axis's own domain
+    // weight; chart wants normalized in/s, so divide it back out.
     const double dw_x = best->domain_w_x_q16 ? static_cast<double>(best->domain_w_x_q16)
                                              : static_cast<double>(RA_Q16_ONE);
     const double dw_y = best->domain_w_y_q16 ? static_cast<double>(best->domain_w_y_q16)
                                              : static_cast<double>(RA_Q16_ONE);
 
-    // Always report the genuinely-distinct per-axis speeds (the BPF writes
-    // awv_x/awv_y separately in both whole and separate mode) plus the combined
-    // aggregate. The GUI decides which to show: x/y for the two per-axis lines,
-    // combined for the single line. Never force x == y - that coupled the two
-    // lines whenever the device ran in whole mode (the default).
+    // Report distinct per-axis speeds (kernel writes awv_x/awv_y separately in
+    // every mode) plus the combined; the GUI picks. Never force x == y.
     SpeedSample out;
     out.x = static_cast<double>(best_state.tele_speed_x_q16) / dw_x;
     out.y = static_cast<double>(best_state.tele_speed_y_q16) / dw_y;
-    // Combined is the magnitude of the per-axis chart speeds. Deriving it from
-    // the already-unweighted out.x/out.y removes each axis's own domain weight;
-    // dividing the kernel's combined (which mixes domain_w_x and domain_w_y) by
-    // dw_x alone is only correct when the weights are equal (isotropic).
+    // Combined = magnitude of the unweighted per-axis speeds (the kernel's own
+    // combined mixes both domain weights, only correct when isotropic).
     out.combined = std::hypot(out.x, out.y);
     return out;
 }
