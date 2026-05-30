@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = [
+    "cli",
+    "agentd",
+    "crates/ra-backend-sys",
+]
+
+# Profiles are honored only at the workspace root (moved here from cli/).
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

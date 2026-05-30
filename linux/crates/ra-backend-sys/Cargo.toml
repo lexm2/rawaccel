@@ -1,0 +1,8 @@
+[package]
+name = "ra-backend-sys"
+version = "1.7.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Raw FFI bindings to libra_backend.so (HID-BPF data plane + curve math)"
+license = "MIT"
+links = "ra_backend"

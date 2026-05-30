@@ -1,0 +1,2 @@
+# Cargo workspace build output (cli + agentd + crates share this target dir).
+/target/

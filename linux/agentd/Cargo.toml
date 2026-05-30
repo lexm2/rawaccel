@@ -1,0 +1,15 @@
+[package]
+name = "rawaccel-agentd"
+version = "1.7.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Userspace HID-BPF agent daemon (control plane + device orchestration)"
+license = "MIT"
+
+[[bin]]
+name = "rawaccel-agentd"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+ra-backend-sys = { path = "../crates/ra-backend-sys" }
