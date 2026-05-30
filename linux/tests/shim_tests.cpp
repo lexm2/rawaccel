@@ -1,9 +1,9 @@
 // Tests for the cross-OS curve shim (shim/ra_curve.cpp).
 //
-// The shim is what the Linux GUI preview P/Invokes: parse driver-config JSON
-// into a modifier, run rawaccel::modifier::modify. Asserts ABI parity against
-// a direct modify call, that profile scaling takes effect, and that bad input
-// degrades to a null handle / pass-through instead of crashing.
+// The shim is what the Linux GUI preview P/Invokes: parse a single profile
+// (modifier_settings) JSON into a modifier, run rawaccel::modifier::modify.
+// Asserts ABI parity against a direct modify call, that profile scaling takes
+// effect, and that bad input degrades to a null handle / pass-through.
 
 #include "ra_curve.h"
 #include "test_harness.hpp"
@@ -11,18 +11,36 @@
 #include "json_io.hpp"
 #include "rawaccel.hpp"
 
+#include <nlohmann/json.hpp>
+
+#include <fstream>
+#include <sstream>
+#include <string>
+
 namespace ra = rawaccel;
+using nlohmann::json;
 
 namespace {
 
-// Direct modifier on the same settings the shim builds: parse JSON, zero
-// smoother halflives, init_data, construct. Mirrors
-// ra_curve_create_from_config_json for comparison.
-ra::modifier reference_modifier(const std::string& json,
+#ifndef RA_FIXTURE_PATH
+#error "RA_FIXTURE_PATH must be defined (path to default_config.json)"
+#endif
+
+// The shim input is a single profile object: the frozen fixture's profiles[0].
+json base_profile()
+{
+    std::ifstream f(RA_FIXTURE_PATH);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return json::parse(ss.str()).at("profiles").at(0);
+}
+
+// Direct modifier on the same JSON the shim parses: zero smoother halflives,
+// init_data, construct. Mirrors ra_curve_create_from_config_json for comparison.
+ra::modifier reference_modifier(const std::string& profile_json,
                                 ra::modifier_settings& out_settings)
 {
-    auto cfg = rajson::from_string(json);
-    out_settings = cfg.profiles.front();
+    out_settings = rajson::modifier_settings_from_jobject(json::parse(profile_json));
     out_settings.prof.speed_processor_args.input_speed_smooth_halflife = 0;
     out_settings.prof.speed_processor_args.scale_smooth_halflife = 0;
     out_settings.prof.speed_processor_args.output_speed_smooth_halflife = 0;
@@ -30,38 +48,31 @@ ra::modifier reference_modifier(const std::string& json,
     return ra::modifier(out_settings);
 }
 
-std::string config_json_with(const ra::modifier_settings& s)
-{
-    rajson::driver_config cfg{};
-    cfg.profiles.push_back(s);
-    return rajson::to_string(cfg);
-}
-
 } // namespace
 
-RA_TEST("Shim: abi version is 2")
+RA_TEST("Shim: abi version is 3")
 {
-    RA_CHECK_EQ(ra_curve_abi_version(), 2u);
+    RA_CHECK_EQ(ra_curve_abi_version(), 3u);
 }
 
 RA_TEST("Shim: modify matches a direct modifier::modify on a classic curve")
 {
-    ra::modifier_settings s{};
-    auto& ax = s.prof.accel_x;
-    ax.mode = ra::accel_mode::classic;
-    ax.gain = true;
-    ax.acceleration = 0.005;
-    ax.exponent_classic = 2.0;
-    s.prof.accel_y = ax;
+    json p = base_profile();
+    json args = p.at("Whole or horizontal accel parameters");
+    args["mode"] = "classic";
+    args["Gain / Velocity"] = true;
+    args["acceleration"] = 0.005;
+    args["exponentClassic"] = 2.0;
+    p["Whole or horizontal accel parameters"] = args;
+    p["Vertical accel parameters"] = args;
+    const std::string json_str = p.dump();
 
-    std::string json = config_json_with(s);
-
-    ra_curve_t* c = ra_curve_create_from_config_json(json.c_str());
+    ra_curve_t* c = ra_curve_create_from_config_json(json_str.c_str());
     RA_CHECK(c != nullptr);
     if (c == nullptr) return;
 
     ra::modifier_settings ref{};
-    ra::modifier mod = reference_modifier(json, ref);
+    ra::modifier mod = reference_modifier(json_str, ref);
 
     // skip v=0 (LUT builder samples the limit separately); representative speeds
     for (double v : {1.0, 5.0, 20.0, 100.0}) {
@@ -82,11 +93,11 @@ RA_TEST("Shim: modify matches a direct modifier::modify on a classic curve")
 
 RA_TEST("Shim: output_dpi 2000 scales a noaccel profile by 2x")
 {
-    ra::modifier_settings s{};
-    s.prof.output_dpi = 2000;  // 2x NORMALIZED_DPI (=1000)
+    json p = base_profile();
+    p["Output DPI"] = 2000.0;  // 2x NORMALIZED_DPI (=1000)
+    const std::string json_str = p.dump();
 
-    std::string json = config_json_with(s);
-    ra_curve_t* c = ra_curve_create_from_config_json(json.c_str());
+    ra_curve_t* c = ra_curve_create_from_config_json(json_str.c_str());
     RA_CHECK(c != nullptr);
     if (c == nullptr) return;
 
@@ -99,8 +110,8 @@ RA_TEST("Shim: output_dpi 2000 scales a noaccel profile by 2x")
 
 RA_TEST("Shim: default profile is identity")
 {
-    std::string json = config_json_with(ra::modifier_settings{});
-    ra_curve_t* c = ra_curve_create_from_config_json(json.c_str());
+    const std::string json_str = base_profile().dump();
+    ra_curve_t* c = ra_curve_create_from_config_json(json_str.c_str());
     RA_CHECK(c != nullptr);
     if (c == nullptr) return;
 
@@ -112,14 +123,13 @@ RA_TEST("Shim: default profile is identity")
     ra_curve_destroy(c);
 }
 
-RA_TEST("Shim: malformed and empty input degrade gracefully")
+RA_TEST("Shim: malformed and incomplete input degrade gracefully")
 {
     RA_CHECK(ra_curve_create_from_config_json(nullptr) == nullptr);
     RA_CHECK(ra_curve_create_from_config_json("not json") == nullptr);
 
-    // valid JSON, no profiles -> null handle
-    std::string empty = rajson::to_string(rajson::driver_config{});
-    RA_CHECK(ra_curve_create_from_config_json(empty.c_str()) == nullptr);
+    // valid JSON missing required profile keys -> .at() throws -> null handle
+    RA_CHECK(ra_curve_create_from_config_json("{}") == nullptr);
 
     // null handle passes input through unchanged
     double ox = 1, oy = 1;

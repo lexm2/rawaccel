@@ -30,13 +30,12 @@ extern "C" {
 
 typedef struct ra_curve ra_curve_t;
 
-// Build a curve handle from a driver-config JSON string (UTF-8). Shape is
-// RawAccel.Contracts.RawAccelConfig / rajson::driver_config: top-level object
-// with "defaultDeviceConfig", "profiles", "devices". Uses profiles[0]; rest ignored.
+// Build a curve handle from a single profile (modifier_settings) JSON object
+// (UTF-8), the same shape the agent binds per device.
 //
 // Smoother halflives are zeroed so the preview is the steady-state curve
-// (matching the BPF LUT), not EMA warmup. Returns null on parse failure, empty
-// profiles, or OOM. Caller owns the handle; release with ra_curve_destroy.
+// (matching the BPF LUT), not EMA warmup. Returns null on parse failure, a
+// missing required key, or OOM. Caller owns the handle; release with ra_curve_destroy.
 RA_API ra_curve_t* ra_curve_create_from_config_json(const char* config_json);
 
 // Free a handle from ra_curve_create_from_config_json; null is a no-op.

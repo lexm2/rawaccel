@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Newtonsoft.Json;
 using RawAccel.Contracts;
 
@@ -40,13 +39,8 @@ namespace userspace_backend.Driver.Linux
             if (profile == null) throw new ArgumentNullException(nameof(profile));
             if (!shimAvailable) return IdentityInstance.Instance;
 
-            // wrap the profile in the config shape the agent consumes;
-            // device fields use contract defaults (irrelevant to preview)
-            var config = new RawAccelConfig
-            {
-                profiles = new List<RawAccelProfile> { profile },
-            };
-            var json = JsonConvert.SerializeObject(config);
+            // shim takes a single profile (modifier_settings) JSON object
+            var json = JsonConvert.SerializeObject(profile);
 
             var handle = RaCurveNative.CreateFromConfigJson(json);
             if (handle == IntPtr.Zero) return IdentityInstance.Instance;

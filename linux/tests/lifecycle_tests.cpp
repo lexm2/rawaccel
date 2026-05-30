@@ -11,27 +11,32 @@
 // uses). ra_backend_attach (which needs CAP_BPF) is intentionally not called.
 
 #include "ra_backend.h"
-#include "json_io.hpp"
 #include "test_harness.hpp"
-
-#include "rawaccel.hpp"
 
 #include <nlohmann/json.hpp>
 
+#include <fstream>
+#include <sstream>
 #include <string>
 
-namespace ra = rawaccel;
+#ifndef RA_FIXTURE_PATH
+#error "RA_FIXTURE_PATH must be defined (path to default_config.json)"
+#endif
 
 namespace {
 
 // The resolved-settings doc ra_backend_bind parses: {"profile":..,"config":..}.
-// Built via json_io's own serializers so it round-trips exactly into the
-// matching _from_jobject parsers -- no hand-written keys to drift.
+// Assembled from the frozen contract fixture so the keys never drift from the
+// matching _from_jobject parsers.
 std::string build_resolved()
 {
+    std::ifstream f(RA_FIXTURE_PATH);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const nlohmann::json fixture = nlohmann::json::parse(ss.str());
     nlohmann::json j;
-    j["profile"] = rajson::modifier_settings_to_jobject(ra::modifier_settings{});
-    j["config"]  = rajson::device_config_to_jobject(ra::device_config{});
+    j["profile"] = fixture.at("profiles").at(0);
+    j["config"]  = fixture.at("defaultDeviceConfig");
     return j.dump();
 }
 

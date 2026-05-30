@@ -49,3 +49,12 @@ binary points at `linux/build` and is simply ignored on an install box.
 | `rawaccel-agentd.service` | systemd unit dir | cmake |
 | `rawaccel-agentd` (daemon) | `<bindir>` | cargo + install |
 | `rawaccel` (CLI) | `<bindir>` | cargo + install |
+
+## Cross-OS config fixture
+
+`linux/tests/fixtures/default_config.json` is a frozen, hand-maintained artifact of
+the cross-OS settings.json contract (key names match the Windows `wrapper` JsonProperty
+names; pretty-print uses nlohmann key order). The C++ generator (`ra-config-dump`) was
+removed, so update this file by hand if the contract changes. The Rust
+`config::tests::reserialize_is_byte_stable` test guards its byte-stability against serde,
+and the C++ `*_from_jobject` parsers consume it in `json_tests`.

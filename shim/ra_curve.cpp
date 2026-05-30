@@ -24,7 +24,7 @@ extern "C" {
 
 uint32_t ra_curve_abi_version(void)
 {
-    return 2u;
+    return 3u;
 }
 
 ra_curve_t* ra_curve_create_from_config_json(const char* config_json)
@@ -32,10 +32,9 @@ ra_curve_t* ra_curve_create_from_config_json(const char* config_json)
     if (config_json == nullptr) return nullptr;
 
     try {
-        rajson::driver_config cfg = rajson::from_string(config_json);
-        if (cfg.profiles.empty()) return nullptr;
-
-        ra::modifier_settings settings = cfg.profiles.front();
+        // Input is a single profile (modifier_settings) JSON object.
+        ra::modifier_settings settings =
+            rajson::modifier_settings_from_jobject(nlohmann::json::parse(config_json));
 
         // Curve-only preview: the kernel runs its own input-speed EMA, so the
         // LUT (the steady-state curve charted) zeroes the smoother halflives.
@@ -48,7 +47,7 @@ ra_curve_t* ra_curve_create_from_config_json(const char* config_json)
         return new ra_curve_t(settings);
     }
     catch (...) {
-        // from_string throws on bad JSON / missing keys; report as null handle
+        // parse throws on bad JSON / missing keys; report as null handle
         return nullptr;
     }
 }

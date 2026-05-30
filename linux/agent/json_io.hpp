@@ -4,12 +4,10 @@
 // settings.json contract: do NOT rename a key without changing the Windows JsonProperty.
 
 #include "rawaccel.hpp"
-#include "rawaccel-version.h"
 
 #include <nlohmann/json.hpp>
 
 #include <string>
-#include <vector>
 
 namespace rajson {
 
@@ -71,63 +69,21 @@ inline constexpr const char* POLLING_RATE    = "Polling rate Hz (keep at 0 for a
 inline constexpr const char* MINIMUM_TIME    = "minimumTime";
 inline constexpr const char* MAXIMUM_TIME    = "maximumTime";
 
-// DeviceSettings.
-inline constexpr const char* DEVICE_NAME    = "name";
-inline constexpr const char* DEVICE_PROFILE = "profile";
-inline constexpr const char* DEVICE_ID      = "id";
-inline constexpr const char* DEVICE_CONFIG  = "config";
-
-// DriverConfig top-level.
-inline constexpr const char* ACCEL_MODES_BANNER  = "### Accel modes ###";
-inline constexpr const char* CAP_MODES_BANNER    = "### Cap modes ###";
-inline constexpr const char* VERSION             = "version";
-inline constexpr const char* DEFAULT_DEVICE_CONFIG = "defaultDeviceConfig";
-inline constexpr const char* PROFILES            = "profiles";
-inline constexpr const char* DEVICES             = "devices";
-
 // Vec2 component names.
 inline constexpr const char* X = "x";
 inline constexpr const char* Y = "y";
 
 } // namespace key
 
-// JSON "lut" maps to accel_mode::lookup.
-inline constexpr const char* ACCEL_MODE_NAMES[] = {
-    "classic", "jump", "natural", "synchronous", "power", "lut", "noaccel"
-};
-inline constexpr const char* ACCEL_MODES_JOINED =
-    "classic | jump | natural | synchronous | power | lut | noaccel";
-
-inline constexpr const char* CAP_MODE_NAMES[] = { "in_out", "input", "output" };
-inline constexpr const char* CAP_MODES_JOINED = "in_out | input | output";
-
-struct driver_config {
-    std::string version = RA_VER_STRING;
-    ra::device_config default_device_config{};
-    std::vector<ra::modifier_settings> profiles{};
-    std::vector<ra::device_settings> devices{};
-};
-
-nlohmann::json to_jobject(const driver_config& cfg);
-driver_config from_jobject(const nlohmann::json& j);
-
-std::string to_string(const driver_config& cfg, int indent = 2);
-driver_config from_string(const std::string& s);
-
-// Per-type (de)serializers for the backend's resolved-config FFI. `j` is a single
-// profile / device_config object. modifier_settings_from runs init_data like from_jobject.
-nlohmann::json modifier_settings_to_jobject(const ra::modifier_settings& m);
+// Per-type parsers for the backend's resolved-config FFI and the curve shim. `j`
+// is a single profile / device_config object. modifier_settings_from runs init_data.
 ra::modifier_settings modifier_settings_from_jobject(const nlohmann::json& j);
-nlohmann::json device_config_to_jobject(const ra::device_config& c);
 ra::device_config device_config_from_jobject(const nlohmann::json& j);
 
-const char* accel_mode_to_string(ra::accel_mode m);
 ra::accel_mode accel_mode_from_string(const std::string& s);
-const char* cap_mode_to_string(ra::cap_mode m);
 ra::cap_mode cap_mode_from_string(const std::string& s);
 
 // Linux wchar_t is 32-bit (UTF-32); caller buffer needs room for the null.
-std::string wchar_to_utf8(const wchar_t* s, std::size_t cap);
 void utf8_to_wchar(const std::string& s, wchar_t* out, std::size_t cap);
 
 } // namespace rajson

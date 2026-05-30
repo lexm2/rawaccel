@@ -13,7 +13,7 @@ namespace userspace_backend.Driver.Linux
         public const string LibraryName = "rawaccel_common";
 
         // shim ABI this binding targets; ra_curve_abi_version must agree
-        public const uint ExpectedAbiVersion = 2;
+        public const uint ExpectedAbiVersion = 3;
 
         [DllImport(LibraryName, EntryPoint = "ra_curve_abi_version",
             CallingConvention = CallingConvention.Cdecl)]

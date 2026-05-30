@@ -109,6 +109,8 @@ add_executable(json_tests
     tests/json_roundtrip_tests.cpp
 )
 target_link_libraries(json_tests PRIVATE rawaccel_json_io)
+target_compile_definitions(json_tests PRIVATE
+    RA_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/default_config.json")
 add_test(NAME json_tests COMMAND json_tests)
 
 # Curve shim tests: exercise the C ABI the GUI preview P/Invokes, asserting it
@@ -119,6 +121,8 @@ add_executable(shim_tests
 )
 target_include_directories(shim_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../shim)
 target_link_libraries(shim_tests PRIVATE rawaccel_common_shim rawaccel_json_io)
+target_compile_definitions(shim_tests PRIVATE
+    RA_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/default_config.json")
 add_test(NAME shim_tests COMMAND shim_tests)
 
 # C++ data-plane + math library: HID descriptor parsing, LUT precomputation,
@@ -180,11 +184,6 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/rawaccel-agentd.service
         DESTINATION ${RA_SYSTEMD_UNIT_DIR})
 
 # Diagnostic probe (`rawaccel-agentd --probe`) lives in the Rust daemon now.
-
-# Dump a canonical driver_config via json_io. Generates the cross-OS JSON
-# contract fixture for the Rust config parser and serves as a parity reference.
-add_executable(ra-config-dump tools/ra-config-dump.cpp)
-target_link_libraries(ra-config-dump PRIVATE rawaccel_json_io)
 
 # Step 10 HID-BPF kernel program: compile rawaccel.bpf.c via clang -target bpf
 # and verifier-check it via a libbpf loader. clang + bpftool are required;
@@ -296,4 +295,6 @@ add_executable(lifecycle_tests
     tests/lifecycle_tests.cpp
 )
 target_link_libraries(lifecycle_tests PRIVATE ra_backend)
+target_compile_definitions(lifecycle_tests PRIVATE
+    RA_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/default_config.json")
 add_test(NAME lifecycle_tests COMMAND lifecycle_tests)
