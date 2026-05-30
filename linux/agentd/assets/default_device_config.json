@@ -1,0 +1,6 @@
+{
+  "DPI (normalizes input speed unit: counts/ms -> in/s)": 0,
+  "Polling rate Hz (keep at 0 for automatic adjustment)": 0,
+  "Use constant time interval based on polling rate": false,
+  "disable": false
+}

@@ -24,6 +24,12 @@ fn main() {
         println!("cargo:rustc-env={name}={}", extract_int(&src, name));
     }
 
+    // min_driver_version = { a, b, c }; gates version negotiation (client_too_old).
+    let (min_major, min_minor, min_patch) = extract_min_version(&src);
+    println!("cargo:rustc-env=RA_MIN_VER_MAJOR={min_major}");
+    println!("cargo:rustc-env=RA_MIN_VER_MINOR={min_minor}");
+    println!("cargo:rustc-env=RA_MIN_VER_PATCH={min_patch}");
+
     println!("cargo:rerun-if-env-changed=RA_BACKEND_LIB_DIR");
     let lib_dir = env::var("RA_BACKEND_LIB_DIR")
         .map(PathBuf::from)
@@ -32,6 +38,27 @@ fn main() {
     // bins for the daemon, tests for the FFI contract test.
     println!("cargo:rustc-link-arg-bins=-Wl,-rpath,{}", lib_dir.display());
     println!("cargo:rustc-link-arg-tests=-Wl,-rpath,{}", lib_dir.display());
+}
+
+// Parse `min_driver_version = { a, b, c }` (whitespace-insensitive) into a triple.
+fn extract_min_version(src: &str) -> (i32, i32, i32) {
+    let line = src
+        .lines()
+        .find(|l| l.contains("min_driver_version"))
+        .unwrap_or_else(|| panic!("missing min_driver_version in rawaccel-version.h"));
+    let braces = line
+        .split_once('{')
+        .and_then(|(_, r)| r.split_once('}'))
+        .map(|(inner, _)| inner)
+        .unwrap_or_else(|| panic!("malformed min_driver_version line: {line}"));
+    let nums: Vec<i32> = braces
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+    match nums.as_slice() {
+        [a, b, c] => (*a, *b, *c),
+        _ => panic!("min_driver_version needs 3 ints, got: {braces}"),
+    }
 }
 
 fn extract_int(src: &str, name: &str) -> i32 {

@@ -28,3 +28,23 @@ fn cpp_backend_accepts_rust_resolved_json() {
         assert_eq!(rc, 0, "C++ json_io rejected the Rust-built resolved_json");
     }
 }
+
+#[test]
+fn cpp_backend_accepts_embedded_defaults() {
+    // The deactivate path and the no-matching-profile fallback hand the backend
+    // the embedded canonical defaults; json_io uses .at() everywhere, so these
+    // must be field-complete or bind would throw -> rc != 0.
+    let rj = config::resolved_json(&config::default_profile(), &config::default_device_config());
+
+    let path = CString::new("/nonexistent.bpf.o").unwrap();
+    let rj_c = CString::new(rj).unwrap();
+
+    // SAFETY: as above, unknown id only exercises the JSON parse path.
+    unsafe {
+        let be = sys::ra_backend_create(path.as_ptr());
+        assert!(!be.is_null(), "ra_backend_create returned null");
+        let rc = sys::ra_backend_bind(be, 999, rj_c.as_ptr());
+        sys::ra_backend_destroy(be);
+        assert_eq!(rc, 0, "C++ json_io rejected the embedded default profile/config");
+    }
+}

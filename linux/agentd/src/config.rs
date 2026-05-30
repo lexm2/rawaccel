@@ -8,6 +8,33 @@
 use anyhow::{anyhow, Context, Result};
 use serde_json::{Map, Value};
 
+/// Canonical default profile (noaccel) and device_config, generated from the C++
+/// json_io serializer (`ra-config-dump`) so they are guaranteed `.at()`-complete
+/// when the backend reparses them. Used as the resolve fallback and on deactivate.
+pub const DEFAULT_PROFILE_JSON: &str = include_str!("../assets/default_profile.json");
+pub const DEFAULT_DEVICE_CONFIG_JSON: &str = include_str!("../assets/default_device_config.json");
+
+/// Parsed embedded default profile. Panics only if the checked-in asset is invalid.
+pub fn default_profile() -> Value {
+    serde_json::from_str(DEFAULT_PROFILE_JSON).expect("embedded default_profile.json is valid JSON")
+}
+
+/// Parsed embedded default device_config.
+pub fn default_device_config() -> Value {
+    serde_json::from_str(DEFAULT_DEVICE_CONFIG_JSON)
+        .expect("embedded default_device_config.json is valid JSON")
+}
+
+/// "major.minor.patch" from the build-embedded version (mirrors RA_VER_STRING).
+pub fn version_string() -> String {
+    format!(
+        "{}.{}.{}",
+        env!("RA_VER_MAJOR"),
+        env!("RA_VER_MINOR"),
+        env!("RA_VER_PATCH")
+    )
+}
+
 /// JSON keys the daemon interprets (subset of json_io.hpp `key::`).
 mod key {
     pub const VERSION: &str = "version";
@@ -102,6 +129,28 @@ impl DriverConfig {
             profiles,
             devices,
         })
+    }
+
+    /// Empty/default config: no profiles or devices, embedded default
+    /// device_config. Mirrors a default-constructed C++ `driver_config` and is
+    /// the active state before the first apply and after a deactivate.
+    pub fn empty() -> Self {
+        let default_device_config = default_device_config();
+        let mut m = Map::new();
+        m.insert(key::VERSION.to_string(), Value::String(version_string()));
+        m.insert(
+            key::DEFAULT_DEVICE_CONFIG.to_string(),
+            default_device_config.clone(),
+        );
+        m.insert(key::PROFILES.to_string(), Value::Array(vec![]));
+        m.insert(key::DEVICES.to_string(), Value::Array(vec![]));
+        Self {
+            raw: Value::Object(m),
+            version: version_string(),
+            default_device_config,
+            profiles: vec![],
+            devices: vec![],
+        }
     }
 
     /// The underlying Value (embedded verbatim in the `get` RPC response).
