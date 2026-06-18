@@ -7,5 +7,6 @@ pub mod agent;
 pub mod backend;
 pub mod config;
 pub mod discovery;
+pub mod doctor;
 pub mod hid;
 pub mod server;

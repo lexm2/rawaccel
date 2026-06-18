@@ -78,6 +78,8 @@ enum Command {
     Version,
     /// Print agent status (active/pending config, time until apply)
     Status,
+    /// Check this system meets the HID-BPF requirements (kernel, BTF, config)
+    Doctor,
 }
 
 fn main() -> ExitCode {
@@ -117,6 +119,8 @@ fn run(cli: Cli) -> Result<()> {
             println!("rawaccel-agentd restarted ({})", socket.display());
             Ok(())
         }
+        // run the daemon's own preflight (it links libbpf for the real probe)
+        Command::Doctor => daemon::doctor(),
         // client RPCs connect to whichever socket is live
         other => {
             let socket = daemon::connect_socket(&cli.socket);
@@ -126,7 +130,8 @@ fn run(cli: Cli) -> Result<()> {
                 Command::Get { output } => cmd_get(&mut client, output.as_deref()),
                 Command::Version => cmd_version(&mut client),
                 Command::Status => cmd_status(&mut client),
-                Command::Gui | Command::Start | Command::Stop | Command::Restart => {
+                Command::Gui | Command::Start | Command::Stop | Command::Restart
+                | Command::Doctor => {
                     unreachable!("handled above")
                 }
             }

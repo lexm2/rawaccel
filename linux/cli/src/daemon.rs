@@ -238,6 +238,29 @@ fn spawn_dev_agent(socket: &Path) -> Result<()> {
     Ok(())
 }
 
+// Exec `rawaccel-agentd --doctor`: the daemon links libbpf, so it runs the real
+// capability probe. exec() makes the daemon's exit code our own (1 == NOT READY).
+pub fn doctor() -> Result<()> {
+    use std::os::unix::process::CommandExt;
+    let agent = agent_binary().ok_or_else(|| {
+        anyhow!(
+            "rawaccel-agentd not found next to this executable or in the dev build \
+             dir; build linux/target/release/rawaccel-agentd first"
+        )
+    })?;
+    let mut cmd = Command::new(&agent);
+    cmd.arg("--doctor");
+    // In a dev checkout the BPF object sits in linux/build, not beside the daemon;
+    // point --doctor at it so the "object present" check reflects reality.
+    if let Some(repo) = crate::find_repo_root() {
+        let obj = repo.join("linux").join("build").join("rawaccel.bpf.o");
+        if obj.is_file() {
+            cmd.arg("--bpf-object").arg(obj);
+        }
+    }
+    Err(cmd.exec()).context("failed to run rawaccel-agentd --doctor")
+}
+
 // rawaccel-agentd beside this exe (installed) or in the dev build dir
 fn agent_binary() -> Option<PathBuf> {
     if let Ok(exe) = env::current_exe() {

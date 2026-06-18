@@ -1,0 +1,124 @@
+# Cross-distro / cross-kernel CI for the Linux HID-BPF agent.
+#
+# The portability surface here is the KERNEL, not userspace. The BPF program uses
+# the struct_ops HID-BPF API (hid_bpf_ops / hid_device_event), which only exists on
+# Linux >= 6.11. Containers share the runner's kernel, so they can only validate the
+# BUILD; proving the program verifies on a given kernel requires booting that kernel
+# in a VM (kernel-matrix job below).
+name: linux-ci
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["linux/**", "common/**", "userinterface/**", "userspace-backend/**", ".github/workflows/linux-ci.yml"]
+  pull_request:
+    paths: ["linux/**", "common/**", "userinterface/**", "userspace-backend/**", ".github/workflows/linux-ci.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # 1) Build everything + run the unprivileged suite on a single recent toolchain.
+  #    No BPF load here (no root / kernel guarantee) -- that's the kernel-matrix job.
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake clang llvm bpftool libbpf-dev pkg-config \
+            libsystemd-dev nlohmann-json3-dev build-essential
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Core tests (cargo + ctest + parity, no root)
+        run: ./linux/run-tests.sh --core
+      - name: Preflight doctor smoke (non-gating; runner kernel may predate 6.11)
+        run: |
+          cargo build --manifest-path linux/Cargo.toml -p rawaccel-agentd
+          sudo linux/target/debug/rawaccel-agentd --doctor \
+            --bpf-object linux/build/rawaccel.bpf.o || true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0"
+      - name: Build .NET GUI + userspace backend (net8.0)
+        run: |
+          dotnet build userspace-backend/userspace-backend.csproj -c Release
+          dotnet build userinterface/userinterface.csproj -c Release
+          dotnet test userspace-backend-tests/userspace-backend-tests.csproj -c Release
+
+  # 2) Kernel matrix -- the actual cross-kernel portability gate.
+  #    Boots each kernel in a microVM via vmtest and runs the libbpf verifier load
+  #    (rawaccel-bpf-verify) as root. Kernels come from cilium/ci-kernels OCI images.
+  #    6.11 is the floor (struct_ops HID-BPF); bump the top as new stable kernels ship.
+  kernel-matrix:
+    runs-on: ubuntu-24.04
+    needs: build-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: ["6.11", "6.12", "6.13", "6.14", "stable"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake clang llvm bpftool libbpf-dev pkg-config \
+            libsystemd-dev nlohmann-json3-dev build-essential qemu-system-x86
+      - name: Build BPF object + verifier tool
+        run: |
+          cmake -S linux -B linux/build
+          cmake --build linux/build -j --target rawaccel-bpf-verify rawaccel_bpf_object
+      - name: Install vmtest
+        uses: dtolnay/rust-toolchain@stable
+      - run: cargo install vmtest
+      - name: Fetch kernel image (${{ matrix.kernel }})
+        run: |
+          # cilium/ci-kernels ships boot/vmlinuz for a range of stable kernels.
+          img="ghcr.io/cilium/ci-kernels:${{ matrix.kernel }}"
+          cid=$(docker create "$img")
+          mkdir -p /tmp/kernel
+          docker cp "$cid:/boot/vmlinuz" /tmp/kernel/vmlinuz
+          docker rm "$cid"
+      - name: Verify BPF object loads on kernel ${{ matrix.kernel }}
+        run: |
+          # vmtest boots the kernel, mounts the cwd, runs the command as root.
+          # rawaccel-bpf-verify exercises the libbpf verifier on the in-VM kernel;
+          # it needs CAP_BPF (root) but NOT a real HID device.
+          vmtest -k /tmp/kernel/vmlinuz \
+            "./linux/build/rawaccel-bpf-verify --object ./linux/build/rawaccel.bpf.o"
+
+  # 3) Distro build matrix -- catches per-distro toolchain/dependency drift
+  #    (libbpf/clang/bpftool versions, package names). BUILD ONLY: containers share
+  #    the host kernel, so no BPF load happens here. /sys/kernel/btf/vmlinux from the
+  #    runner is mounted read-only, which is enough to generate vmlinux.h.
+  distro-build:
+    runs-on: ubuntu-24.04
+    needs: build-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: fedora:latest
+            install: dnf -y install cmake clang llvm bpftool libbpf-devel pkgconf-pkg-config systemd-devel nlohmann-json-devel rust cargo gcc-c++ make
+          - distro: archlinux:latest
+            install: pacman -Sy --noconfirm cmake clang llvm bpf libbpf pkgconf systemd nlohmann-json rust make gcc
+          - distro: debian:trixie
+            install: apt-get update && apt-get install -y --no-install-recommends cmake clang llvm bpftool libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential
+          - distro: ubuntu:24.04
+            install: apt-get update && apt-get install -y --no-install-recommends cmake clang llvm bpftool libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential
+    container:
+      image: ${{ matrix.distro }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: ${{ matrix.install }}
+      - name: Build C++ artifacts + BPF object
+        run: |
+          cmake -S linux -B linux/build
+          cmake --build linux/build -j
+      - name: Build Rust daemon + CLI
+        run: cargo build --release --manifest-path linux/Cargo.toml

@@ -28,7 +28,7 @@ extern "C" fn on_signal(_: libc::c_int) {
 fn usage() {
     eprintln!(
         "usage: rawaccel-agentd [--socket PATH] [--settings PATH] \
-         [--backend {{auto,bpf,noop}}] [--bpf-object PATH] [--probe]"
+         [--backend {{auto,bpf,noop}}] [--bpf-object PATH] [--probe] [--doctor]"
     );
 }
 
@@ -51,6 +51,7 @@ fn run() -> i32 {
     let mut backend_name = "auto".to_string();
     let mut bpf_object_path = default_bpf_object_path();
     let mut probe_only = false;
+    let mut doctor = false;
 
     let args: Vec<String> = std::env::args().collect();
     let mut i = 1;
@@ -73,6 +74,7 @@ fn run() -> i32 {
                 i += 1;
             }
             "--probe" => probe_only = true,
+            "--doctor" => doctor = true,
             "-h" | "--help" => {
                 usage();
                 return 0;
@@ -83,6 +85,10 @@ fn run() -> i32 {
             }
         }
         i += 1;
+    }
+
+    if doctor {
+        return rawaccel_agentd::doctor::run(&bpf_object_path);
     }
 
     if probe_only {
