@@ -1,10 +1,14 @@
-# Cross-distro / cross-kernel CI for the Linux HID-BPF agent.
+# Cross-distro CI for the Linux HID-BPF agent.
 #
-# The portability surface here is the KERNEL, not userspace. The BPF program uses
-# the struct_ops HID-BPF API (hid_bpf_ops / hid_device_event), which only exists on
-# Linux >= 6.11. Containers share the runner's kernel, so they can only validate the
-# BUILD; proving the program verifies on a given kernel requires booting that kernel
-# in a VM (kernel-matrix job below).
+# The BPF program uses the struct_ops HID-BPF API (hid_bpf_ops / hid_device_event),
+# which only exists on Linux >= 6.11 with CONFIG_HID_BPF=y. A true multi-kernel
+# load-verify needs HID-BPF-enabled kernels; the readily-available prebuilt CI
+# kernel images (cilium/ci-kernels) are built WITHOUT CONFIG_HID_BPF, so they can't
+# load our program. Until an HID-BPF kernel source is wired in (self-hosted runner
+# or custom-built kernels), cross-kernel verification is covered by `rawaccel
+# doctor` + real-hardware testing. CI here validates: the build on each distro, and
+# a best-effort real verifier load on the runner's own kernel (skipped if it lacks
+# HID-BPF). See the runner-verify step in build-and-test.
 name: linux-ci
 
 on:
@@ -20,8 +24,8 @@ defaults:
     shell: bash
 
 jobs:
-  # 1) Build everything + run the unprivileged suite on a single recent toolchain.
-  #    No BPF load here (no root / kernel guarantee) -- that's the kernel-matrix job.
+  # 1) Build everything, run the unprivileged suite, and attempt a real verifier
+  #    load on the runner's own kernel (best-effort: skipped if it lacks HID-BPF).
   build-and-test:
     runs-on: ubuntu-24.04
     steps:
@@ -44,6 +48,20 @@ jobs:
           cargo build --manifest-path linux/Cargo.toml -p rawaccel-agentd
           sudo linux/target/debug/rawaccel-agentd --doctor \
             --bpf-object linux/build/rawaccel.bpf.o || true
+      - name: BPF verifier load on runner kernel
+        # Real load through the libbpf verifier on the runner's kernel. Gates on a
+        # genuine verifier rejection, but PASSES on exit 77 (skip), which the tool
+        # returns when the kernel lacks HID-BPF/CAP_BPF -- expected on most runners.
+        # This is the one real load datapoint until HID-BPF test kernels are wired in.
+        run: |
+          set +e
+          sudo linux/build/rawaccel-bpf-verify --object linux/build/rawaccel.bpf.o
+          code=$?
+          if [ "$code" -eq 77 ]; then
+            echo "::notice::runner kernel lacks HID-BPF or CAP_BPF; verifier load skipped"
+            exit 0
+          fi
+          exit "$code"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0"
@@ -53,65 +71,7 @@ jobs:
           dotnet build userinterface/userinterface.csproj -c Release
           dotnet test userspace-backend-tests/userspace-backend-tests.csproj -c Release
 
-  # 2) Kernel matrix -- the actual cross-kernel portability gate.
-  #    Boots each kernel in a microVM via vmtest and runs the libbpf verifier load
-  #    (rawaccel-bpf-verify) as root. Kernels come from cilium/ci-kernels OCI images.
-  #    6.11 is the floor (struct_ops HID-BPF); bump the top as new stable kernels ship.
-  kernel-matrix:
-    runs-on: ubuntu-24.04
-    needs: build-and-test
-    strategy:
-      fail-fast: false
-      matrix:
-        kernel: ["6.11", "6.12", "6.13", "6.14", "stable"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake clang llvm libbpf-dev pkg-config \
-            libsystemd-dev nlohmann-json3-dev build-essential \
-            qemu-system-x86 qemu-guest-agent linux-tools-generic
-          # vmtest runs the command in the guest via qemu-ga (qemu-guest-agent);
-          # the guest shares the host rootfs, so the binary must exist on the runner.
-          # noble bpftool is virtual; symlink the generic linux-tools binary (see job 1).
-          sudo ln -sf "$(find /usr/lib/linux-tools* -name bpftool 2>/dev/null | sort | tail -1)" /usr/local/bin/bpftool
-          bpftool version
-      - name: Build BPF object + verifier tool
-        run: |
-          cmake -S linux -B linux/build
-          cmake --build linux/build -j --target rawaccel-bpf-verify rawaccel_bpf_object
-      - name: Install vmtest
-        uses: dtolnay/rust-toolchain@stable
-      - run: cargo install vmtest
-      - name: Fetch kernel image (${{ matrix.kernel }})
-        run: |
-          # cilium/ci-kernels ships /boot/vmlinuz for a range of stable kernels.
-          # The image is a bare rootfs with no CMD, so `docker create` needs a
-          # command arg (never run -- we only `docker cp` from the container fs).
-          img="ghcr.io/cilium/ci-kernels:${{ matrix.kernel }}"
-          cid=$(docker create "$img" /bin/true)
-          mkdir -p /tmp/kernel
-          docker cp "$cid:/boot/vmlinuz" /tmp/kernel/vmlinuz
-          docker rm "$cid"
-      - name: Enable KVM access
-        # /dev/kvm exists on hosted runners but is root:kvm 0660 and the runner
-        # user isn't in the kvm group, so qemu can't open it. Relax via udev.
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Verify BPF object loads on kernel ${{ matrix.kernel }}
-        run: |
-          # vmtest boots the kernel, mounts the cwd, runs the command as root.
-          # rawaccel-bpf-verify exercises the libbpf verifier on the in-VM kernel;
-          # it needs CAP_BPF (root) but NOT a real HID device.
-          vmtest -k /tmp/kernel/vmlinuz \
-            "./linux/build/rawaccel-bpf-verify --object ./linux/build/rawaccel.bpf.o"
-
-  # 3) Distro build matrix -- catches per-distro toolchain/dependency drift
+  # 2) Distro build matrix -- catches per-distro toolchain/dependency drift
   #    (libbpf/clang/bpftool versions, package names). BUILD ONLY: containers share
   #    the host kernel, so no BPF load happens here. /sys/kernel/btf/vmlinux from the
   #    runner is mounted read-only, which is enough to generate vmlinux.h.

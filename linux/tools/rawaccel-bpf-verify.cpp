@@ -63,23 +63,41 @@ int main(int argc, char** argv)
     int rc = bpf_object__load(obj);
     if (rc != 0) {
         const int saved = errno;
-        // EACCES: verifier rejected as unsafe (log explains). EPERM: missing
-        // CAP_BPF / RLIMIT_MEMLOCK, never reached the verifier.
-        if (saved != EPERM) {
+
+        // Kernel built without CONFIG_HID_BPF: the hid_bpf kfuncs/struct_ops are
+        // absent from BTF, so load fails at ksym resolution before the verifier.
+        // That's an environment gap (generic CI kernels omit HID-BPF), not a
+        // program defect -- skip rather than fail.
+        const bool no_hid_bpf =
+            g_log.find("not found in kernel or module BTFs") != std::string::npos &&
+            g_log.find("hid_bpf") != std::string::npos;
+        if (no_hid_bpf) {
             std::fprintf(stderr,
-                "---- verifier log ----\n%s---- end verifier log ----\n",
-                verifier_log.data());
+                "verifier check skipped: kernel lacks HID-BPF (CONFIG_HID_BPF); "
+                "hid_bpf kfuncs absent from BTF\n");
+            bpf_object__close(obj);
+            return 77;
         }
-        std::fprintf(stderr, "bpf_object__load failed: rc=%d errno=%d (%s)\n",
-                     rc, saved, std::strerror(saved));
-        bpf_object__close(obj);
+
+        // EPERM: missing CAP_BPF / RLIMIT_MEMLOCK, never reached the verifier.
         if (saved == EPERM) {
+            std::fprintf(stderr, "bpf_object__load failed: rc=%d errno=%d (%s)\n",
+                         rc, saved, std::strerror(saved));
             std::fprintf(stderr,
                 "verifier check skipped: needs CAP_BPF or root. "
                 "Re-run as: sudo %s --object %s\n",
                 argv[0], path.c_str());
+            bpf_object__close(obj);
             return 77;
         }
+
+        // EACCES etc: verifier rejected as unsafe -- the log explains why.
+        std::fprintf(stderr,
+            "---- verifier log ----\n%s---- end verifier log ----\n",
+            verifier_log.data());
+        std::fprintf(stderr, "bpf_object__load failed: rc=%d errno=%d (%s)\n",
+                     rc, saved, std::strerror(saved));
+        bpf_object__close(obj);
         return 1;
     }
 
