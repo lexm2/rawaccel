@@ -84,9 +84,11 @@ jobs:
       - run: cargo install vmtest
       - name: Fetch kernel image (${{ matrix.kernel }})
         run: |
-          # cilium/ci-kernels ships boot/vmlinuz for a range of stable kernels.
+          # cilium/ci-kernels ships /boot/vmlinuz for a range of stable kernels.
+          # The image is a bare rootfs with no CMD, so `docker create` needs a
+          # command arg (never run -- we only `docker cp` from the container fs).
           img="ghcr.io/cilium/ci-kernels:${{ matrix.kernel }}"
-          cid=$(docker create "$img")
+          cid=$(docker create "$img" /bin/true)
           mkdir -p /tmp/kernel
           docker cp "$cid:/boot/vmlinuz" /tmp/kernel/vmlinuz
           docker rm "$cid"
@@ -124,11 +126,15 @@ jobs:
       - name: Install deps
         run: ${{ matrix.install }}
       - name: Ensure bpftool on PATH
-        # Ubuntu has no standalone bpftool package; symlink the linux-tools binary.
-        # No-op on Fedora/Arch/Debian where the package puts it on PATH directly.
+        # Ubuntu's linux-tools-common installs a /usr/sbin/bpftool SHIM that
+        # dispatches to the running kernel's tools (absent in a container), so it's
+        # on PATH but non-functional. Test that bpftool actually RUNS, not just that
+        # the name resolves; if not, symlink the real linux-tools binary (which
+        # /usr/local/bin shadows ahead of the shim). No-op on Fedora/Arch/Debian.
         run: |
-          if ! command -v bpftool >/dev/null 2>&1; then
+          if ! bpftool version >/dev/null 2>&1; then
             ln -sf "$(find /usr/lib/linux-tools* -name bpftool 2>/dev/null | sort | tail -1)" /usr/local/bin/bpftool
+            hash -r
           fi
           bpftool version
       - name: Build C++ artifacts + BPF object
