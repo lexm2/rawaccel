@@ -30,8 +30,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake clang llvm bpftool libbpf-dev pkg-config \
-            libsystemd-dev nlohmann-json3-dev build-essential
+            cmake clang llvm libbpf-dev pkg-config \
+            libsystemd-dev nlohmann-json3-dev build-essential linux-tools-generic
+          # noble has no standalone bpftool (virtual pkg); the shim can't match the
+          # Azure runner kernel, so symlink the generic linux-tools binary onto PATH.
+          sudo ln -sf "$(find /usr/lib/linux-tools* -name bpftool 2>/dev/null | sort | tail -1)" /usr/local/bin/bpftool
+          bpftool version
       - uses: dtolnay/rust-toolchain@stable
       - name: Core tests (cargo + ctest + parity, no root)
         run: ./linux/run-tests.sh --core
@@ -66,8 +70,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake clang llvm bpftool libbpf-dev pkg-config \
-            libsystemd-dev nlohmann-json3-dev build-essential qemu-system-x86
+            cmake clang llvm libbpf-dev pkg-config \
+            libsystemd-dev nlohmann-json3-dev build-essential qemu-system-x86 linux-tools-generic
+          # noble bpftool is virtual; symlink the generic linux-tools binary (see job 1).
+          sudo ln -sf "$(find /usr/lib/linux-tools* -name bpftool 2>/dev/null | sort | tail -1)" /usr/local/bin/bpftool
+          bpftool version
       - name: Build BPF object + verifier tool
         run: |
           cmake -S linux -B linux/build
@@ -109,13 +116,21 @@ jobs:
           - distro: debian:trixie
             install: apt-get update && apt-get install -y --no-install-recommends cmake clang llvm bpftool libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential
           - distro: ubuntu:24.04
-            install: apt-get update && apt-get install -y --no-install-recommends cmake clang llvm bpftool libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential
+            install: apt-get update && apt-get install -y --no-install-recommends cmake clang llvm libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential linux-tools-generic
     container:
       image: ${{ matrix.distro }}
     steps:
       - uses: actions/checkout@v4
       - name: Install deps
         run: ${{ matrix.install }}
+      - name: Ensure bpftool on PATH
+        # Ubuntu has no standalone bpftool package; symlink the linux-tools binary.
+        # No-op on Fedora/Arch/Debian where the package puts it on PATH directly.
+        run: |
+          if ! command -v bpftool >/dev/null 2>&1; then
+            ln -sf "$(find /usr/lib/linux-tools* -name bpftool 2>/dev/null | sort | tail -1)" /usr/local/bin/bpftool
+          fi
+          bpftool version
       - name: Build C++ artifacts + BPF object
         run: |
           cmake -S linux -B linux/build
