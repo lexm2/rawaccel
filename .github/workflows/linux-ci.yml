@@ -71,7 +71,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake clang llvm libbpf-dev pkg-config \
-            libsystemd-dev nlohmann-json3-dev build-essential qemu-system-x86 linux-tools-generic
+            libsystemd-dev nlohmann-json3-dev build-essential \
+            qemu-system-x86 qemu-guest-agent linux-tools-generic
+          # vmtest runs the command in the guest via qemu-ga (qemu-guest-agent);
+          # the guest shares the host rootfs, so the binary must exist on the runner.
           # noble bpftool is virtual; symlink the generic linux-tools binary (see job 1).
           sudo ln -sf "$(find /usr/lib/linux-tools* -name bpftool 2>/dev/null | sort | tail -1)" /usr/local/bin/bpftool
           bpftool version
@@ -130,8 +133,12 @@ jobs:
           # HTTPS fetch of crates.io fails ([77] SSL CA cert).
           - distro: debian:trixie
             install: apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates && apt-get install -y --no-install-recommends cmake clang llvm bpftool libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential
+          # Ubuntu 24.04 LTS ships cargo 1.75, too old for the dep tree (clap pulls
+          # edition2024, needs cargo >= 1.85), so the Rust side builds via rustup
+          # instead (see the conditional build step). The C++/BPF build still uses
+          # the distro toolchain, which is the real cross-distro signal here.
           - distro: ubuntu:24.04
-            install: apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates && apt-get install -y --no-install-recommends cmake clang llvm libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential linux-tools-generic
+            install: apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates && apt-get install -y --no-install-recommends cmake clang llvm libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev build-essential linux-tools-generic curl
     container:
       image: ${{ matrix.distro }}
     steps:
@@ -154,5 +161,14 @@ jobs:
         run: |
           cmake -S linux -B linux/build
           cmake --build linux/build -j
-      - name: Build Rust daemon + CLI
+      - name: Build Rust daemon + CLI (distro cargo)
+        # Fedora/Arch/Debian ship cargo >= 1.85, which the dep tree requires.
+        if: ${{ !startsWith(matrix.distro, 'ubuntu') }}
         run: cargo build --release --manifest-path linux/Cargo.toml
+      - name: Build Rust daemon + CLI (rustup stable)
+        # Ubuntu LTS cargo is too old; use the current stable toolchain instead.
+        if: ${{ startsWith(matrix.distro, 'ubuntu') }}
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          . "$HOME/.cargo/env"
+          cargo build --release --manifest-path linux/Cargo.toml
