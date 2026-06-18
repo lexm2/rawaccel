@@ -144,7 +144,7 @@ install(TARGETS ra_backend LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 # Install rules: `cmake --install build` deploys the C++ artifacts (libra_backend.so,
 # curve shim, BPF object) and the systemd unit. cargo builds/installs the daemon
-# binary separately (see PACKAGING.md).
+# binary separately.
 install(TARGETS rawaccel_common_shim LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 pkg_check_modules(SYSTEMD systemd)

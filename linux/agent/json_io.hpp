@@ -1,8 +1,6 @@
 #pragma once
 
-// Native C++ port of wrapper/wrapper.cpp's JSON layer. Key names are the cross-OS
-// settings.json contract: do NOT rename a key without changing the Windows JsonProperty.
-
+// Native C++ port of wrapper/wrapper.cpp's JSON layer. Key names are in common/rawaccel-json-keys.h. 
 #include "rawaccel.hpp"
 #include "rawaccel-json-keys.h"
 

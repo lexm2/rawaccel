@@ -1,7 +1,7 @@
 #pragma once
 
 // BpfMouseLayout: byte-level dx/dy offsets the BPF data plane consumes.
-// Descriptor parsing now lives in the Rust daemon (agentd/src/hid.rs); the layout
+// Descriptor parsing lives in the Rust daemon (agentd/src/hid.rs); the layout
 // arrives precomputed over the C ABI.
 
 #include <cstdint>
