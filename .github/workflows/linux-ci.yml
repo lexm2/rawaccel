@@ -4,11 +4,11 @@
 # which only exists on Linux >= 6.11 with CONFIG_HID_BPF=y. A true multi-kernel
 # load-verify needs HID-BPF-enabled kernels; the readily-available prebuilt CI
 # kernel images (cilium/ci-kernels) are built WITHOUT CONFIG_HID_BPF, so they can't
-# load our program. Until an HID-BPF kernel source is wired in (self-hosted runner
-# or custom-built kernels), cross-kernel verification is covered by `rawaccel
-# doctor` + real-hardware testing. CI here validates: the build on each distro, and
-# a best-effort real verifier load on the runner's own kernel (skipped if it lacks
-# HID-BPF). See the runner-verify step in build-and-test.
+# load our program, and the hosted runner's own kernel lacks it too -- a runner load
+# attempt would only ever skip, so it's not worth running. Until an HID-BPF kernel
+# source is wired in (self-hosted runner or custom-built kernels), real verifier-load
+# and cross-kernel verification are covered by `rawaccel doctor` + real-hardware
+# testing. CI here validates the build + unprivileged test suite on each distro.
 name: linux-ci
 
 on:
@@ -24,8 +24,8 @@ defaults:
     shell: bash
 
 jobs:
-  # 1) Build everything, run the unprivileged suite, and attempt a real verifier
-  #    load on the runner's own kernel (best-effort: skipped if it lacks HID-BPF).
+  # 1) Build everything + run the unprivileged suite (cargo + ctest + parity) and
+  #    the .NET GUI/backend. No BPF load: the runner kernel lacks HID-BPF.
   build-and-test:
     runs-on: ubuntu-24.04
     steps:
@@ -43,25 +43,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Core tests (cargo + ctest + parity, no root)
         run: ./linux/run-tests.sh --core
-      - name: Preflight doctor smoke (non-gating; runner kernel may predate 6.11)
-        run: |
-          cargo build --manifest-path linux/Cargo.toml -p rawaccel-agentd
-          sudo linux/target/debug/rawaccel-agentd --doctor \
-            --bpf-object linux/build/rawaccel.bpf.o || true
-      - name: BPF verifier load on runner kernel
-        # Real load through the libbpf verifier on the runner's kernel. Gates on a
-        # genuine verifier rejection, but PASSES on exit 77 (skip), which the tool
-        # returns when the kernel lacks HID-BPF/CAP_BPF -- expected on most runners.
-        # This is the one real load datapoint until HID-BPF test kernels are wired in.
-        run: |
-          set +e
-          sudo linux/build/rawaccel-bpf-verify --object linux/build/rawaccel.bpf.o
-          code=$?
-          if [ "$code" -eq 77 ]; then
-            echo "::notice::runner kernel lacks HID-BPF or CAP_BPF; verifier load skipped"
-            exit 0
-          fi
-          exit "$code"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0"
