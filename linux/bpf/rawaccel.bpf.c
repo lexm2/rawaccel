@@ -24,28 +24,28 @@ struct {
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct ra_bpf_config);
-} ra_config SEC(".maps");
+} RA_MAP_CONFIG SEC(".maps");  /* map name centralized in rawaccel_bpf_layout.h */
 
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct ra_bpf_state);
-} ra_state SEC(".maps");
+} RA_MAP_STATE SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, RA_LUT_SIZE);
     __type(key, __u32);
     __type(value, __s32);
-} ra_lut_x SEC(".maps");
+} RA_MAP_LUT_X SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, RA_LUT_SIZE);
     __type(key, __u32);
     __type(value, __s32);
-} ra_lut_y SEC(".maps");
+} RA_MAP_LUT_Y SEC(".maps");
 
 /* ---- Helpers -------------------------------------------------------- */
 
@@ -92,9 +92,9 @@ int BPF_PROG(rawaccel_hid_device_event,
              enum hid_report_type report_type, __u64 source)
 {
     __u32 zero = 0;
-    struct ra_bpf_config *cfg = bpf_map_lookup_elem(&ra_config, &zero);
+    struct ra_bpf_config *cfg = bpf_map_lookup_elem(&RA_MAP_CONFIG, &zero);
     if (!cfg) return 0;
-    struct ra_bpf_state *st = bpf_map_lookup_elem(&ra_state, &zero);
+    struct ra_bpf_state *st = bpf_map_lookup_elem(&RA_MAP_STATE, &zero);
     if (!st) return 0;
 
     __u8 *rpt = hid_bpf_get_data(hctx, 0, RA_REPORT_VIEW_BYTES);
@@ -151,10 +151,10 @@ int BPF_PROG(rawaccel_hid_device_event,
     ra_pre_lut(cfg, st, dx, dy, dt_ms_q16, &inx, &iny, &ix, &fx, &iy, &fy,
                &single_scale, &weight);
 
-    __s32 raw_x = ra_q16_lerp(q16_lookup(&ra_lut_x, ix),
-                              q16_lookup(&ra_lut_x, ix + 1), fx);
-    __s32 raw_y = ra_q16_lerp(q16_lookup(&ra_lut_y, iy),
-                              q16_lookup(&ra_lut_y, iy + 1), fy);
+    __s32 raw_x = ra_q16_lerp(q16_lookup(&RA_MAP_LUT_X, ix),
+                              q16_lookup(&RA_MAP_LUT_X, ix + 1), fx);
+    __s32 raw_y = ra_q16_lerp(q16_lookup(&RA_MAP_LUT_Y, iy),
+                              q16_lookup(&RA_MAP_LUT_Y, iy + 1), fy);
 
     __s64 acc_x, acc_y;
     ra_post_lut(cfg, st, inx, iny, raw_x, raw_y, single_scale, weight, dt_ms_q16,
@@ -172,7 +172,7 @@ int BPF_PROG(rawaccel_hid_device_event,
 }
 
 SEC(".struct_ops.link")
-struct hid_bpf_ops rawaccel_ops = {
+struct hid_bpf_ops RA_MAP_OPS = {
     /* hid_id is patched at load time by the userspace loader. */
     .hid_id = 0,
     .hid_device_event = (void *)rawaccel_hid_device_event,

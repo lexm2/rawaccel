@@ -42,7 +42,7 @@ bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
 
     // hid_id must be patched before load() (else attach EINVAL); write directly
     // since set_initial_value() refuses partial writes.
-    bpf_map* ops = bpf_object__find_map_by_name(obj, "rawaccel_ops");
+    bpf_map* ops = bpf_object__find_map_by_name(obj, RA_MAP_NAME(RA_MAP_OPS));
     if (!ops) {
         bpf_object__close(obj);
         return false;
@@ -76,10 +76,10 @@ bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
     slot->layout = layout;
     slot->obj = obj;
     slot->ops_map = ops;
-    slot->config_map = bpf_object__find_map_by_name(obj, "ra_config");
-    slot->lut_x_map = bpf_object__find_map_by_name(obj, "ra_lut_x");
-    slot->lut_y_map = bpf_object__find_map_by_name(obj, "ra_lut_y");
-    slot->state_map = bpf_object__find_map_by_name(obj, "ra_state");
+    slot->config_map = bpf_object__find_map_by_name(obj, RA_MAP_NAME(RA_MAP_CONFIG));
+    slot->lut_x_map = bpf_object__find_map_by_name(obj, RA_MAP_NAME(RA_MAP_LUT_X));
+    slot->lut_y_map = bpf_object__find_map_by_name(obj, RA_MAP_NAME(RA_MAP_LUT_Y));
+    slot->state_map = bpf_object__find_map_by_name(obj, RA_MAP_NAME(RA_MAP_STATE));
     if (!slot->config_map || !slot->lut_x_map || !slot->lut_y_map ||
         !slot->state_map) {
         bpf_object__close(obj);
@@ -135,7 +135,6 @@ bool BpfBackend::populate_maps(Slot& slot,
                                const ra::modifier_settings& s,
                                const ra::device_config& c)
 {
-    // build_lut throws on an unported feature; refuse the bind.
     LutBuildResult lut;
     try {
         lut = build_lut(s, c);

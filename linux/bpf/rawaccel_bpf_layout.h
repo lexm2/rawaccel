@@ -18,6 +18,20 @@
 /* LUT density: 4096 entries -> step <= 0.025 in/s at typical NORMALIZED_DPI. */
 #define RA_LUT_SIZE 4096
 
+/* BPF map names: single source of truth for the BPF<->host map-name contract.
+ * One macro drives both the in-program map identifier (the BPF side declares
+ * `} RA_MAP_CONFIG SEC(".maps")` and dereferences `&RA_MAP_CONFIG`) and the
+ * host-side lookup string (find_map_by_name(obj, RA_MAP_NAME(RA_MAP_CONFIG))),
+ * so a rename can't desync the two files. RA_MAP_NAME needs two levels so the
+ * argument macro expands before being stringized. */
+#define RA_STRINGIFY_(x) #x
+#define RA_MAP_NAME(x)   RA_STRINGIFY_(x)
+#define RA_MAP_CONFIG    ra_config
+#define RA_MAP_STATE     ra_state
+#define RA_MAP_LUT_X     ra_lut_x
+#define RA_MAP_LUT_Y     ra_lut_y
+#define RA_MAP_OPS       rawaccel_ops
+
 /* Bump on any ra_bpf_config/ra_bpf_state layout or semantics change.
  * v4: added the tele_speed_* telemetry fields to ra_bpf_state. */
 #define RA_CONFIG_VERSION 4
