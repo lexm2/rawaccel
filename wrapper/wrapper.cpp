@@ -3,6 +3,7 @@
 #include "interop-exception.h"
 
 #include <rawaccel-io.hpp>
+#include <rawaccel-json-keys.h>
 #include <rawaccel-validate.hpp>
 
 using namespace System;
@@ -49,7 +50,9 @@ generic <typename T>
 [StructLayout(LayoutKind::Sequential)]
 public value struct Vec2
 {
+    [JsonProperty(RA_JK_X)]
     T x;
+    [JsonProperty(RA_JK_Y)]
     T y;
 };
 
@@ -58,34 +61,48 @@ public value struct AccelArgs
 {
     literal int MaxLutPoints = ra::LUT_POINTS_CAPACITY;
 
+    [JsonProperty(RA_JK_MODE)]
     AccelMode mode;
 
-    [JsonProperty("Gain / Velocity")]
+    [JsonProperty(RA_JK_GAIN)]
     [MarshalAs(UnmanagedType::U1)]
     bool gain;
 
+    [JsonProperty(RA_JK_INPUT_OFFSET)]
     double inputOffset;
+    [JsonProperty(RA_JK_OUTPUT_OFFSET)]
     double outputOffset;
+    [JsonProperty(RA_JK_ACCELERATION)]
     double acceleration;
+    [JsonProperty(RA_JK_DECAY_RATE)]
     double decayRate;
+    [JsonProperty(RA_JK_GAMMA)]
     double gamma;
+    [JsonProperty(RA_JK_MOTIVITY)]
     double motivity;
+    [JsonProperty(RA_JK_EXPONENT_CLASSIC)]
     double exponentClassic;
+    [JsonProperty(RA_JK_SCALE)]
     double scale;
+    [JsonProperty(RA_JK_EXPONENT_POWER)]
     double exponentPower;
+    [JsonProperty(RA_JK_LIMIT)]
     double limit;
+    [JsonProperty(RA_JK_SYNC_SPEED)]
     double syncSpeed;
+    [JsonProperty(RA_JK_SMOOTH)]
     double smooth;
 
-    [JsonProperty("Cap / Jump")]
+    [JsonProperty(RA_JK_CAP)]
     Vec2<double> cap;
 
-    [JsonProperty("Cap mode")]
+    [JsonProperty(RA_JK_CAP_MODE)]
     CapMode capMode;
 
     [JsonIgnore]
     int length;
 
+    [JsonProperty(RA_JK_DATA)]
     [MarshalAs(UnmanagedType::ByValArray, SizeConst = ra::LUT_RAW_DATA_CAPACITY)]
     array<float>^ data;
 
@@ -101,19 +118,20 @@ public value struct AccelArgs
 [StructLayout(LayoutKind::Sequential)]
 public value struct SpeedArgs
 {
-    [JsonProperty("Whole/combined accel (set false for 'by component' mode)")]
+    [JsonProperty(RA_JK_COMBINE_MAGNITUDES)]
     [MarshalAs(UnmanagedType::U1)]
     bool combineMagnitudes;
 
+    [JsonProperty(RA_JK_LP_NORM)]
     double lpNorm;
 
-    [JsonProperty("Time in ms after which an input is weighted at half its original value.")]
+    [JsonProperty(RA_JK_INPUT_SMOOTH_HALFLIFE)]
 	double inputSmoothHalflife;
 
-    [JsonProperty("Time in ms after which scale is weighted at half its original value.")]
+    [JsonProperty(RA_JK_SCALE_SMOOTH_HALFLIFE)]
 	double scaleSmoothHalflife;
 
-    [JsonProperty("Time in ms after which an output is weighted at half its original value.")]
+    [JsonProperty(RA_JK_OUTPUT_SMOOTH_HALFLIFE)]
 	double outputSmoothHalflife;
 };
 
@@ -121,39 +139,40 @@ public value struct SpeedArgs
 [StructLayout(LayoutKind::Sequential, CharSet = CharSet::Unicode)]
 public ref struct Profile
 {
+    [JsonProperty(RA_JK_NAME)]
     [MarshalAs(UnmanagedType::ByValTStr, SizeConst = ra::MAX_NAME_LEN)]
     System::String^ name;
 
-    [JsonProperty("Stretches domain for horizontal vs vertical inputs")]
+    [JsonProperty(RA_JK_DOMAIN_XY)]
     Vec2<double> domainXY;
-    [JsonProperty("Stretches accel range for horizontal vs vertical inputs")]
+    [JsonProperty(RA_JK_RANGE_XY)]
     Vec2<double> rangeXY;
 
-    [JsonProperty("Whole or horizontal accel parameters")]
+    [JsonProperty(RA_JK_ARGS_X)]
     AccelArgs argsX;
-    [JsonProperty("Vertical accel parameters")]
+    [JsonProperty(RA_JK_ARGS_Y)]
     AccelArgs argsY;
-    [JsonProperty("Input speed calculation parameters")]
+    [JsonProperty(RA_JK_INPUT_SPEED_ARGS)]
     SpeedArgs inputSpeedArgs;
 
-    [JsonProperty("Output DPI")]
+    [JsonProperty(RA_JK_OUTPUT_DPI)]
     double outputDPI;
-    [JsonProperty("Y/X output DPI ratio (vertical sens multiplier)")]
+    [JsonProperty(RA_JK_YX_RATIO)]
     double yxOutputDPIRatio;
-    [JsonProperty("L/R output DPI ratio (left sens multiplier)")]
+    [JsonProperty(RA_JK_LR_RATIO)]
     double lrOutputDPIRatio;
-    [JsonProperty("U/D output DPI ratio (up sens multiplier)")]
+    [JsonProperty(RA_JK_UD_RATIO)]
     double udOutputDPIRatio;
 
-    [JsonProperty("Degrees of rotation")]
+    [JsonProperty(RA_JK_ROTATION)]
     double rotation;
 
-    [JsonProperty("Degrees of angle snapping")]
+    [JsonProperty(RA_JK_SNAP)]
     double snap;
 
     [JsonIgnore]
     double minimumSpeed;
-    [JsonProperty("Input Speed Cap")]
+    [JsonProperty(RA_JK_MAXIMUM_SPEED)]
     double maximumSpeed;
 
     Profile(ra::profile& args)
@@ -168,29 +187,30 @@ public ref struct Profile
 [JsonObject(ItemRequired = Required::Always)]
 [StructLayout(LayoutKind::Sequential)]
 public value struct DeviceConfig {
+    [JsonProperty(RA_JK_DISABLE)]
     [MarshalAs(UnmanagedType::U1)]
     bool disable;
 
     [MarshalAs(UnmanagedType::U1)]
-    [JsonProperty(Required = Required::Default)]
+    [JsonProperty(RA_JK_SET_EXTRA_INFO, Required = Required::Default)]
     bool setExtraInfo;
 
     [MarshalAs(UnmanagedType::U1)]
-    [JsonProperty("Use constant time interval based on polling rate", Required = Required::Default)]
+    [JsonProperty(RA_JK_POLL_TIME_LOCK, Required = Required::Default)]
     bool pollTimeLock;
 
-    [JsonProperty("DPI (normalizes input speed unit: counts/ms -> in/s)")]
+    [JsonProperty(RA_JK_DPI)]
     int dpi;
 
-    [JsonProperty("Polling rate Hz (keep at 0 for automatic adjustment)")]
+    [JsonProperty(RA_JK_POLLING_RATE)]
     int pollingRate;
     
     [ComponentModel::DefaultValue(ra::DEFAULT_TIME_MIN)]
-    [JsonProperty(Required = Required::Default)]
+    [JsonProperty(RA_JK_MINIMUM_TIME, Required = Required::Default)]
     double minimumTime;
 
     [ComponentModel::DefaultValue(ra::DEFAULT_TIME_MAX)]
-    [JsonProperty(Required = Required::Default)]
+    [JsonProperty(RA_JK_MAXIMUM_TIME, Required = Required::Default)]
     double maximumTime;
 
     bool ShouldSerializesetExtraInfo()

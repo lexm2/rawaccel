@@ -58,13 +58,13 @@ RA_TEST("Shim: abi version is 3")
 RA_TEST("Shim: modify matches a direct modifier::modify on a classic curve")
 {
     json p = base_profile();
-    json args = p.at("Whole or horizontal accel parameters");
-    args["mode"] = "classic";
-    args["Gain / Velocity"] = true;
-    args["acceleration"] = 0.005;
-    args["exponentClassic"] = 2.0;
-    p["Whole or horizontal accel parameters"] = args;
-    p["Vertical accel parameters"] = args;
+    json args = p.at(rajson::key::ARGS_X);
+    args[rajson::key::MODE] = "classic";
+    args[rajson::key::GAIN] = true;
+    args[rajson::key::ACCELERATION] = 0.005;
+    args[rajson::key::EXPONENT_CLASSIC] = 2.0;
+    p[rajson::key::ARGS_X] = args;
+    p[rajson::key::ARGS_Y] = args;
     const std::string json_str = p.dump();
 
     ra_curve_t* c = ra_curve_create_from_config_json(json_str.c_str());
@@ -94,7 +94,7 @@ RA_TEST("Shim: modify matches a direct modifier::modify on a classic curve")
 RA_TEST("Shim: output_dpi 2000 scales a noaccel profile by 2x")
 {
     json p = base_profile();
-    p["Output DPI"] = 2000.0;  // 2x NORMALIZED_DPI (=1000)
+    p[rajson::key::OUTPUT_DPI] = 2000.0;  // 2x NORMALIZED_DPI (=1000)
     const std::string json_str = p.dump();
 
     ra_curve_t* c = ra_curve_create_from_config_json(json_str.c_str());
