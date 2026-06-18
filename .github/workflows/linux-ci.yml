@@ -92,6 +92,14 @@ jobs:
           mkdir -p /tmp/kernel
           docker cp "$cid:/boot/vmlinuz" /tmp/kernel/vmlinuz
           docker rm "$cid"
+      - name: Enable KVM access
+        # /dev/kvm exists on hosted runners but is root:kvm 0660 and the runner
+        # user isn't in the kvm group, so qemu can't open it. Relax via udev.
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
       - name: Verify BPF object loads on kernel ${{ matrix.kernel }}
         run: |
           # vmtest boots the kernel, mounts the cwd, runs the command as root.
@@ -115,10 +123,15 @@ jobs:
             install: dnf -y install cmake clang llvm bpftool libbpf-devel pkgconf-pkg-config systemd-devel nlohmann-json-devel rust cargo gcc-c++ make
           - distro: archlinux:latest
             install: pacman -Sy --noconfirm cmake clang llvm bpf libbpf pkgconf systemd nlohmann-json rust make gcc
+          # ca-certificates first + explicit update-ca-certificates: the minimal
+          # base images ship no CA bundle, and installing it in the same --no-
+          # install-recommends transaction as everything else doesn't reliably
+          # generate /etc/ssl/certs/ca-certificates.crt, so the distro cargo's
+          # HTTPS fetch of crates.io fails ([77] SSL CA cert).
           - distro: debian:trixie
-            install: apt-get update && apt-get install -y --no-install-recommends cmake clang llvm bpftool libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential
+            install: apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates && apt-get install -y --no-install-recommends cmake clang llvm bpftool libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential
           - distro: ubuntu:24.04
-            install: apt-get update && apt-get install -y --no-install-recommends cmake clang llvm libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential linux-tools-generic
+            install: apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates && apt-get install -y --no-install-recommends cmake clang llvm libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential linux-tools-generic
     container:
       image: ${{ matrix.distro }}
     steps:
