@@ -179,7 +179,7 @@
     <value>形式: x1,y1,x2,y2,...xn,yn;</value>
   </data>
   <data name="ProfileResetZoom" xml:space="preserve">
-    <value>拡大リセット</value>
+    <value>ズームリセット</value>
   </data>
 
   <!-- Language Names (Native) -->
@@ -230,10 +230,10 @@
     <value>削除</value>
   </data>
   <data name="MappingDeleteTitle" xml:space="preserve">
-    <value>マッピングを削除</value>
+    <value>割り当てを削除</value>
   </data>
   <data name="MappingDeleteMessage" xml:space="preserve">
-    <value>このマッピングを削除しますか？</value>
+    <value>この割り当てを削除しますか？</value>
   </data>
   <data name="MappingDeleteConfirm" xml:space="preserve">
     <value>削除</value>
@@ -304,7 +304,7 @@
     <value>ガンマ</value>
   </data>
   <data name="AccelSynchronousMotivity" xml:space="preserve">
-    <value>反応性</value>
+    <value>モティビティ</value>
   </data>
   <data name="AccelSynchronousSyncSpeed" xml:space="preserve">
     <value>同期速度</value>
@@ -380,15 +380,15 @@
     <value>最大速度</value>
   </data>
   <data name="HiddenOutputSmoothingHalfLife" xml:space="preserve">
-    <value>出力平滑化時定数</value>
+    <value>出力平滑化半減期</value>
   </data>
 
   <!-- Coalescion Resources -->
   <data name="CoalescionInputSmoothingHalfLife" xml:space="preserve">
-    <value>入力平滑化時定数</value>
+    <value>入力平滑化半減期</value>
   </data>
   <data name="CoalescionScaleSmoothingHalfLife" xml:space="preserve">
-    <value>スケール平滑化時定数</value>
+    <value>スケール平滑化半減期</value>
   </data>
 
   <!-- Device Resources -->
@@ -480,13 +480,13 @@
     <value>これはRawAccelのアルファ版です。問題報告前に以下をご確認ください：</value>
   </data>
   <data name="AlphaBuildWarningStep1" xml:space="preserve">
-    <value>1. 既存問題の確認</value>
+    <value>1. 既存の問題を</value>
   </data>
   <data name="AlphaBuildWarningHere" xml:space="preserve">
     <value>こちら</value>
   </data>
   <data name="AlphaBuildWarningStep1Continue" xml:space="preserve">
-    <value>で同様の問題が報告済みでないかご確認ください</value>
+    <value>から検索し、同様の問題が報告済みでないかご確認ください</value>
   </data>
   <data name="AlphaBuildWarningStep2" xml:space="preserve">
     <value>2. 解決済み問題から、類似する問題をお探しください</value>
