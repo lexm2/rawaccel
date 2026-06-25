@@ -124,7 +124,8 @@ pub fn probe_capability() -> ProbeResult {
 }
 
 fn cstr_to_string(buf: &[std::os::raw::c_char]) -> String {
-    // SAFETY: reinterpret the fixed buffer as bytes; the scan is bounded by buf.len().
+    // SAFETY: reinterpret the fixed buffer as bytes
+    // the scan is bounded by buf.len().
     let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len()) };
     match CStr::from_bytes_until_nul(bytes) {
         Ok(c) => c.to_string_lossy().into_owned(),
@@ -140,7 +141,8 @@ pub struct FfiBackend {
 impl FfiBackend {
     pub fn new(bpf_object_path: &str) -> anyhow::Result<Self> {
         let path = CString::new(bpf_object_path)?;
-        // SAFETY: `path` outlives the call; the C side copies what it needs.
+        // SAFETY: `path` outlives the call
+        // the C side copies what it needs.
         let raw = unsafe { sys::ra_backend_create(path.as_ptr()) };
         if raw.is_null() {
             anyhow::bail!("ra_backend_create returned null (OOM?)");
@@ -166,7 +168,8 @@ impl Backend for FfiBackend {
             dy_byte_offset: layout.dy_byte_offset,
             dy_byte_size: layout.dy_byte_size,
         };
-        // SAFETY: valid handle; sysname_c/&l outlive the call.
+        // SAFETY: valid handle
+        // sysname_c/&l outlive the call.
         let rc = unsafe { sys::ra_backend_attach(self.raw, id, hid_id, sysname_c.as_ptr(), &l) };
         if rc != 0 {
             anyhow::bail!("ra_backend_attach failed for {sysname} (rc={rc})");
@@ -177,18 +180,22 @@ impl Backend for FfiBackend {
     fn bind_device(&mut self, id: u64, profile: &Value, config: &Value) {
         let rj = config::resolved_json(profile, config);
         let Ok(rj_c) = CString::new(rj) else { return };
-        // SAFETY: valid handle; rj_c outlives the call. -1 is non-fatal here; health() surfaces a dead data plane.
+        // SAFETY: valid handle
+        // rj_c outlives the call. -1 is non-fatal here
+        // health() surfaces a dead data plane.
         unsafe { sys::ra_backend_bind(self.raw, id, rj_c.as_ptr()) };
     }
 
     fn unbind_device(&mut self, id: u64) {
-        // SAFETY: valid handle; detach on an unknown id is a no-op C-side.
+        // SAFETY: valid handle
+        // detach on an unknown id is a no-op C-side.
         unsafe { sys::ra_backend_detach(self.raw, id) };
     }
 
     fn current_speed_sample(&self) -> SpeedSample {
         let mut s = sys::RaSpeedSample::default();
-        // SAFETY: valid handle; `s` is a valid out-param.
+        // SAFETY: valid handle
+        // `s` is a valid out-param.
         unsafe { sys::ra_backend_speed(self.raw, &mut s) };
         SpeedSample {
             x: s.x,
@@ -199,7 +206,8 @@ impl Backend for FfiBackend {
 
     fn health(&self) -> DataPlaneHealth {
         let mut h = sys::RaBackendHealth::default();
-        // SAFETY: valid handle; `h` is a valid out-param.
+        // SAFETY: valid handle
+        // `h` is a valid out-param.
         unsafe { sys::ra_backend_health(self.raw, &mut h) };
         DataPlaneHealth {
             devices: h.devices,

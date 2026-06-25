@@ -40,16 +40,16 @@ namespace userspace_backend.Model.AccelDefinitions
 
         public ICoalescionModel Coalescion { get; set; }
 
-        public FormulaAccelModel FormulaAccel
+        public FormulaAccelModel? FormulaAccel
         {
-            get => SelectionLookup.TryGetValue(AccelerationDefinitionType.Formula, out IEditableSettingsCollectionSpecific<Acceleration> value)
+            get => SelectionLookup.TryGetValue(AccelerationDefinitionType.Formula, out IEditableSettingsCollectionSpecific<Acceleration>? value)
                     ? value as FormulaAccelModel
                     : null;
         }
 
-        public LookupTableDefinitionModel LookupTableAccel
+        public LookupTableDefinitionModel? LookupTableAccel
         {
-            get => SelectionLookup.TryGetValue(AccelerationDefinitionType.LookupTable, out IEditableSettingsCollectionSpecific<Acceleration> value)
+            get => SelectionLookup.TryGetValue(AccelerationDefinitionType.LookupTable, out IEditableSettingsCollectionSpecific<Acceleration>? value)
                     ? value as LookupTableDefinitionModel
                     : null;
         }
@@ -73,7 +73,7 @@ namespace userspace_backend.Model.AccelDefinitions
         {
             bool result = true;
 
-            if (data?.Anisotropy != null)
+            if (data.Anisotropy != null)
                 result &= Anisotropy.TryMapFromData(data.Anisotropy);
             else
                 result &= Anisotropy.TryMapFromData(new Anisotropy
@@ -84,7 +84,7 @@ namespace userspace_backend.Model.AccelDefinitions
                     CombineXYComponents = false
                 });
 
-            result &= Coalescion.TryMapFromData(data?.Coalescion);
+            result &= Coalescion.TryMapFromData(data.Coalescion ?? new Coalescion());
             result &= Selected.TryMapFromData(data);
             return result;
         }

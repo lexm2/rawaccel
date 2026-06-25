@@ -26,7 +26,8 @@ typedef struct {
     int  kernel_minor;
     int  kernel_ok;          // bool: kernel >= required
     int  syscall_ok;         // bool: bpf() callable (CAP_BPF / root)
-    char reason[128];        // "" when ok; truncated diagnostic otherwise
+    char reason[128];        // "" when ok
+    // truncated diagnostic otherwise
 } ra_probe_result;
 
 // Wraps probe_bpf_capability(). Returns 1 if both checks pass, else 0.

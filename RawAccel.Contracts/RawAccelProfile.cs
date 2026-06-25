@@ -2,8 +2,9 @@ using Newtonsoft.Json;
 
 namespace RawAccel.Contracts
 {
-    // Mirrors Profile in wrapper.cpp. Relaxed here (partial JSON tolerated);
-    // the native side does the strict all-fields-present validation.
+    // Relaxed here (partial JSON tolerated)
+    // the native side does the strict
+    // all-fields-present validation.
     public class RawAccelProfile
     {
         public string name { get; set; } = "default";

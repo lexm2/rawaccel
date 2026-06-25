@@ -16,7 +16,8 @@ namespace userspace_backend.Driver.Windows
             var nativeProfile = JsonConvert.DeserializeObject<Profile>(json)
                 ?? throw new InvalidOperationException(
                     "POCO -> wrapper.Profile deserialization returned null");
-            // Seed is disposed; CreateStatelessCopy allocates a fresh native pair.
+            // Seed is disposed
+            // CreateStatelessCopy allocates a fresh native pair.
             using var seed = new ManagedAccel(nativeProfile);
             var accel = seed.CreateStatelessCopy();
             return new ManagedAccelInstance(accel);

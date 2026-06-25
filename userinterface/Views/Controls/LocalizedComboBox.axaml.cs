@@ -24,7 +24,7 @@ namespace userinterface.Views.Controls
         public LocalizedComboBox()
         {
             InitializeComponent();
-            localizationService = App.Services.GetRequiredService<LocalizationService>();
+            localizationService = App.Services!.GetRequiredService<LocalizationService>();
             localizationService.PropertyChanged += OnLocalizationChanged;
             localizedItems = new ObservableCollection<LocalizedComboItem>();
 
@@ -45,7 +45,7 @@ namespace userinterface.Views.Controls
         }
 
         // Expose the internal ComboBox properties directly
-        public object SelectedItem
+        public object? SelectedItem
         {
             get => InternalComboBox.SelectedItem;
             set => InternalComboBox.SelectedItem = value;
@@ -65,7 +65,7 @@ namespace userinterface.Views.Controls
         }
 
         // Helper property to get the selected enum value
-        public string SelectedEnumValue => (SelectedItem as LocalizedComboItem)?.EnumValue;
+        public string SelectedEnumValue => (SelectedItem as LocalizedComboItem)?.EnumValue ?? string.Empty;
 
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
@@ -104,7 +104,8 @@ namespace userinterface.Views.Controls
                 });
             }
 
-            // Prefer restoring the prior selection; fall back to first item when there was none.
+            // Prefer restoring the prior selection
+            // fall back to first item when there was none.
             if (priorEnumValue != null)
             {
                 SelectedItem = localizedItems.FirstOrDefault(it => it.EnumValue == priorEnumValue)
@@ -116,7 +117,7 @@ namespace userinterface.Views.Controls
             }
         }
 
-        private void OnLocalizationChanged(object sender, PropertyChangedEventArgs e)
+        private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
         {
             // Update localized text for all items when language changes
             foreach (var item in localizedItems)
@@ -129,10 +130,10 @@ namespace userinterface.Views.Controls
 
     public class LocalizedComboItem : INotifyPropertyChanged
     {
-        private string localizedText;
+        private string localizedText = null!;
 
-        public string LocalizationKey { get; set; }
-        public string EnumValue { get; set; }
+        public string LocalizationKey { get; set; } = null!;
+        public string EnumValue { get; set; } = null!;
 
         public string LocalizedText
         {
@@ -149,7 +150,7 @@ namespace userinterface.Views.Controls
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected virtual void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = null)
+        protected virtual void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }

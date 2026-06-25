@@ -173,7 +173,7 @@ public partial class App : Application
             };
 
             // ShutdownRequested only fires on a normal window close. A Ctrl+C under
-            // `dotnet run` sends SIGINT, which skips that but still hits ProcessExit;
+            // `dotnet run` sends SIGINT, which skips that but still hits ProcessExit
             // mirror the save there so dev sessions don't drop unsaved edits.
             AppDomain.CurrentDomain.ProcessExit += (_, _) =>
             {
@@ -382,8 +382,9 @@ public partial class App : Application
         }
     }
 
-    // Preloads libraries that can cause first-use stutter. Limited effect in
-    // practice; kept for now. Candidates: System.Runtime.Intrinsics,
+    // Preloads libraries that can cause first-use stutter. Limited effect
+    // in practice
+    // kept for now. Candidates: System.Runtime.Intrinsics,
     // System.Text.Json/Encodings.Web/Encoding.Extensions, System.IO.Pipelines.
     private async Task PreloadLibrariesAsync()
     {
@@ -423,8 +424,9 @@ public partial class App : Application
         }
     }
 
-    // On Linux, settings live under $XDG_CONFIG_HOME/rawaccel ($HOME/.config/rawaccel
-    // if unset); other OSes write next to the executable.
+    // On Linux, settings live under $XDG_CONFIG_HOME/rawaccel
+    // ($HOME/.config/rawaccel if unset)
+    // other OSes write next to the executable.
     private static string ResolveSettingsDirectory()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))

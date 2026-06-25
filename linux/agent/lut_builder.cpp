@@ -34,7 +34,8 @@ double raw_curve_at(ra::modifier_settings& s, double v, bool along_x)
 LutBuildResult build_lut(const ra::modifier_settings& settings,
                          const ra::device_config& dev_config)
 {
-    // zero userspace smoothing halflives so the LUT is the raw curve; kernel layers its own smoothers
+    // zero userspace smoothing halflives so the LUT is the raw curve
+    // kernel layers its own smoothers
     ra::modifier_settings stateless = settings;
     stateless.prof.speed_processor_args.input_speed_smooth_halflife = 0;
     stateless.prof.speed_processor_args.scale_smooth_halflife = 0;
@@ -48,13 +49,15 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.lut_max_q16  = static_cast<std::int32_t>(
         static_cast<std::int64_t>(RA_LUT_SIZE) * RA_Q16_ONE - 1);
 
-    // dpi_factor = NORMALIZED_DPI/device_dpi; scales curve domain and output. dpi=0 -> 1.
+    // dpi_factor = NORMALIZED_DPI/device_dpi
+    // scales curve domain and output. dpi=0 -> 1.
     double dpi_factor = 1.0;
     if (dev_config.dpi > 0)
         dpi_factor = ra::NORMALIZED_DPI / static_cast<double>(dev_config.dpi);
     out.dpi_norm_q16 = q16_round(dpi_factor);
 
-    // input_speed_smoother: log2 level+trend coeffs (trend halflife 1.25); RA_F_SMOOTH_INPUT gates.
+    // input_speed_smoother: log2 level+trend coeffs (trend halflife 1.25)
+    // RA_F_SMOOTH_INPUT gates.
     {
         double hl = settings.prof.speed_processor_args.input_speed_smooth_halflife;
         if (hl > 0.0) {
@@ -70,7 +73,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         }
     }
 
-    // scale_smoother: level pair, no trend; RA_F_SMOOTH_SCALE gates.
+    // scale_smoother: level pair, no trend
+    // RA_F_SMOOTH_SCALE gates.
     {
         double hl = settings.prof.speed_processor_args.scale_smooth_halflife;
         if (hl > 0.0) {
@@ -81,7 +85,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         }
     }
 
-    // output_speed_smoother: like input, trend halflife 0.7; RA_F_SMOOTH_OUTPUT gates.
+    // output_speed_smoother: like input, trend halflife 0.7
+    // RA_F_SMOOTH_OUTPUT gates.
     {
         double hl = settings.prof.speed_processor_args.output_speed_smooth_halflife;
         if (hl > 0.0) {
@@ -114,7 +119,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     out.speed_min_q16 = q16_round(prof.speed_min);
     out.speed_max_q16 = q16_round(prof.speed_max);
 
-    // snap thresholds as tangents (kernel snaps with a multiply); q16_round saturates to INT32_MAX on tan -> inf.
+    // snap thresholds as tangents (kernel snaps with a multiply)
+    // q16_round saturates to INT32_MAX on tan -> inf.
     {
         const double kPi = 3.14159265358979323846;
         double snap_rad = prof.degrees_snap * kPi / 180.0;
@@ -122,7 +128,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
         out.snap_hi_tan_q16 = q16_round(std::tan(kPi / 2.0 - snap_rad));
     }
 
-    // dt clamp window; kernel clamps measured dt before folding 1/dt into velocity.
+    // dt clamp window
+    // kernel clamps measured dt before folding 1/dt into velocity.
     out.time_min_q16 = q16_round(dev_config.clamp.min);
     out.time_max_q16 = q16_round(dev_config.clamp.max);
 
@@ -157,7 +164,8 @@ LutBuildResult build_lut(const ra::modifier_settings& settings,
     else
         out.dist_mode = RA_DIST_EUCLIDEAN;
 
-    // refuse unported features rather than approximate; Lp norm deferred (needs fixed-point pow)
+    // refuse unported features rather than approximate
+    // Lp norm deferred (needs fixed-point pow)
     if (out.dist_mode == RA_DIST_LP)
         throw std::runtime_error("rawaccel: Lp distance norm not yet supported on Linux");
 

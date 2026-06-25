@@ -65,7 +65,8 @@ namespace userspace_backend.Driver.Windows
                 return false;
             }
 
-            // Driver is already active; don't fail Apply for a listener hiccup.
+            // Driver is already active
+            // don't fail Apply for a listener hiccup.
             try { listener?.UpdateDevices(config); }
             catch (Exception ex) { logger.LogDebug(ex, "listener device update failed after apply"); }
 

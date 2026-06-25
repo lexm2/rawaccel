@@ -219,7 +219,7 @@ namespace userspace_backend_tests.IOTests
                 "Serialized profile missing curve params: " + json);
 
             var roundTripped = rw.Deserialize(json);
-            Assert.IsInstanceOfType(roundTripped.Acceleration, typeof(ClassicAccel));
+            Assert.IsInstanceOfType(roundTripped!.Acceleration, typeof(ClassicAccel));
             var ca = (ClassicAccel)roundTripped.Acceleration;
             Assert.AreEqual(0.05, ca.Acceleration);
             Assert.AreEqual(2.3, ca.Exponent);

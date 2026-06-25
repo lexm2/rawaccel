@@ -92,7 +92,8 @@ void accel_args_from(const json& j, ra::accel_args& out)
     out.cap              = vec2_from(j.at(key::CAP));
     out.cap_mode         = cap_mode_from_string(j.at(key::CAP_MODE).get<std::string>());
 
-    // array size sets `length`; zero-pad tail for constant binary layout
+    // array size sets `length`
+    // zero-pad tail for constant binary layout
     const auto& data_arr = j.at(key::DATA);
     const int n = static_cast<int>(data_arr.size());
     if (n > static_cast<int>(ra::LUT_RAW_DATA_CAPACITY)) {

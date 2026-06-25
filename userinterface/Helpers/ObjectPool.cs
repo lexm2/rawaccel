@@ -8,10 +8,10 @@ public class ObjectPool<T> : IDisposable where T : class
 {
     private readonly ConcurrentBag<T> objects = new();
     private readonly Func<T> objectGenerator;
-    private readonly Action<T> resetAction;
+    private readonly Action<T>? resetAction;
     private bool disposed = false;
 
-    public ObjectPool(Func<T> objectGenerator, Action<T> resetAction = null)
+    public ObjectPool(Func<T> objectGenerator, Action<T>? resetAction = null)
     {
         this.objectGenerator = objectGenerator ?? throw new ArgumentNullException(nameof(objectGenerator));
         this.resetAction = resetAction;
@@ -20,7 +20,7 @@ public class ObjectPool<T> : IDisposable where T : class
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T Get()
     {
-        if (objects.TryTake(out T item))
+        if (objects.TryTake(out T? item))
         {
             resetAction?.Invoke(item);
             return item;
@@ -45,7 +45,7 @@ public class ObjectPool<T> : IDisposable where T : class
             disposed = true;
             
             // Dispose all pooled objects if they implement IDisposable
-            while (objects.TryTake(out T item))
+            while (objects.TryTake(out T? item))
             {
                 if (item is IDisposable disposable)
                 {

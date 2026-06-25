@@ -17,7 +17,8 @@ fn cpp_backend_accepts_rust_resolved_json() {
     let path = CString::new("/nonexistent.bpf.o").unwrap();
     let rj_c = CString::new(rj).unwrap();
 
-    // SAFETY: create/bind/destroy on one handle; unknown id only parses JSON, no kernel calls.
+    // SAFETY: create/bind/destroy on one handle
+    // unknown id only parses JSON, no kernel calls.
     unsafe {
         let be = sys::ra_backend_create(path.as_ptr());
         assert!(!be.is_null(), "ra_backend_create returned null");
@@ -29,8 +30,8 @@ fn cpp_backend_accepts_rust_resolved_json() {
 
 #[test]
 fn cpp_backend_accepts_embedded_defaults() {
-    // deactivate / no-match fallback feed the backend embedded defaults; json_io's
-    // .at() requires them field-complete or bind throws -> rc != 0.
+    // deactivate / no-match fallback feed the backend embedded defaults
+    // json_io's .at() requires them field-complete or bind throws -> rc != 0.
     let rj = config::resolved_json(&config::default_profile(), &config::default_device_config());
 
     let path = CString::new("/nonexistent.bpf.o").unwrap();

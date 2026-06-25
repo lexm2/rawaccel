@@ -45,7 +45,7 @@ namespace userspace_backend.Model.EditableSettings
 
         public bool TryMapFromData(U data)
         {
-            T dataCasted = data as T;
+            T? dataCasted = data as T;
             // base. avoids re-binding to the U overload (T converts to U).
             return dataCasted == null ? false : base.TryMapFromData(dataCasted);
         }
@@ -116,7 +116,7 @@ namespace userspace_backend.Model.EditableSettings
 
         public bool TryMapFromData(V data)
         {
-            U dataCasted = data as U;
+            U? dataCasted = data as U;
             // base. avoids re-binding to the V overload (U converts to V).
             return dataCasted == null ? false : base.TryMapFromData(dataCasted);
         }

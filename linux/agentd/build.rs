@@ -23,7 +23,8 @@ fn main() {
         println!("cargo:rustc-env={name}={}", extract_int(&src, name));
     }
 
-    // min_driver_version = { a, b, c }; gates version negotiation (client_too_old).
+    // min_driver_version = { a, b, c }
+    // gates version negotiation (client_too_old).
     let (min_major, min_minor, min_patch) = extract_min_version(&src);
     println!("cargo:rustc-env=RA_MIN_VER_MAJOR={min_major}");
     println!("cargo:rustc-env=RA_MIN_VER_MINOR={min_minor}");

@@ -9,8 +9,8 @@ namespace userspace_backend.Model.EditableSettings
 
     /// <summary>
     /// Rejects values outside [min, max]. Either bound may be omitted (open) and
-    /// either may be inclusive or exclusive. Rejection returns false; caller keeps
-    /// the last good value.
+    /// either may be inclusive or exclusive. Rejection returns false
+    /// caller keeps the last good value.
     /// </summary>
     public class RangeValidator<T> : IModelValueValidator<T> where T : struct, IComparable<T>
     {

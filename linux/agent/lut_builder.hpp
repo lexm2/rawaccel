@@ -44,17 +44,20 @@ struct LutBuildResult {
     std::int32_t time_min_q16      = 0;
     std::int32_t time_max_q16      = 0;
 
-    // input_speed_smoother (linear EMA) log2 coeffs (negative); RA_F_SMOOTH_INPUT.
+    // input_speed_smoother (linear EMA) log2 coeffs (negative)
+    // RA_F_SMOOTH_INPUT.
     std::int32_t in_log2_win_q16   = 0;
     std::int32_t in_log2_cut_q16   = 0;
     std::int32_t in_log2_trw_q16   = 0;
     std::int32_t in_log2_trc_q16   = 0;
 
-    // scale_smoother (simple EMA) log2 coefficients; RA_F_SMOOTH_SCALE.
+    // scale_smoother (simple EMA) log2 coefficients
+    // RA_F_SMOOTH_SCALE.
     std::int32_t sc_log2_win_q16   = 0;
     std::int32_t sc_log2_cut_q16   = 0;
 
-    // output_speed_smoother (linear EMA) log2 coefficients; RA_F_SMOOTH_OUTPUT.
+    // output_speed_smoother (linear EMA) log2 coefficients
+    // RA_F_SMOOTH_OUTPUT.
     std::int32_t out_log2_win_q16  = 0;
     std::int32_t out_log2_cut_q16  = 0;
     std::int32_t out_log2_trw_q16  = 0;

@@ -40,8 +40,8 @@ bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
         return false;
     }
 
-    // hid_id must be patched before load() (else attach EINVAL); write directly
-    // since set_initial_value() refuses partial writes.
+    // hid_id must be patched before load() (else attach EINVAL)
+    // write directly since set_initial_value() refuses partial writes.
     bpf_map* ops = bpf_object__find_map_by_name(obj, RA_MAP_NAME(RA_MAP_OPS));
     if (!ops) {
         bpf_object__close(obj);
@@ -120,7 +120,7 @@ bool BpfBackend::attach_prepared(DeviceId id, std::uint32_t hid_id,
 
     std::lock_guard<std::mutex> lock(mu_);
     // Replace any stale slot for this id (re-attach without unbind) so its
-    // link+object are torn down instead of leaked by a silent emplace no-op.
+    // link+object are torn down instead of leaked by a silent emplace noop.
     auto existing = slots_.find(slot->id);
     if (existing != slots_.end()) {
         detach_slot(*existing->second);
@@ -144,10 +144,10 @@ bool BpfBackend::populate_maps(Slot& slot,
         return false;
     }
 
-    // raw curve -> lut_x/lut_y; weighting, output-DPI, HID layout -> config
+    // raw curve -> lut_x/lut_y
+    // weighting, output-DPI, HID layout -> config
     ra_bpf_config cfg = to_bpf_config(lut, slot.layout);
-
-    // Cache for current_speed_sample telemetry conversion.
+    
     slot.domain_w_x_q16 = cfg.domain_w_x_q16;
     slot.domain_w_y_q16 = cfg.domain_w_y_q16;
 
@@ -202,7 +202,8 @@ void BpfBackend::bind_device(DeviceId id,
     if (it == slots_.end()) return;
 
     Slot& slot = *it->second;
-    // link attaches in attach_prepared; bind only refreshes maps (dormant until attached).
+    // link attaches in attach_prepared
+    // bind only refreshes maps (dormant until attached).
     if (!populate_maps(slot, s, c)) {
         std::fprintf(stderr,
             "bpf backend: populate_maps failed for %s\n",
@@ -237,7 +238,8 @@ DataPlaneHealth BpfBackend::health() const
 
 SpeedSample BpfBackend::current_speed_sample() const
 {
-    // No packet within this window -> idle; above any >=125 Hz gap so responsive.
+    // No packet within this window -> idle
+    // above any >=125 Hz gap so responsive.
     constexpr std::uint64_t STALE_NS = 150ull * 1000 * 1000;  // 150 ms
 
     std::lock_guard<std::mutex> lock(mu_);
@@ -270,18 +272,19 @@ SpeedSample BpfBackend::current_speed_sample() const
                         static_cast<std::uint64_t>(now_ts.tv_nsec);
     if (now > best_ts && now - best_ts > STALE_NS) return {};
 
-    // Telemetry is Q16.16 in/s weighted by each axis's domain weight; divide it
-    // back out for normalized in/s.
+    // Telemetry is Q16.16 in/s weighted by each axis's domain weight
+    // divide it back out for normalized in/s.
     const double dw_x = best->domain_w_x_q16 ? static_cast<double>(best->domain_w_x_q16)
                                              : static_cast<double>(RA_Q16_ONE);
     const double dw_y = best->domain_w_y_q16 ? static_cast<double>(best->domain_w_y_q16)
                                              : static_cast<double>(RA_Q16_ONE);
 
-    // Per-axis speeds plus combined; the GUI picks. Never force x == y.
+    // Per-axis speeds plus combined
+    // the GUI picks. Never force x == y.
     SpeedSample out;
     out.x = static_cast<double>(best_state.tele_speed_x_q16) / dw_x;
     out.y = static_cast<double>(best_state.tele_speed_y_q16) / dw_y;
-    // Combined from unweighted per-axis (kernel's own mixes both domain weights).
+    
     out.combined = std::hypot(out.x, out.y);
     return out;
 }

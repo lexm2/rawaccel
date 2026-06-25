@@ -1,5 +1,0 @@
-/target/
-/build-asan/
-/build-cov/
-/compile_commands.json
-/.clangd

@@ -41,7 +41,8 @@ public:
                      const ra::device_config&) override;
     void unbind_device(DeviceId) override;
 
-    // devices = slots; attached = those with a live struct_ops link
+    // devices = slots
+    // attached = those with a live struct_ops link
     DataPlaneHealth health() const override;
 
     // Most-recently-active device's ra_state telemetry as normalized in/s.

@@ -11,10 +11,10 @@ namespace userspace_backend.Data
         public static readonly MappingEqualityComparer EqualityComparer = new MappingEqualityComparer();
 
         [JsonRequired]
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
 
         [JsonRequired]
-        public GroupsToProfilesMapping GroupsToProfiles { get; set; }
+        public GroupsToProfilesMapping GroupsToProfiles { get; set; } = null!;
 
         public override bool Equals(object? obj)
         {
@@ -44,7 +44,8 @@ namespace userspace_backend.Data
             public override int GetHashCode()
             {
                 // XOR per-entry hashes for order-independence (matches Equals).
-                // Keys: dictionary's ordinal comparer; values: case-insensitive.
+                // Keys: dictionary's ordinal comparer
+                // values: case-insensitive.
                 int hash = 0;
 
                 foreach (var kvp in this)
@@ -96,7 +97,8 @@ namespace userspace_backend.Data
         public override int GetHashCode()
         {
             // XOR element hashes so the hash is order-independent, consistent
-            // with the set-based Equals; combine with the positional index.
+            // with the set-based Equals
+            // combine with the positional index.
             int mappingsHash = 0;
             if (Mappings is not null)
             {

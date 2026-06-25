@@ -20,7 +20,7 @@ namespace userspace_backend
         public DATA.Settings? SettingsToLoad { get; set; }
 
         // Allows us to test parts of BackEndLoader as desired
-        public BackEndLoader BackEndLoader { get; set; }
+        public BackEndLoader BackEndLoader { get; set; } = null!;
 
         public IEnumerable<DATA.Device> LoadDevices()
         {

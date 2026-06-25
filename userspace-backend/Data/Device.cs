@@ -5,9 +5,9 @@ namespace userspace_backend.Data
 {
     public class Device
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
 
-        public string HWID { get; set; }
+        public string HWID { get; set; } = null!;
 
         public int DPI { get; set; }
 
@@ -16,7 +16,7 @@ namespace userspace_backend.Data
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool Ignore { get; set; }
 
-        public string DeviceGroup { get; set; }
+        public string DeviceGroup { get; set; } = null!;
 
         public override bool Equals(object? obj)
         {

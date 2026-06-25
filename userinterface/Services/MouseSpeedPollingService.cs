@@ -8,8 +8,9 @@ using userspace_backend.Driver;
 namespace userinterface.Services
 {
     // Background poller for the driver's current input-speed telemetry. Transient,
-    // so each chart ViewModel owns one. No-op when the driver is null; when the
-    // agent is down the driver returns Zero cheaply, so the loop is safe to run.
+    // so each chart ViewModel owns one. No-op when the driver is null
+    // when the agent is down the driver returns Zero cheaply, so the loop is
+    // safe to run.
     public sealed class MouseSpeedPollingService : IDisposable
     {
         // ~30 Hz. The chart animates at ~100 ms, so the indicator only needs to

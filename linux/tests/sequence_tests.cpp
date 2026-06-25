@@ -39,7 +39,8 @@ using Packets = std::vector<Packet>;
 struct Emit {
     int x;
     int y;
-    bool emitted;  // false => ValidCarry drop; never fires here
+    bool emitted;  // false => ValidCarry drop
+    // never fires here
 };
 
 // Continuous oracle for one axis (smoother halflives zeroed, dpi_factor 1,
@@ -87,7 +88,8 @@ std::vector<Emit> run_fixed(const ra::modifier_settings& s,
             continue;
         }
         __s64 ax = 0, ay = 0;
-        // 1 ms slice; dt-varying behavior is in fixedpoint_tests.cpp's P2.1 cases.
+        // 1 ms slice
+        // dt-varying behavior is in fixedpoint_tests.cpp's P2.1 cases.
         ra_modify_q16_flat(&cfg, &st, lut.lut_x.data(), lut.lut_y.data(),
                            dx, dy, RA_Q16_ONE, &ax, &ay);
         if (acc_out) acc_out->push_back({(long long)ax, (long long)ay});
@@ -199,7 +201,8 @@ RA_TEST("Seq: carry accumulates fractional output_dpi into whole counts")
         sum_f += f[i].x;
         sum_o += o[i].x;
     }
-    // 1.5 + carry emits 1,2,1,2,...; 8 packets total 12 counts.
+    // 1.5 + carry emits 1,2,1,2,...
+    // 8 packets total 12 counts.
     RA_CHECK_EQ(f[0].x, 1);
     RA_CHECK_EQ(f[1].x, 2);
     RA_CHECK_EQ(sum_f, 12);
@@ -289,7 +292,8 @@ RA_TEST("Seq: classic curve output rises with speed and matches the oracle")
     for (std::size_t i = 0; i < sweep.size(); ++i)
         RA_CHECK(std::abs(f[i].x - o[i].x) <= 1);
 
-    // Output monotone non-decreasing as speed rises; pre-emit acc dodges carry.
+    // Output monotone non-decreasing as speed rises
+    // pre-emit acc dodges carry.
     for (std::size_t i = 1; i < sweep.size(); ++i)
         RA_CHECK(acc[i].first >= acc[i - 1].first);
 }
@@ -348,7 +352,7 @@ RA_TEST("Seq: whole-mode input smoothing matches the stateful oracle (1 ms)")
 RA_TEST("Seq: scale smoothing matches the stateful oracle (whole + separate)")
 {
     // Scale smoother (simple EMA) smooths the range-weighted curve scale before
-    // the output-DPI multiply. Totals start at 0, so the scale ramps from below;
+    // the output-DPI multiply. Totals start at 0, so the scale ramps from below
     // parity must hold from the first packet through the ramp.
     ra::device_config dev{};
 
@@ -434,7 +438,8 @@ RA_TEST("Seq: output speed smoothing matches the stateful oracle (whole + separa
 
 RA_TEST("Seq: all three smoothers together match the stateful oracle")
 {
-    // All three smoothers stacked; parity packet for packet.
+    // All three smoothers stacked
+    // parity packet for packet.
     ra::modifier_settings s{};
     s.prof.accel_x.mode = ra::accel_mode::classic;
     s.prof.accel_x.acceleration = 0.05;

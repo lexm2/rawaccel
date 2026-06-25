@@ -30,7 +30,7 @@ namespace userspace_backend_tests.IOTests
         {
             var reader = new DevicesReaderWriter();
             string readInputPath = Path.Combine(TestInputs, "readInvalidInput.json");
-            Exception foundException = null;
+            Exception? foundException = null;
             try
             {
                 var actualReadDevices = reader.Read(readInputPath);

@@ -16,7 +16,7 @@ namespace userspace_backend.Model
 
         int ActiveMappingIndex { get; }
 
-        MappingModel GetMappingToSetActive();
+        MappingModel? GetMappingToSetActive();
 
         MappingModel? GetActiveMapping();
 
@@ -70,7 +70,7 @@ namespace userspace_backend.Model
 
         protected MappingNameValidator NameValidator { get; }
 
-        public MappingModel GetMappingToSetActive()
+        public MappingModel? GetMappingToSetActive()
         {
             return Mappings.FirstOrDefault(m => m.SetActive);
         }

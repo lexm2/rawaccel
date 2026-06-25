@@ -121,9 +121,9 @@ void time_config(const char* what, const Bench& b)
     // the worst preemption seen. We therefore report the compute distribution
     // by percentile (robust to a sparse preempted tail) and gate on p99.9,
     // which stays clean as long as far fewer than 0.1% of samples preempt.
-    // The over-cutoff count is disclosed (never silently capped); if it ever
-    // approaches 0.1%, pin/isolate the core (chrt -f / isolcpus) for a true
-    // max instead of trusting these numbers.
+    // The over-cutoff count is disclosed (never silently capped)
+    // if it ever approaches 0.1%, pin/isolate the core (chrt -f / isolcpus) for
+    // a true max instead of trusting these numbers.
     const long cutoff = std::max(800L, med * 8);
     size_t preempted = 0;
     for (size_t i = n; i-- > 0 && samples[i] > cutoff; ) ++preempted;

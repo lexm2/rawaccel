@@ -6,16 +6,16 @@ namespace userspace_backend.Data
     public class Profile
     {
         [JsonRequired]
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
 
         public int OutputDPI { get; set; }
 
         public double YXRatio { get; set; }
 
         [JsonRequired]
-        public Acceleration Acceleration { get; set; }
+        public Acceleration Acceleration { get; set; } = null!;
 
         [JsonRequired]
-        public Hidden Hidden { get; set; }
+        public Hidden Hidden { get; set; } = null!;
     }
 }

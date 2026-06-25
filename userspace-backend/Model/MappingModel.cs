@@ -186,9 +186,9 @@ namespace userspace_backend.Model
 
     public class MappingGroup : ObservableObject
     {
-        public string DeviceGroup { get; set; }
+        public string DeviceGroup { get; set; } = null!;
 
-        private IProfileModel profile;
+        private IProfileModel profile = null!;
 
         public IProfileModel Profile
         {
@@ -197,6 +197,6 @@ namespace userspace_backend.Model
         }
 
         // This is here for easy binding
-        public IProfilesModel Profiles { get; set; }
+        public IProfilesModel Profiles { get; set; } = null!;
     }
 }

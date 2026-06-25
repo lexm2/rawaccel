@@ -1,13 +1,10 @@
 #pragma once
 
 // Single source of truth for the settings.json key names (the cross-OS contract).
-// Plain string-literal macros so every C/C++ consumer resolves the same value:
-//   wrapper/wrapper.cpp      [JsonProperty(RA_JK_GAIN)]              (Windows C++/CLI)
-//   linux/agent/json_io.hpp  constexpr ... GAIN = RA_JK_GAIN;        (Linux native)
-//   linux/tests/shim_tests   args[rajson::key::GAIN] = ...;          (via the header)
-// Rename a key here and all of them move together. The C# RawAccel.Contracts
-// assembly carries its own parallel [JsonProperty] strings (different language,
-// cannot include this header) -- keep it in sync by hand if a key changes.
+// Plain string-literal macros so every C/C++ consumer resolves the same value;
+// rename a key here and all of them move together. The C# RawAccel.Contracts
+// assembly can't include this header, so keep its parallel [JsonProperty]
+// strings in sync by hand.
 
 // AccelArgs (mode-specific knobs).
 #define RA_JK_MODE              "mode"

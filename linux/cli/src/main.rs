@@ -53,7 +53,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Launch the GUI (default with no command); starts rawaccel-agentd first
+    /// Launch the GUI (default with no command)
+    /// starts rawaccel-agentd first
     /// if needed.
     Gui,
     /// Start rawaccel-agentd if not already running (uses sudo when root is
@@ -99,7 +100,8 @@ fn run(cli: Cli) -> Result<()> {
     let command = cli.command.unwrap_or(Command::Gui);
 
     match command {
-        // start daemon, then GUI; a privilege failure aborts before the GUI
+        // start daemon, then GUI
+        // a privilege failure aborts before the GUI
         Command::Gui => launch_gui_with_daemon(&cli.socket),
         Command::Start => {
             let socket = daemon::start(&cli.socket)?;

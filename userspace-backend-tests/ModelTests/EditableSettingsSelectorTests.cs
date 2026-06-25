@@ -268,7 +268,7 @@ namespace userspace_backend_tests.ModelTests
             IEditableSettingsCollectionSpecific<TestDataAbstract> testObjectAbstractA =
                 testObject.GetSelectable(TestDataAbstract.TestDataType.A);
             Assert.IsNotNull(testObjectAbstractA);
-            IEditableSettingsTestA testObjectA = testObjectAbstractA as IEditableSettingsTestA;
+            IEditableSettingsTestA? testObjectA = testObjectAbstractA as IEditableSettingsTestA;
             Assert.IsNotNull(testObjectA);
             Assert.AreEqual(aName, testObjectA.PropertyA.DisplayName);
             Assert.AreEqual(aInitialValue, testObjectA.PropertyA.ModelValue);
@@ -276,7 +276,7 @@ namespace userspace_backend_tests.ModelTests
             IEditableSettingsCollectionSpecific<TestDataAbstract> testObjectAbstractB =
                 testObject.GetSelectable(TestDataAbstract.TestDataType.B);
             Assert.IsNotNull(testObjectAbstractB);
-            IEditableSettingsTestB testObjectB = testObjectAbstractB as IEditableSettingsTestB;
+            IEditableSettingsTestB? testObjectB = testObjectAbstractB as IEditableSettingsTestB;
             Assert.IsNotNull(testObjectB);
             Assert.AreEqual(bName, testObjectB.PropertyB.DisplayName);
             Assert.AreEqual(bInitialValue, testObjectB.PropertyB.ModelValue);

@@ -1,0 +1,25 @@
+# Builds wrapper + common and runs wrapper-tests (user-mode, no IOCTL/driver load).
+name: windows-ci
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["common/**", "wrapper/**", "wrapper-deps/**", "wrapper-tests/**", "RawAccel.Contracts/**", ".github/workflows/windows-ci.yml"]
+  pull_request:
+    paths: ["common/**", "wrapper/**", "wrapper-deps/**", "wrapper-tests/**", "RawAccel.Contracts/**", ".github/workflows/windows-ci.yml"]
+  workflow_dispatch:
+
+jobs:
+  wrapper-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: microsoft/setup-msbuild@v2
+      - uses: nuget/setup-nuget@v2
+      - name: Restore NuGet (legacy packages.config)
+        run: nuget restore rawaccel.sln
+      # Explicit x64: C++/CLI has no real AnyCPU config, only x64/ARM64.
+      - name: Build wrapper-tests (x64)
+        run: msbuild wrapper-tests\wrapper-tests.csproj /p:Configuration=Release /p:Platform=x64 /m
+      - name: MSTest suite
+        run: vstest.console.exe wrapper-tests\bin\Release\wrapper-tests.dll /Platform:x64

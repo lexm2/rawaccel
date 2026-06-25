@@ -101,7 +101,8 @@ void sweep_grid(const ra::modifier_settings& s,
 
 RA_TEST("Fixed: ra_exp2_q16 approximates 2^x for x <= 0")
 {
-    // Smoother decay feeds this x <= 0; check the cubic against libc.
+    // Smoother decay feeds this x <= 0
+    // check the cubic against libc.
     for (double x = 0.0; x >= -30.0; x -= 0.011) {
         __s32 xq = static_cast<__s32>(std::lround(x * RA_Q16_ONE));
         double got = static_cast<double>(ra_exp2_q16(xq)) / RA_Q16_ONE;
@@ -218,7 +219,7 @@ RA_TEST("Fixed: whole-mode directional weighting blends range_weights by angle")
     s.prof.range_weights = vec2d{0.5, 1.5};  // asymmetric -> angular blend
     // default speed_processor_args: whole, euclidean
 
-    // reference angle blends range_w_x (horizontal) to range_w_y (vertical);
+    // reference angle blends range_w_x (horizontal) to range_w_y (vertical)
     // the in-kernel atan must track the oracle's.
     check_axis(s, 100, 0);    // 0 deg   -> weight 0.5
     check_axis(s, 0, 100);    // 90 deg  -> weight 1.5
@@ -266,7 +267,8 @@ RA_TEST("Fixed: speed clamp composes with a curve")
     s.prof.accel_x.acceleration = 0.05;
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y = s.prof.accel_x;
-    s.prof.speed_max = 80.0;  // cap; speed_min stays 0
+    s.prof.speed_max = 80.0;  // cap
+    // speed_min stays 0
 
     check_axis(s, 40, 0);
     check_axis(s, 200, 0);   // clamped to 80 before the curve
@@ -292,7 +294,8 @@ RA_TEST("Fixed: real dt scales the curve-input speed (poll-rate independence)")
     BpfMouseLayout layout{};
     ra_bpf_config cfg = to_bpf_config(lut, layout);
 
-    // 8 kHz .. 125 Hz; magnitudes keep 1/dt * |v| inside the LUT span.
+    // 8 kHz .. 125 Hz
+    // magnitudes keep 1/dt * |v| inside the LUT span.
     for (double dt : {0.125, 0.5, 1.0, 2.0, 4.0, 8.0}) {
         for (std::int32_t v : {5, 20, 80, 200}) {
             check_with(s, lut, cfg, v, 0, 1e-2, 2e-3, dt);
@@ -358,7 +361,7 @@ RA_TEST("Fixed: device DPI scales the output to match Windows (dpi_factor)")
         LutBuildResult lut = build_lut(s, dev);
         ra_bpf_config cfg = to_bpf_config(lut, layout);
 
-        // speed domain folds dpi_factor/dt, output folds dpi_factor (no dt);
+        // speed domain folds dpi_factor/dt, output folds dpi_factor (no dt)
         // both must compose.
         for (double dt : {0.5, 1.0, 2.0}) {
             check_with(s, lut, cfg, 40, 0, 1e-2, 3e-3, dt, dpi_factor);
@@ -487,7 +490,8 @@ RA_TEST("Grid: directional weighting matches oracle across directions")
     s.prof.accel_x.exponent_classic = 2.0;
     s.prof.accel_y = s.prof.accel_x;
     s.prof.range_weights = vec2d{0.6, 1.4};  // whole-mode angular blend
-    // atan is a polynomial fit (< 0.0015 rad); wider band than curve-only grids
+    // atan is a polynomial fit (< 0.0015 rad)
+    // wider band than curve-only grids
     sweep_grid(s, 1e-2, 5e-3);
 }
 

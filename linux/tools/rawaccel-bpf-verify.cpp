@@ -52,7 +52,8 @@ int main(int argc, char** argv)
     }
 
     // Per-program log buffer: the default truncates a non-trivial rejection.
-    // 1 MiB exceeds anything the kernel emits; on the heap to keep the stack small.
+    // 1 MiB exceeds anything the kernel emits
+    // on the heap to keep the stack small.
     static std::vector<char> verifier_log(1 << 20);
     bpf_program* p = nullptr;
     bpf_object__for_each_program(p, obj) {

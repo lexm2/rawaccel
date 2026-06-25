@@ -9,7 +9,7 @@ namespace userspace_backend.Model
 {
     public interface IDeviceGroups
     {
-        bool TryGetDeviceGroup(string name, out string? deviceGroup);
+        bool TryGetDeviceGroup(string name, [NotNullWhen(true)] out string? deviceGroup);
     }
 
     public class DeviceGroups : EditableSettingsCollection<IEnumerable<string>>, IDeviceGroups
@@ -22,11 +22,11 @@ namespace userspace_backend.Model
             GroupNameChangeValidator = new DeviceGroupValidator(this);
         }
 
-        public ObservableCollection<string> DeviceGroupModels { get; set; }
+        public ObservableCollection<string> DeviceGroupModels { get; set; } = null!;
 
         protected DeviceGroupValidator GroupNameChangeValidator { get; set; }
 
-        public bool TryGetDeviceGroup(string name, out string? deviceGroup)
+        public bool TryGetDeviceGroup(string name, [NotNullWhen(true)] out string? deviceGroup)
         {
             deviceGroup = DeviceGroupModels.FirstOrDefault(
                 g => string.Equals(g, name, StringComparison.InvariantCultureIgnoreCase));

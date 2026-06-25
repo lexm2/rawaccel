@@ -117,7 +117,7 @@ RA_TEST("Lut: features not yet ported throw instead of silently approximating")
         catch (...) { return true; }
     };
 
-    // Lp norm (lp_norm in (0,16), != 2, whole) still needs fixed-point pow;
+    // Lp norm (lp_norm in (0,16), != 2, whole) still needs fixed-point pow
     // the only remaining unsupported feature.
     { ra::modifier_settings s{}; s.prof.speed_processor_args.lp_norm = 3.0;
       RA_CHECK(throws(s)); }
@@ -139,7 +139,8 @@ RA_TEST("Lut: angle snapping sets APPLY_SNAP and emits the threshold tangents")
         auto r = build_lut(s, dev);
         RA_CHECK((r.flags & RA_F_APPLY_SNAP) == 0);
     }
-    // 15 deg snap: flag set; tan(15) ~= 0.2679, tan(75) ~= 3.7321
+    // 15 deg snap: flag set
+    // tan(15) ~= 0.2679, tan(75) ~= 3.7321
     {
         ra::modifier_settings s{};
         s.prof.degrees_snap = 15.0;
@@ -207,7 +208,8 @@ RA_TEST("Lut: input smoothing sets RA_F_SMOOTH_INPUT and emits log2 coefficients
         RA_CHECK((r.flags & RA_F_SMOOTH_INPUT) == 0);
         RA_CHECK_EQ(r.in_log2_win_q16, 0);
     }
-    // halflife 50 ms -> flag set; log2(coeff) matches linear_ema_smoother init
+    // halflife 50 ms -> flag set
+    // log2(coeff) matches linear_ema_smoother init
     // with input_trend_halflife = 1.25
     {
         ra::modifier_settings s{};

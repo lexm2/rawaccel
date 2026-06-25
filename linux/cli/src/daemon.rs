@@ -113,7 +113,8 @@ pub fn stop(explicit: &Option<PathBuf>) -> Result<bool> {
     } else if is_up(&socket) {
         // -x matches the exact process name, not the command line (avoids
         // signalling e.g. `tail -f rawaccel-agentd.log`). pkill exit 1 == no
-        // match == already gone; only >=2 is a real error.
+        // match == already gone
+        // only >=2 is a real error.
         let status = privileged("pkill", &["-TERM", "-x", SERVICE])
             .status()
             .context("failed to run pkill (is sudo available?)")?;
@@ -223,7 +224,8 @@ fn spawn_dev_agent(socket: &Path) -> Result<()> {
         c.arg("sh").arg("-c").arg(&script);
         c
     };
-    // sudo prompts on /dev/tty regardless; let the user see normal stdio
+    // sudo prompts on /dev/tty regardless
+    // let the user see normal stdio
     cmd.stdin(Stdio::inherit());
 
     let status = cmd
@@ -250,7 +252,7 @@ pub fn doctor() -> Result<()> {
     })?;
     let mut cmd = Command::new(&agent);
     cmd.arg("--doctor");
-    // In a dev checkout the BPF object sits in linux/build, not beside the daemon;
+    // In a dev checkout the BPF object sits in linux/build, not beside the daemon
     // point --doctor at it so the "object present" check reflects reality.
     if let Some(repo) = crate::find_repo_root() {
         let obj = repo.join("linux").join("build").join("rawaccel.bpf.o");

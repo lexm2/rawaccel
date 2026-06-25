@@ -64,7 +64,7 @@ namespace userspace_backend
 
         public IProfilesModel Profiles { get; set; }
 
-        public DATA.Settings Settings { get; set; }
+        public DATA.Settings Settings { get; set; } = null!;
 
         protected IBackEndLoader BackEndLoader { get; set; }
 
@@ -141,8 +141,8 @@ namespace userspace_backend
                 return;
             }
 
-            // OS reported devices => skip the placeholder; ImportSystemDevices
-            // populates real ones.
+            // OS reported devices => skip the placeholder
+            // ImportSystemDevices populates real ones.
             if (Devices.SystemDevices.SystemDevices.Count > 0)
             {
                 return;

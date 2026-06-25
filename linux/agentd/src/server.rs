@@ -170,7 +170,8 @@ impl<B: Backend> ControlServer<B> {
 
     /// Bind the listener (removes a stale socket first). Err on error (see source).
     pub fn listen(&mut self) -> anyhow::Result<()> {
-        // Remove a stale socket; warn (don't clobber) if a non-socket sits there.
+        // Remove a stale socket
+        // warn (don't clobber) if a non-socket sits there.
         match std::fs::symlink_metadata(&self.socket_path) {
             Ok(md) if md.file_type().is_socket() => {
                 let _ = std::fs::remove_file(&self.socket_path);
@@ -191,7 +192,8 @@ impl<B: Backend> ControlServer<B> {
         unsafe { libc::umask(prev_umask) };
         let listener = bind_result?;
 
-        // Under sudo, chown to SUDO_UID/GID so the client can connect; SO_PEERCRED enforces access.
+        // Under sudo, chown to SUDO_UID/GID so the client can connect
+        // SO_PEERCRED enforces access.
         // SAFETY: geteuid is always safe.
         self.expected_uid = unsafe { libc::geteuid() };
         if self.expected_uid == 0 {
@@ -209,7 +211,8 @@ impl<B: Backend> ControlServer<B> {
         Ok(())
     }
 
-    /// Accept/dispatch loop until stop(); ticks the agent every poll_interval.
+    /// Accept/dispatch loop until stop()
+    /// ticks the agent every poll_interval.
     pub fn run(&mut self, poll_interval: Duration) {
         let listener = self
             .listener
@@ -249,7 +252,8 @@ impl<B: Backend> ControlServer<B> {
         &mut self.agent
     }
 
-    // root always; else only the chowned owner UID (the sudo invoker).
+    // root always
+    // else only the chowned owner UID (the sudo invoker).
     fn peer_allowed(&self, stream: &UnixStream) -> bool {
         match peer_uid(stream) {
             Some(uid) => uid == 0 || uid == self.expected_uid,
@@ -336,7 +340,8 @@ fn poll_readable(fd: i32, timeout: Duration) -> bool {
         revents: 0,
     };
     let ms = timeout.as_millis().min(i32::MAX as u128) as i32;
-    // SAFETY: single valid pollfd; the kernel only writes revents.
+    // SAFETY: single valid pollfd
+    // the kernel only writes revents.
     let r = unsafe { libc::poll(&mut pfd, 1, ms) };
     r > 0 && (pfd.revents & libc::POLLIN) != 0
 }

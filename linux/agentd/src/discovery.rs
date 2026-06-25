@@ -10,7 +10,8 @@ use crate::backend::{Backend, DeviceInfo};
 use crate::hid::{self, BpfDecision};
 
 const HIDRAW_ROOT: &str = "/sys/class/hidraw";
-const MAX_DESCRIPTOR: usize = 8192; // kernel caps at 4096; don't trust that here
+const MAX_DESCRIPTOR: usize = 8192; // kernel caps at 4096
+// don't trust that here
 
 /// Stable 64-bit device id from a string. FNV-1a; constants MUST match
 /// `hash_id` in bpf_backend.cpp or ids drift across the C++/Rust boundary.

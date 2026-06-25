@@ -16,7 +16,7 @@ namespace userspace_backend_tests.ModelTests
 
         public class TestData
         {
-            public string Name { get; set; }
+            public string Name { get; set; } = null!;
 
             public int Property { get; set; }
         }

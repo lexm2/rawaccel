@@ -18,7 +18,7 @@ namespace userspace_backend.Model.EditableSettings
     {
         public bool HasChanged { get; }
 
-        public EventHandler AnySettingChanged { get; set; }
+        public EventHandler? AnySettingChanged { get; set; }
     }
 
     public interface IEditableSettingsCollectionSpecific<T> : IEditableSettingsCollectionV2
@@ -42,11 +42,11 @@ namespace userspace_backend.Model.EditableSettings
     /// </summary>
     public abstract class EditableSettingsCollectionBase<T> : ObservableObject, IEditableSettingsCollectionV2
     {
-        public EventHandler AnySettingChanged { get; set; }
+        public EventHandler? AnySettingChanged { get; set; }
 
-        public IEnumerable<IEditableSetting> AllContainedEditableSettings { get; protected set; }
+        public IEnumerable<IEditableSetting> AllContainedEditableSettings { get; protected set; } = [];
 
-        public IEnumerable<IEditableSettingsCollectionV2> AllContainedEditableSettingsCollections { get; protected set; }
+        public IEnumerable<IEditableSettingsCollectionV2> AllContainedEditableSettingsCollections { get; protected set; } = [];
 
         public bool HasChanged { get; protected set; }
 
@@ -123,8 +123,9 @@ namespace userspace_backend.Model.EditableSettings
     /// </summary>
     /// <remarks>
     /// Unique collection logic belongs in this class or a child of it, not in
-    /// concrete model collections. This class and any such parent requires unit
-    /// tests; concrete model collections only need composition tests.
+    /// concrete model collections. This class and any such parent requires
+    /// unit tests
+    /// concrete model collections only need composition tests.
     /// </remarks>
     /// <typeparam name="T"></typeparam>
     public abstract class EditableSettingsCollectionV2<T> : EditableSettingsCollectionBase<T>, IEditableSettingsCollectionSpecific<T>

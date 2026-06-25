@@ -186,7 +186,8 @@ namespace userspace_backend
         protected static string GetProfileFile(string profileDirectory, string profileName) => Path.Combine(profileDirectory, $"{SanitizeFileName(profileName)}.json");
 
         // User-supplied profile names may contain filename-illegal chars
-        // ('/', '\\', ':', ...); replace so the write doesn't throw. The on-disk
+        // ('/', '\\', ':', ...)
+        // replace so the write doesn't throw. The on-disk
         // name isn't authoritative -- load reads Name from the file body.
         private static string SanitizeFileName(string name)
         {

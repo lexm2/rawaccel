@@ -49,8 +49,9 @@ pub fn run(bpf_object_path: &str) -> i32 {
         detail: if probe.syscall_ok {
             "supported".into()
         } else if probe.kernel_ok && !root {
-            // libbpf reports the probe as unsupported when it can't load without
-            // CAP_BPF; don't claim the kernel lacks it. Re-run as root to confirm.
+            // libbpf reports the probe as unsupported when it can't load
+            // without CAP_BPF
+            // don't claim the kernel lacks it. Re-run as root to confirm.
             "probe needs CAP_BPF; re-run as root to confirm".into()
         } else {
             probe.reason.clone()

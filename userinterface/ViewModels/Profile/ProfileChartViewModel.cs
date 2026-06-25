@@ -48,8 +48,9 @@ namespace userinterface.ViewModels.Profile
         private const float SubStrokeThickness = 0.5f;
 
         // Speed-line smoothing: a UI-thread timer eases the displayed line toward
-        // the latest ~30 Hz poll target. TimeConstant = glide speed (larger is
-        // smoother/laggier); SettleEpsilon = chart-unit "arrived" threshold.
+        // the latest ~30 Hz poll target. TimeConstant = glide speed (larger
+        // is smoother/laggier)
+        // SettleEpsilon = chart-unit "arrived" threshold.
         private const int TweenIntervalMs = 16;            // ~60 Hz
         private const double TweenTimeConstantMs = 60.0;
         private const double SpeedSettleEpsilon = 0.05;
@@ -117,7 +118,8 @@ namespace userinterface.ViewModels.Profile
 
         private bool showSpeedLines = true;
 
-        // Whether the live current-speed line(s) are shown; toggled from the button bar.
+        // Whether the live current-speed line(s) are shown
+        // toggled from the button bar.
         public bool ShowSpeedLines
         {
             get => showSpeedLines;
@@ -572,8 +574,9 @@ namespace userinterface.ViewModels.Profile
         // LIVE CURRENT-SPEED INDICATOR LINES
         // ================================================================================================
 
-        // Vertical zero-width line (Xi == Xj) at the given speed; non-positive
-        // speed -> NaN bounds, which render nothing. Fresh paint per call: a shared
+        // Vertical zero-width line (Xi == Xj) at the given speed
+        // non-positive speed -> NaN bounds, which render nothing. Fresh paint
+        // per call: a shared
         // one gets disposed by LiveCharts when its section is removed.
         private static RectangularSection MakeSpeedLine(double speed, SKColor color)
         {
@@ -599,7 +602,8 @@ namespace userinterface.ViewModels.Profile
 
             bool combined = CombineXY?.CurrentValidatedValue ?? true;
 
-            // X/Y lines match the curve colors; combined uses a neutral theme color.
+            // X/Y lines match the curve colors
+            // combined uses a neutral theme color.
             Sections = combined
                 ? new[] { MakeSpeedLine(sample.Combined, themeService.GetCachedColor(AxisLabelsBrush)) }
                 : new[]
@@ -615,7 +619,8 @@ namespace userinterface.ViewModels.Profile
         private void RebuildSpeedSections() =>
             PublishSpeedSections(new MouseSpeedSample(dispSpeedX, dispSpeedY, dispSpeedCombined));
 
-        // Poller callback (UI thread): record the new target; the tween eases toward it.
+        // Poller callback (UI thread): record the new target
+        // the tween eases toward it.
         private void ApplySpeedSample(MouseSpeedSample sample)
         {
             targetSpeedX = sample.X;
@@ -624,7 +629,8 @@ namespace userinterface.ViewModels.Profile
             EnsureTweenRunning();
         }
 
-        // Starts the tween pump if there's anything to animate; no-op once settled.
+        // Starts the tween pump if there's anything to animate
+        // no-op once settled.
         private void EnsureTweenRunning()
         {
             if (!IsInteractiveMode || !ShowSpeedLines) return;
@@ -653,8 +659,8 @@ namespace userinterface.ViewModels.Profile
         private static bool SpeedAxisSettled(double disp, double target) =>
             Math.Abs(disp - target) < SpeedSettleEpsilon;
 
-        // Frame-rate-independent exponential ease toward target; a fading line
-        // (target <= 0) snaps to 0 so MakeSpeedLine hides it.
+        // Frame-rate-independent exponential ease toward target
+        // a fading line (target <= 0) snaps to 0 so MakeSpeedLine hides it.
         private static double EaseSpeedAxis(double disp, double target, double alpha)
         {
             double next = disp + (target - disp) * alpha;
@@ -712,7 +718,7 @@ namespace userinterface.ViewModels.Profile
 
         private void OnCombineXYChanged(object? sender, PropertyChangedEventArgs e)
         {
-            // ModelValue is the observable property that raises change events;
+            // ModelValue is the observable property that raises change events
             // CurrentValidatedValue is a plain getter that never notifies.
             if (e.PropertyName != nameof(IEditableSettingSpecific<bool>.ModelValue))
                 return;

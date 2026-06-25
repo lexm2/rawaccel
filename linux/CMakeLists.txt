@@ -7,8 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(GNUInstallDirs)
 
-# Instrumented test builds, global so libs are covered too. Use a per-mode build
-# dir (build-asan/, build-cov/) via run-tests.sh; default build/ is uninstrumented.
+# Instrumented test builds (global, so libs are covered). run-tests.sh uses a
+# per-mode dir (build-asan/, build-cov/); default build/ is uninstrumented.
 option(RA_SANITIZE "Build with AddressSanitizer + UBSan + LeakSanitizer" OFF)
 option(RA_COVERAGE "Build with clang source-based coverage instrumentation" OFF)
 
@@ -23,8 +23,8 @@ if(RA_COVERAGE)
     add_link_options(-fprofile-instr-generate -fcoverage-mapping)
 endif()
 
-# Header-only view of common/ for Linux consumers. win_compat.hpp is force-included
-# so common/'s MSVC-isms (_copysign, __forceinline) resolve on clang/gcc.
+# Header-only view of common/ for Linux. win_compat.hpp is force-included so
+# common/'s MSVC-isms (_copysign, __forceinline) resolve on clang/gcc.
 add_library(rawaccel_common INTERFACE)
 target_include_directories(rawaccel_common INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
@@ -32,15 +32,15 @@ target_include_directories(rawaccel_common INTERFACE
 )
 target_compile_options(rawaccel_common INTERFACE
     -include ${CMAKE_CURRENT_SOURCE_DIR}/agent/win_compat.hpp
-    # common/ has `cap_mode cap_mode = ...` that g++14+ rejects under
-    # -Wchanges-meaning; tolerate it rather than restructure shared code.
+    # g++14+ rejects common/'s `cap_mode cap_mode = ...` under -Wchanges-meaning;
+    # tolerate it rather than restructure shared code.
     -Wno-changes-meaning
 )
 
 include(FetchContent)
 
-# Prefer system nlohmann_json; else fetch v3.11.3 at configure time (needs
-# internet once, then cached in build/_deps).
+# Prefer system nlohmann_json; else fetch v3.11.3 at configure time (one-time
+# download, then cached in build/_deps).
 find_package(nlohmann_json 3.11 QUIET)
 if(NOT nlohmann_json_FOUND)
     # TODO: pin URL_HASH once verified against an authoritative source.
@@ -59,8 +59,8 @@ target_link_libraries(rawaccel_json_io PUBLIC rawaccel_common nlohmann_json::nlo
 set_target_properties(rawaccel_json_io PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Cross-OS C-ABI shim over common/: builds a modifier from driver-config JSON and
-# runs modifier::modify behind an opaque handle, so .NET callers P/Invoke a stable
-# C surface and the preview matches the agent/kernel math.
+# runs modifier::modify behind an opaque handle, giving .NET a stable P/Invoke
+# surface whose preview matches the agent/kernel math.
 add_library(rawaccel_common_shim SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/../shim/ra_curve.cpp
 )
@@ -82,7 +82,7 @@ target_link_libraries(compile_check PRIVATE rawaccel_common)
 add_test(NAME compile_check COMMAND compile_check)
 
 # Parity tests: a subset of wrapper-tests/ ported to native C++. Smoothers and the
-# synchronous-curve simulator are reimplemented so parity is real, not tautological.
+# synchronous-curve simulator are reimplemented so parity is real, not circular.
 add_executable(parity_tests
     tests/test_main.cpp
     tests/end_to_end_tests.cpp
@@ -114,9 +114,9 @@ target_compile_definitions(shim_tests PRIVATE
     RA_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/default_config.json")
 add_test(NAME shim_tests COMMAND shim_tests)
 
-# C++ data-plane + math library: LUT precomputation, the BPF attach/bind
-# lifecycle, and the kernel-capability probe. The Rust daemon drives this over the
-# C ABI; libbpf and the curve math stay in C++. Feeds ra_backend (hence PIC).
+# C++ data-plane + math library: LUT precomputation, the BPF attach/bind lifecycle,
+# and the kernel-capability probe. The Rust daemon drives it over the C ABI; libbpf
+# and curve math stay in C++. Feeds ra_backend (hence PIC).
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBBPF REQUIRED IMPORTED_TARGET libbpf)
 
@@ -142,9 +142,8 @@ target_include_directories(ra_backend PUBLIC
 target_link_libraries(ra_backend PUBLIC rawaccel_agent rawaccel_json_io PkgConfig::LIBBPF)
 install(TARGETS ra_backend LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-# Install rules: `cmake --install build` deploys the C++ artifacts (libra_backend.so,
-# curve shim, BPF object) and the systemd unit. cargo builds/installs the daemon
-# binary separately.
+# `cmake --install build` deploys the C++ artifacts (libra_backend.so, curve shim,
+# BPF object) and the systemd unit; cargo installs the daemon binary separately.
 install(TARGETS rawaccel_common_shim LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 pkg_check_modules(SYSTEMD systemd)
@@ -168,8 +167,8 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/rawaccel-agentd.service
 
 # Diagnostic probe (`rawaccel-agentd --probe`) lives in the Rust daemon now.
 
-# HID-BPF kernel program: compile rawaccel.bpf.c via clang -target bpf. clang +
-# bpftool are required; rawaccel-agentd cannot run without rawaccel.bpf.o.
+# HID-BPF kernel program: rawaccel.bpf.c via clang -target bpf. clang + bpftool
+# required; rawaccel-agentd cannot run without rawaccel.bpf.o.
 find_program(CLANG_EXE NAMES clang REQUIRED)
 find_program(BPFTOOL_EXE NAMES bpftool REQUIRED)
 
@@ -194,7 +193,7 @@ add_custom_command(
             ${RA_VMLINUX_H}
     COMMAND ${CLANG_EXE}
             -O2 -g -Wall
-            # vmlinux.h has empty struct decls newer clang flags; kernel-side noise.
+            # newer clang flags empty struct decls in vmlinux.h; kernel-side noise.
             -Wno-missing-declarations
             -target bpf
             -D__TARGET_ARCH_x86
@@ -215,8 +214,8 @@ target_link_libraries(rawaccel-bpf-verify PRIVATE PkgConfig::LIBBPF)
 add_dependencies(rawaccel-bpf-verify rawaccel_bpf_object)
 add_test(NAME bpf_verify
     COMMAND rawaccel-bpf-verify --object ${RA_BPF_OBJ})
-# Exit 77 means "skipped, not failed" (no CAP_BPF / RLIMIT_MEMLOCK), so
-# unprivileged boxes don't fail CI while `sudo ctest` still runs the verifier.
+# Exit 77 means skipped (no CAP_BPF / RLIMIT_MEMLOCK), so unprivileged boxes don't
+# fail CI while `sudo ctest` still runs the verifier.
 set_tests_properties(bpf_verify PROPERTIES SKIP_RETURN_CODE 77)
 
 # Data-plane tests: LUT precomputation, the BPF backend, and the capability probe.
@@ -238,9 +237,9 @@ add_executable(fixedpoint_tests
 target_link_libraries(fixedpoint_tests PRIVATE rawaccel_agent)
 add_test(NAME fixedpoint_tests COMMAND fixedpoint_tests)
 
-# BPF scenario tests: push a sequence of fake packets through the fixed-point
-# pipeline + ra_emit_q16 and check carry, speed clamp, directional DPI, smoothing
-# warmup, and idle pass-through against the common/ oracle.
+# BPF scenario tests: push fake packet sequences through the fixed-point pipeline +
+# ra_emit_q16, checking carry, speed clamp, directional DPI, smoothing warmup, and
+# idle pass-through against the common/ oracle.
 add_executable(sequence_tests
     tests/test_main.cpp
     tests/sequence_tests.cpp
@@ -249,7 +248,7 @@ target_link_libraries(sequence_tests PRIVATE rawaccel_agent)
 add_test(NAME sequence_tests COMMAND sequence_tests)
 
 # Per-packet latency gate: time the fixed-point pipeline over the full
-# curve/distance/flag matrix, assert p99 < 125 us (the 8 kHz budget). Excluded from
+# curve/distance/flag matrix, assert p99 < 125 us (the 8 kHz budget). Skipped on
 # sanitized runs (instrumentation skews timing) via `ctest -E latency_bench`.
 add_executable(latency_bench
     tests/test_main.cpp
@@ -260,7 +259,7 @@ add_test(NAME latency_bench COMMAND latency_bench)
 
 # FFI lifecycle leak test: loop the C ABI create/bind/health/speed/detach/destroy
 # cycle under RA_SANITIZE so LSan proves the libbpf/Slot/JSON paths leak nothing.
-# Links ra_backend directly (pure C++ -> single ASan runtime, no Rust mismatch).
+# Links ra_backend directly (pure C++ -> one ASan runtime, no Rust mismatch).
 add_executable(lifecycle_tests
     tests/test_main.cpp
     tests/lifecycle_tests.cpp

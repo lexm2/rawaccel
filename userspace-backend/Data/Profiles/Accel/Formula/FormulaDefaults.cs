@@ -1,7 +1,8 @@
 namespace userspace_backend.Data.Profiles.Accel.Formula
 {
     // Single source of truth for formula defaults: used by BackEndComposer DI and the Data DTOs.
-    // UI defaults intentionally differ from native/Contracts; do not unify with Contracts.
+    // UI defaults intentionally differ from native/Contracts
+    // do not unify with Contracts.
     public static class FormulaDefaults
     {
         // Synchronous

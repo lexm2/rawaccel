@@ -14,7 +14,7 @@ namespace ra = rawaccel;
 
 using DeviceId = std::uint64_t;
 
-// Data-plane health: prepared vs attached; `error` is the first failure (lets control plane fail an apply when nothing attached).
+// DataPlaneHealth how many of the devices found are actually attached, lets the UI throw error when nothing is attached
 struct DataPlaneHealth {
     std::size_t devices = 0;
     std::size_t attached = 0;
@@ -31,18 +31,14 @@ struct SpeedSample {
 struct Backend {
     virtual ~Backend() = default;
 
-    // Set/replace settings for one device.
     virtual void bind_device(DeviceId,
                              const ra::modifier_settings&,
                              const ra::device_config&) = 0;
 
-    // Safe to call for an unknown id (no-op).
     virtual void unbind_device(DeviceId) = 0;
 
-    // Per-axis + combined current input speed. Default zero (no per-packet visibility, e.g. Noop).
     virtual SpeedSample current_speed_sample() const { return {}; }
 
-    // Data-plane attach health. Default: nothing to report (e.g. Noop).
     virtual DataPlaneHealth health() const { return {}; }
 };
 

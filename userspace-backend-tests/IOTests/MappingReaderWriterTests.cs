@@ -141,7 +141,7 @@ namespace userspace_backend_tests.IOTests
         {
             var reader = new MappingsReaderWriter();
             string readInputPath = Path.Combine(TestInputs, "readInvalidInput.json");
-            Exception foundException = null;
+            Exception? foundException = null;
             try
             {
                 var actualReadMapping = reader.Read(readInputPath);
@@ -159,7 +159,7 @@ namespace userspace_backend_tests.IOTests
         {
             var reader = new MappingsReaderWriter();
             string readInputPath = Path.Combine(TestInputs, "readEmptyInput.json");
-            Exception foundException = null;
+            Exception? foundException = null;
             try
             {
                 var actualReadMapping = reader.Read(readInputPath);

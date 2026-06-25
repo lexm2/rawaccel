@@ -17,8 +17,8 @@ namespace userinterface.Helpers
         public static readonly AttachedProperty<bool> EnableAnimationProperty =
             AvaloniaProperty.RegisterAttached<Path, bool>("EnableAnimation", typeof(MappingAnimationHelper));
 
-        private static readonly AttachedProperty<AnimationHandler> HandlerProperty =
-            AvaloniaProperty.RegisterAttached<Path, AnimationHandler>("Handler", typeof(MappingAnimationHelper));
+        private static readonly AttachedProperty<AnimationHandler?> HandlerProperty =
+            AvaloniaProperty.RegisterAttached<Path, AnimationHandler?>("Handler", typeof(MappingAnimationHelper));
 
         public static bool GetEnableAnimation(Path element) => element.GetValue(EnableAnimationProperty);
         public static void SetEnableAnimation(Path element, bool value) => element.SetValue(EnableAnimationProperty, value);

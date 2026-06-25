@@ -351,7 +351,7 @@ namespace userspace_backend
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                // Windows impls live under Driver/Windows/ and depend on wrapper.dll;
+                // Windows impls live under Driver/Windows/ and depend on wrapper.dll
                 // reflection so this method compiles where those types are absent.
                 RegisterWindowsServicesByReflection(services);
             }

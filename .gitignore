@@ -357,4 +357,7 @@ healthchecksdb
 linux/build/
 linux/build-*/
 linux/target/
+linux/cli/target/
+linux/compile_commands.json
+linux/.clangd
 Testing/

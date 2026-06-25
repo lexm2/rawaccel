@@ -22,7 +22,7 @@ namespace userspace_backend_tests.SerializationTests
         protected class AccelerationOnlyObject
         {
             [JsonConverter(typeof(AccelerationJsonConverter))]
-            public Acceleration Acceleration { get; set; }
+            public Acceleration Acceleration { get; set; } = null!;
         }
 
         [TestMethod]
@@ -37,7 +37,7 @@ namespace userspace_backend_tests.SerializationTests
                 """;
 
             var deserializedText = JsonSerializer.Deserialize<AccelerationOnlyObject>(textToDeserialize);
-            Assert.AreEqual(Acceleration.AccelerationDefinitionType.None, deserializedText.Acceleration.Type);
+            Assert.AreEqual(Acceleration.AccelerationDefinitionType.None, deserializedText!.Acceleration.Type);
         }
 
         [TestMethod]
@@ -55,7 +55,7 @@ namespace userspace_backend_tests.SerializationTests
                 """;
 
             var deserializedText = JsonSerializer.Deserialize<AccelerationOnlyObject>(textToDeserialize);
-            Assert.AreEqual(Acceleration.AccelerationDefinitionType.Formula, deserializedText.Acceleration.Type);
+            Assert.AreEqual(Acceleration.AccelerationDefinitionType.Formula, deserializedText!.Acceleration.Type);
             var actualClassicAccel = deserializedText.Acceleration as ClassicAccel;
             Assert.IsNotNull(actualClassicAccel);
             Assert.AreEqual(0.001, actualClassicAccel.Acceleration);
@@ -76,7 +76,7 @@ namespace userspace_backend_tests.SerializationTests
                 """;
 
             var deserializedText = JsonSerializer.Deserialize<AccelerationOnlyObject>(textToDeserialize);
-            Assert.AreEqual(Acceleration.AccelerationDefinitionType.Formula, deserializedText.Acceleration.Type);
+            Assert.AreEqual(Acceleration.AccelerationDefinitionType.Formula, deserializedText!.Acceleration.Type);
             var actualLinearAccel = deserializedText.Acceleration as LinearAccel;
             Assert.IsNotNull(actualLinearAccel);
             Assert.AreEqual(0.001, actualLinearAccel.Acceleration);
@@ -102,7 +102,7 @@ namespace userspace_backend_tests.SerializationTests
                 """;
 
             var deserialized = JsonSerializer.Deserialize<AccelerationOnlyObject>(textToDeserialize);
-            Assert.IsNotNull(deserialized.Acceleration);
+            Assert.IsNotNull(deserialized!.Acceleration);
             Assert.IsInstanceOfType(deserialized.Acceleration, expectedRuntimeType);
         }
 
@@ -140,7 +140,7 @@ namespace userspace_backend_tests.SerializationTests
             ];
 
             var deserializedText = JsonSerializer.Deserialize<AccelerationOnlyObject>(textToDeserialize);
-            Assert.AreEqual(Acceleration.AccelerationDefinitionType.LookupTable, deserializedText.Acceleration.Type);
+            Assert.AreEqual(Acceleration.AccelerationDefinitionType.LookupTable, deserializedText!.Acceleration.Type);
             var actualLookupTableAccel = deserializedText.Acceleration as LookupTableAccel;
             Assert.IsNotNull(actualLookupTableAccel);
             Assert.AreEqual(LookupTableType.Velocity, actualLookupTableAccel.ApplyAs);

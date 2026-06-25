@@ -129,7 +129,8 @@ impl DriverConfig {
         })
     }
 
-    /// Empty config (no profiles/devices, embedded default device_config); mirrors a default C++ `driver_config`, the active state pre-first-apply and post-deactivate.
+    /// Empty config (no profiles/devices, embedded default device_config)
+    /// mirrors a default C++ `driver_config`, the active state pre-first-apply and post-deactivate.
     pub fn empty() -> Self {
         let default_device_config = default_device_config();
         let mut m = Map::new();
@@ -154,7 +155,8 @@ impl DriverConfig {
         &self.raw
     }
 
-    /// Pretty JSON (for save-to-file); byte-stable against the C++ serializer
+    /// Pretty JSON (for save-to-file)
+    /// byte-stable against the C++ serializer
     /// for canonical input (see tests).
     pub fn to_pretty_string(&self) -> String {
         serde_json::to_string_pretty(&self.raw).unwrap_or_default()

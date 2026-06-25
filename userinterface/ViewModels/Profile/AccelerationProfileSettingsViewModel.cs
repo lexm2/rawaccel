@@ -28,9 +28,9 @@ namespace userinterface.ViewModels.Profile
         {
             AccelerationBE = accelerationBE;
             AccelerationFormulaSettings = new AccelerationFormulaSettingsViewModel(
-                accelerationBE.GetSelectable(BEData.AccelerationDefinitionType.Formula) as BE.IFormulaAccelModel, notificationService);
+                (BE.IFormulaAccelModel)accelerationBE.GetSelectable(BEData.AccelerationDefinitionType.Formula), notificationService);
             AccelerationLUTSettings = new AccelerationLUTSettingsViewModel(
-                accelerationBE.GetSelectable(BEData.AccelerationDefinitionType.LookupTable) as BE.ILookupTableDefinitionModel);
+                (BE.ILookupTableDefinitionModel)accelerationBE.GetSelectable(BEData.AccelerationDefinitionType.LookupTable));
             AnisotropySettings = new AnisotropyProfileSettingsViewModel(accelerationBE.Anisotropy, localizationService);
             CoalescionSettings = new CoalescionProfileSettingsViewModel(accelerationBE.Coalescion);
             // TODO: editable settings composition

@@ -89,7 +89,7 @@ namespace userspace_backend.Model
 
         public IHiddenModel Hidden { get; set; }
 
-        public RaProfile CurrentValidatedDriverProfile { get; protected set; }
+        public RaProfile CurrentValidatedDriverProfile { get; protected set; } = null!;
 
         public ICurvePreview XCurvePreview { get; protected set; }
 
@@ -133,8 +133,8 @@ namespace userspace_backend.Model
                 snap = Hidden.AngleSnappingDegrees.ModelValue,
                 maximumSpeed = Hidden.SpeedCap.ModelValue,
 
-                // Driver supports a speed floor (common/rawaccel-base.hpp); UI doesn't
-                // expose one, keep pinned at 0.
+                // Driver supports a speed floor (common/rawaccel-base.hpp)
+                // UI doesn't expose one, keep pinned at 0.
                 minimumSpeed = 0,
                 inputSpeedArgs = new RaSpeedArgs
                 {

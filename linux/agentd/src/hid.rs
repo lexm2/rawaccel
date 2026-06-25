@@ -129,7 +129,8 @@ fn process_input(g: &GlobalState, usages: &[u32], flags: u32, rep: &mut PerRepor
     if g.report_size > MAX_REPORT_SIZE || g.report_count > MAX_REPORT_COUNT {
         return false;
     }
-    // ReportCount x ReportSize bits, one Usage each; repeat last (HID 1.11 6.2.2.7).
+    // ReportCount x ReportSize bits, one Usage each
+    // repeat last (HID 1.11 6.2.2.7).
     for i in 0..g.report_count {
         let usage = if usages.is_empty() {
             0
@@ -187,7 +188,8 @@ pub fn parse_mouse_descriptor(desc: &[u8]) -> Option<MouseDescriptor> {
     let mut usage_max_set = false;
 
     let mut coll_usages: Vec<u32> = Vec::new();
-    // Depth (coll_usages.len()) at which we entered a mouse/pointer collection; None when outside one.
+    // Depth (coll_usages.len()) at which we entered a mouse/pointer collection
+    // None when outside one.
     let mut mouse_depth: Option<usize> = None;
     let mut rep = PerReport::default();
     let mut result: Option<MouseDescriptor> = None;
@@ -248,7 +250,8 @@ pub fn parse_mouse_descriptor(desc: &[u8]) -> Option<MouseDescriptor> {
                     }
                     g.has_report_id = true;
                     g.report_id = uv as u8;
-                    // new Report ID resets the cursor; commit the prior report
+                    // new Report ID resets the cursor
+                    // commit the prior report
                     if rep.report_id != g.report_id || rep.has_report_id != g.has_report_id {
                         commit_if_complete(&rep, &mut result);
                         rep = PerReport {
@@ -388,7 +391,8 @@ pub fn validate_for_bpf(d: &MouseDescriptor) -> BpfDecision {
         return Reject("Y is unsigned".into());
     }
 
-    // layout offsets are u8; reject >255 (past any real mouse report)
+    // layout offsets are u8
+    // reject >255 (past any real mouse report)
     let prefix = if d.has_report_id { 1u32 } else { 0 };
     let dx_off = prefix + d.x.bit_offset_in_payload / 8;
     let dy_off = prefix + d.y.bit_offset_in_payload / 8;
@@ -426,7 +430,8 @@ mod tests {
         0x7F, 0x75, 0x10, 0x95, 0x02, 0x81, 0x06, 0xC0, 0xC0,
     ];
 
-    // 12-bit X packed alongside Y in a 24-bit field; not byte-aligned -> rejected.
+    // 12-bit X packed alongside Y in a 24-bit field
+    // not byte-aligned -> rejected.
     const PACKED_12BIT: &[u8] = &[
         0x05, 0x01, 0x09, 0x02, 0xA1, 0x01, 0x09, 0x01, 0xA1, 0x00, 0x05, 0x01, 0x09, 0x30, 0x09,
         0x31, 0x16, 0x01, 0xF8, 0x26, 0xFF, 0x07, 0x75, 0x0C, 0x95, 0x02, 0x81, 0x06, 0xC0, 0xC0,

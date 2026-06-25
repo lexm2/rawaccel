@@ -11,13 +11,13 @@ namespace userspace_backend.Model.EditableSettings
         /// This value can be bound in UI for direct editing
         /// </summary>
         [ObservableProperty]
-        public string interfaceValue;
+        public string interfaceValue = null!;
 
         /// <summary>
         /// This value can be bound in UI for logic based on validated input
         /// </summary>
         [ObservableProperty]
-        public T modelValue;
+        public T modelValue = default!;
 
         public T CurrentValidatedValue => ModelValue;
 
@@ -31,7 +31,7 @@ namespace userspace_backend.Model.EditableSettings
             IUserInputParser<T> parser,
             IModelValueValidator<T> validator,
             bool autoUpdateFromInterface = false,
-            string localizationKey = null,
+            string? localizationKey = null,
             ILogger? logger = null)
         {
             DisplayName = displayName;
@@ -50,7 +50,7 @@ namespace userspace_backend.Model.EditableSettings
         /// </summary>
         public string DisplayName { get; }
 
-        public string LocalizationKey { get; set; }
+        public string? LocalizationKey { get; set; }
 
         public string DisplayText =>
             !string.IsNullOrEmpty(LocalizationKey)
@@ -115,7 +115,7 @@ namespace userspace_backend.Model.EditableSettings
         {
             bool previous = AllowAutoUpdateFromInterface;
             AllowAutoUpdateFromInterface = false;
-            InterfaceValue = ModelValue?.ToString();
+            InterfaceValue = ModelValue?.ToString() ?? string.Empty;
             AllowAutoUpdateFromInterface = true;
         }
 

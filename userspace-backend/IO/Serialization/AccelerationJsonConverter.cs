@@ -48,7 +48,7 @@ namespace userspace_backend.IO.Serialization
                 throw new JsonException("Type must be a string.");
             }
 
-            string typeString = reader.GetString();
+            string? typeString = reader.GetString();
 
             if (string.IsNullOrEmpty(typeString))
             {
@@ -113,17 +113,17 @@ namespace userspace_backend.IO.Serialization
             switch (formulaType)
             {
                 case AccelerationFormulaType.Synchronous:
-                    return JsonSerializer.Deserialize<SynchronousAccel>(ref readerFromStart);
+                    return JsonSerializer.Deserialize<SynchronousAccel>(ref readerFromStart)!;
                 case AccelerationFormulaType.Linear:
-                    return JsonSerializer.Deserialize<LinearAccel>(ref readerFromStart);
+                    return JsonSerializer.Deserialize<LinearAccel>(ref readerFromStart)!;
                 case AccelerationFormulaType.Classic:
-                    return JsonSerializer.Deserialize<ClassicAccel>(ref readerFromStart);
+                    return JsonSerializer.Deserialize<ClassicAccel>(ref readerFromStart)!;
                 case AccelerationFormulaType.Power:
-                    return JsonSerializer.Deserialize<PowerAccel>(ref readerFromStart);
+                    return JsonSerializer.Deserialize<PowerAccel>(ref readerFromStart)!;
                 case AccelerationFormulaType.Natural:
-                    return JsonSerializer.Deserialize<NaturalAccel>(ref readerFromStart);
+                    return JsonSerializer.Deserialize<NaturalAccel>(ref readerFromStart)!;
                 case AccelerationFormulaType.Jump:
-                    return JsonSerializer.Deserialize<JumpAccel>(ref readerFromStart);
+                    return JsonSerializer.Deserialize<JumpAccel>(ref readerFromStart)!;
                 default:
                     throw new JsonException($"Unknown formula type {formulaTypeString}");
             }
@@ -142,7 +142,7 @@ namespace userspace_backend.IO.Serialization
 
         private static LookupTableAccel CreateLookupTableAccel(ref Utf8JsonReader readerFromStart)
         {
-            return JsonSerializer.Deserialize<LookupTableAccel>(ref readerFromStart);
+            return JsonSerializer.Deserialize<LookupTableAccel>(ref readerFromStart)!;
         }
 
         public override void Write(Utf8JsonWriter writer, Acceleration value, JsonSerializerOptions options)
@@ -157,7 +157,8 @@ namespace userspace_backend.IO.Serialization
             if (node is JsonObject obj)
             {
                 obj["Type"] = GetDiscriminator(value);
-                // FormulaType is folded into Type ("Formula/Classic"); don't emit twice.
+                // FormulaType is folded into Type ("Formula/Classic")
+                // don't emit twice.
                 obj.Remove("FormulaType");
             }
             node?.WriteTo(writer);
@@ -172,7 +173,7 @@ namespace userspace_backend.IO.Serialization
         };
 
         // Cache derived options keyed by source identity. A reader/writer reuses
-        // one JsonSerializerOptions for its lifetime, so this is a near-perfect hit;
+        // one JsonSerializerOptions for its lifetime, so this is a near-perfect hit
         // a different source just re-derives. The first-call race wastes at most
         // one copy -- no locking needed.
         private JsonSerializerOptions? cachedSource;

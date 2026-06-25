@@ -1,14 +1,6 @@
 # Cross-distro CI for the Linux HID-BPF agent.
-#
-# The BPF program uses the struct_ops HID-BPF API (hid_bpf_ops / hid_device_event),
-# which only exists on Linux >= 6.11 with CONFIG_HID_BPF=y. A true multi-kernel
-# load-verify needs HID-BPF-enabled kernels; the readily-available prebuilt CI
-# kernel images (cilium/ci-kernels) are built WITHOUT CONFIG_HID_BPF, so they can't
-# load our program, and the hosted runner's own kernel lacks it too -- a runner load
-# attempt would only ever skip, so it's not worth running. Until an HID-BPF kernel
-# source is wired in (self-hosted runner or custom-built kernels), real verifier-load
-# and cross-kernel verification are covered by `rawaccel doctor` + real-hardware
-# testing. CI here validates the build + unprivileged test suite on each distro.
+# No BPF load-verify: HID-BPF needs kernel >= 6.11 + CONFIG_HID_BPF=y
+# CI validates the build + unprivileged test suite per disto
 name: linux-ci
 
 on:
@@ -24,26 +16,24 @@ defaults:
     shell: bash
 
 jobs:
-  # 1) Build everything + run the unprivileged suite (cargo + ctest + parity) and
-  #    the .NET GUI/backend. No BPF load: the runner kernel lacks HID-BPF.
+  # 1) Build everything + run the unprivileged suite (cargo + ctest + parity) and the .NET GUI/backend.
   build-and-test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install build deps
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake clang llvm libbpf-dev pkg-config \
             libsystemd-dev nlohmann-json3-dev build-essential linux-tools-generic
-          # noble has no standalone bpftool (virtual pkg); the shim can't match the
-          # Azure runner kernel, so symlink the generic linux-tools binary onto PATH.
+          # noble has no standalone bpftool; symlink the generic linux-tools binary onto PATH.
           sudo ln -sf "$(find /usr/lib/linux-tools* -name bpftool 2>/dev/null | sort | tail -1)" /usr/local/bin/bpftool
           bpftool version
       - uses: dtolnay/rust-toolchain@stable
       - name: Core tests (cargo + ctest + parity, no root)
         run: ./linux/run-tests.sh --core
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0"
       - name: Build .NET GUI + userspace backend (net8.0)
@@ -52,10 +42,8 @@ jobs:
           dotnet build userinterface/userinterface.csproj -c Release
           dotnet test userspace-backend-tests/userspace-backend-tests.csproj -c Release
 
-  # 2) Distro build matrix -- catches per-distro toolchain/dependency drift
-  #    (libbpf/clang/bpftool versions, package names). BUILD ONLY: containers share
-  #    the host kernel, so no BPF load happens here. /sys/kernel/btf/vmlinux from the
-  #    runner is mounted read-only, which is enough to generate vmlinux.h.
+  # 2) Distro build matrix -- catches per-distro toolchain/dependency drift. Build only;
+  #    the runner's /sys/kernel/btf/vmlinux is enough to generate vmlinux.h, no BPF load.
   distro-build:
     runs-on: ubuntu-24.04
     needs: build-and-test
@@ -67,31 +55,24 @@ jobs:
             install: dnf -y install cmake clang llvm bpftool libbpf-devel pkgconf-pkg-config systemd-devel nlohmann-json-devel rust cargo gcc-c++ make
           - distro: archlinux:latest
             install: pacman -Sy --noconfirm cmake clang llvm bpf libbpf pkgconf systemd nlohmann-json rust make gcc
-          # ca-certificates first + explicit update-ca-certificates: the minimal
-          # base images ship no CA bundle, and installing it in the same --no-
-          # install-recommends transaction as everything else doesn't reliably
-          # generate /etc/ssl/certs/ca-certificates.crt, so the distro cargo's
-          # HTTPS fetch of crates.io fails ([77] SSL CA cert).
+          # ca-certificates in its own transaction first: the minimal base image ships no
+          # CA bundle, and bundling it with everything else leaves crates.io HTTPS broken ([77]).
           - distro: debian:trixie
             install: apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates && apt-get install -y --no-install-recommends cmake clang llvm bpftool libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev rustc cargo build-essential
-          # Ubuntu 24.04 LTS ships cargo 1.75, too old for the dep tree (clap pulls
-          # edition2024, needs cargo >= 1.85), so the Rust side builds via rustup
-          # instead (see the conditional build step). The C++/BPF build still uses
-          # the distro toolchain, which is the real cross-distro signal here.
+          # Ubuntu 24.04 LTS cargo (1.75) is too old for the dep tree (needs >= 1.85), so
+          # the Rust side builds via rustup; the C++/BPF build still uses the distro toolchain.
           - distro: ubuntu:24.04
             install: apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates && apt-get install -y --no-install-recommends cmake clang llvm libbpf-dev pkg-config libsystemd-dev nlohmann-json3-dev build-essential linux-tools-generic curl
     container:
       image: ${{ matrix.distro }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install deps
         run: ${{ matrix.install }}
       - name: Ensure bpftool on PATH
-        # Ubuntu's linux-tools-common installs a /usr/sbin/bpftool SHIM that
-        # dispatches to the running kernel's tools (absent in a container), so it's
-        # on PATH but non-functional. Test that bpftool actually RUNS, not just that
-        # the name resolves; if not, symlink the real linux-tools binary (which
-        # /usr/local/bin shadows ahead of the shim). No-op on Fedora/Arch/Debian.
+        # Ubuntu's bpftool is a shim that dispatches to the running kernel's tools (absent
+        # in a container), so test that it actually RUNS and, if not, symlink the real
+        # linux-tools binary ahead of it on PATH. No-op on Fedora/Arch/Debian.
         run: |
           if ! bpftool version >/dev/null 2>&1; then
             ln -sf "$(find /usr/lib/linux-tools* -name bpftool 2>/dev/null | sort | tail -1)" /usr/local/bin/bpftool

@@ -20,7 +20,8 @@ namespace userspace_backend.IO
 
         public override Settings Deserialize(string toRead)
         {
-            // Literal "null" -> defaults; malformed JSON throws for the caller
+            // Literal "null" -> defaults
+            // malformed JSON throws for the caller
             // (BackEndLoader.LoadSettings) to handle, matching sibling readers.
             return JsonSerializer.Deserialize<Settings>(toRead, JsonOptions) ?? new Settings();
         }

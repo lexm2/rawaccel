@@ -197,7 +197,8 @@ fn run_probe() -> i32 {
 
 fn install_signal_handlers() {
     let handler = on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t;
-    // SAFETY: installing a process-wide handler; on_signal only sets an atomic.
+    // SAFETY: installing a process-wide handler
+    // on_signal only sets an atomic.
     unsafe {
         libc::signal(libc::SIGINT, handler);
         libc::signal(libc::SIGTERM, handler);

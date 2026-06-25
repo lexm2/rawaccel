@@ -109,12 +109,14 @@ impl<B: Backend> Agent<B> {
         }
     }
 
-    /// Stage a config; calls within WRITE_DELAY collapse to the latest, tick() commits.
+    /// Stage a config
+    /// calls within WRITE_DELAY collapse to the latest, tick() commits.
     pub fn schedule_apply(&mut self, cfg: DriverConfig, now: Instant) {
         self.pending = Some((cfg, now + WRITE_DELAY));
     }
 
-    /// Commit a pending apply once its deadline passes; rebinds known devices.
+    /// Commit a pending apply once its deadline passes
+    /// rebinds known devices.
     /// Returns true if it fired.
     pub fn tick(&mut self, now: Instant) -> bool {
         match &self.pending {
@@ -128,7 +130,8 @@ impl<B: Backend> Agent<B> {
         true
     }
 
-    /// Reset to embedded default (noaccel) now, bypassing WRITE_DELAY; stays "active" with a default config rather than reporting none.
+    /// Reset to embedded default (noaccel) now, bypassing WRITE_DELAY
+    /// stays "active" with a default config rather than reporting none.
     pub fn deactivate(&mut self) {
         self.pending = None;
         self.apply(DriverConfig::empty());
@@ -136,7 +139,8 @@ impl<B: Backend> Agent<B> {
         self.rebind_all();
     }
 
-    /// Sets active state only; the apply timestamp is stamped by tick/deactivate, not by startup load (matches the C++ port).
+    /// Sets active state only
+    /// the apply timestamp is stamped by tick/deactivate, not by startup load (matches the C++ port).
     fn apply(&mut self, cfg: DriverConfig) {
         self.active = cfg;
         self.has_active = true;
@@ -175,7 +179,7 @@ impl<B: Backend> Agent<B> {
         }
     }
 
-    /// Non-empty when devices exist but none are attached (apply would no-op);
+    /// Non-empty when devices exist but none are attached (apply would no-op)
     /// surfaced as an apply error so the GUI/CLI doesn't report a false success.
     pub fn data_plane_failure(&self) -> Option<String> {
         let h = self.backend.health();
@@ -236,7 +240,8 @@ impl<B: Backend> Agent<B> {
     }
 
     /// Port of resolve_locked. First device entry whose id (== device_sysname) or
-    /// name matches wins, in list order; empty config fields never match. No match
+    /// name matches wins, in list order
+    /// empty config fields never match. No match
     /// -> first profile (or embedded default) + default_device_config.
     fn resolve(&self, info: &DeviceInfo) -> (Value, Value) {
         let default_profile = self

@@ -74,7 +74,8 @@ RA_TEST("Shim: modify matches a direct modifier::modify on a classic curve")
     ra::modifier_settings ref{};
     ra::modifier mod = reference_modifier(json_str, ref);
 
-    // skip v=0 (LUT builder samples the limit separately); representative speeds
+    // skip v=0 (LUT builder samples the limit separately)
+    // representative speeds
     for (double v : {1.0, 5.0, 20.0, 100.0}) {
         double ox = 0, oy = 0;
         ra_curve_modify(c, v, 0.0, 1.0, 1.0, &ox, &oy);

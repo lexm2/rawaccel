@@ -31,7 +31,8 @@ namespace userspace_backend.Driver.Linux
         }
 
         // RAWACCEL_SOCKET, then the system path, then the dev-launcher path
-        // under XDG_RUNTIME_DIR; first existing socket wins (works under both
+        // under XDG_RUNTIME_DIR
+        // first existing socket wins (works under both
         // systemd and linux/run-dev-agent.sh).
         private static string ResolveSocketPath()
         {
@@ -137,8 +138,9 @@ namespace userspace_backend.Driver.Linux
                 var respJson = client.Call("{\"cmd\":\"stats\"}");
                 var resp = JObject.Parse(respJson);
                 if (!resp.Value<bool>("ok")) return MouseSpeedSample.Zero;
-                // current_speed is the combined (hypot) magnitude for the single
-                // line; current_speed_x/_y are the genuine per-axis speeds for the
+                // current_speed is the combined (hypot) magnitude for the
+                // single line
+                // current_speed_x/_y are the genuine per-axis speeds for the
                 // two lines. Do NOT fall back x/y to combined: that would draw both
                 // per-axis lines on top of the same hypot value (coupled). If a
                 // (stale) agent omits the per-axis fields, leave them 0 so the

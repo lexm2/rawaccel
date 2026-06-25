@@ -1,6 +1,7 @@
 namespace RawAccel.Contracts
 {
-    // Mirrors common/rawaccel-base.hpp; keep values in sync with the native side.
+    // Mirrors common/rawaccel-base.hpp
+    // keep values in sync with the native side.
     public static class RawAccelConstants
     {
         public const int PollRateMin = 125;

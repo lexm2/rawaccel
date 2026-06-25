@@ -87,7 +87,7 @@ namespace userspace_backend_tests.ModelTests
 
             protected override bool TryMapEditableSettingsCollectionsFromData(TestDataType data)
             {
-                return SubCollection.TryMapFromData(data.SubData);
+                return SubCollection.TryMapFromData(data.SubData!);
             }
 
             protected override bool TryMapEditableSettingsFromData(TestDataType data)

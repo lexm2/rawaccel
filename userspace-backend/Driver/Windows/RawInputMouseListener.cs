@@ -13,9 +13,10 @@ namespace userspace_backend.Driver.Windows
     // window + thread (Avalonia exposes no WndProc to hook). Reports in chart
     // units: counts/ms normalized to 1000 DPI.
     //
-    // Raw input keys devices by HANDLE; config keys DPI by hardware-id. We map
-    // handle -> id via wrapper.dll's MultiHandleDevice; unmapped handles use the
-    // default factor.
+    // Raw input keys devices by HANDLE
+    // config keys DPI by hardware-id. We map handle -> id via
+    // wrapper.dll's MultiHandleDevice
+    // unmapped handles use the default factor.
     internal sealed class RawInputMouseListener : IDisposable
     {
         // No movement for this long => Zero (line eases back to rest).
@@ -59,12 +60,14 @@ namespace userspace_backend.Driver.Windows
         private volatile bool running;
         private volatile bool disposed;
 
-        // Latest speed (under gate); lastEventTimestamp is the freshness +
+        // Latest speed (under gate)
+        // lastEventTimestamp is the freshness +
         // inter-event clock (Interlocked).
         private double lastX, lastY, lastCombined;
         private long lastEventTimestamp;
 
-        // handle -> NormalizedDpi/dpi; defaultFactor for the rest. Volatile +
+        // handle -> NormalizedDpi/dpi
+        // defaultFactor for the rest. Volatile +
         // build-once-publish keeps HandleRawInput lock-free on the hot path.
         private volatile Dictionary<IntPtr, double> handleFactors = new();
         private double defaultFactor = 1.0;
@@ -120,7 +123,8 @@ namespace userspace_backend.Driver.Windows
             RebuildHandleMap();
         }
 
-        // Current normalized input speed; Zero if idle/unavailable.
+        // Current normalized input speed
+        // Zero if idle/unavailable.
         public MouseSpeedSample CurrentSample()
         {
             if (!running) return MouseSpeedSample.Zero;
@@ -150,7 +154,8 @@ namespace userspace_backend.Driver.Windows
             uint tid = Volatile.Read(ref nativeThreadId);
             if (tid != 0)
             {
-                // Wake the loop; the thread tears down its own window/class.
+                // Wake the loop
+                // the thread tears down its own window/class.
                 PostThreadMessageW(tid, WM_QUIT, IntPtr.Zero, IntPtr.Zero);
             }
             thread?.Join(LifecycleTimeoutMs);
@@ -402,7 +407,8 @@ namespace userspace_backend.Driver.Windows
             public IntPtr hwndTarget;
         }
 
-        // Flattened RAWINPUTHEADER + RAWMOUSE; Padding mirrors the native
+        // Flattened RAWINPUTHEADER + RAWMOUSE
+        // Padding mirrors the native
         // union's 4-byte alignment after MouseFlags.
         [StructLayout(LayoutKind.Sequential)]
         private struct RAWINPUTMOUSE

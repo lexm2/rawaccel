@@ -9,7 +9,8 @@
 #   ./run-tests.sh --root          (sudo) real BPF verifier load + bpftool cross-check
 #   ./run-tests.sh --all           everything the current privilege level allows
 #
-# Only --root and --fuzz need extra tooling/privilege; the rest run unprivileged.
+# Only --root and --fuzz need extra tooling/privilege
+# the rest run unprivileged.
 
 set -euo pipefail
 

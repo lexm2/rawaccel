@@ -2,15 +2,16 @@
 # Dev launcher for rawaccel-agentd. Builds if needed, runs the daemon under
 # sudo against a per-user socket in $XDG_RUNTIME_DIR, and chowns the socket
 # back to the calling user so the GUI (running unprivileged) can connect.
-# Not for production install; for that use `cmake --install` + systemctl.
+# Not for production install
+# for that use `cmake --install` + systemctl.
 
 set -euo pipefail
 
 LINUX_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${LINUX_DIR}/build"
-# CMake builds the C++ data-plane .so + shim + BPF object; cargo builds the
-# Rust daemon. The daemon's rpath defaults to ${BUILD_DIR}, so it finds
-# libra_backend.so there without LD_LIBRARY_PATH.
+# CMake builds the C++ data-plane .so + shim + BPF object
+# cargo builds the Rust daemon. The daemon's rpath defaults to ${BUILD_DIR}, so
+# it finds libra_backend.so there without LD_LIBRARY_PATH.
 AGENT="${LINUX_DIR}/target/release/rawaccel-agentd"
 SHIM="${BUILD_DIR}/librawaccel_common.so"
 BACKEND_LIB="${BUILD_DIR}/libra_backend.so"
@@ -20,7 +21,8 @@ SOCKET_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 SOCKET="${SOCKET_DIR}/rawaccel.sock"
 # Backend: auto (probe kernel, pick bpf if >= 6.11 else exit), bpf (force
 # HID-BPF), or noop (control plane only, for tests). The old evdev backend
-# was removed; HID-BPF is the only data-plane transport.
+# was removed
+# HID-BPF is the only data-plane transport.
 BACKEND="${1:-auto}"
 UID_NUM="$(id -u)"
 GID_NUM="$(id -g)"
@@ -71,8 +73,8 @@ shutdown() {
 }
 trap shutdown INT TERM
 
-# Loop because the first wait returns once the signal handler runs; the
-# agent may still need a moment to flush its shutdown path.
+# Loop because the first wait returns once the signal handler runs
+# the agent may still need a moment to flush its shutdown path.
 while kill -0 "${agent_pid}" 2>/dev/null; do
     wait "${agent_pid}" 2>/dev/null || true
 done
