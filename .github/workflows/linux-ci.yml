@@ -54,7 +54,7 @@ jobs:
           - distro: fedora:latest
             install: dnf -y install cmake clang llvm bpftool libbpf-devel pkgconf-pkg-config systemd-devel nlohmann-json-devel rust cargo gcc-c++ make
           - distro: archlinux:latest
-            install: pacman -Sy --noconfirm cmake clang llvm bpf libbpf pkgconf systemd nlohmann-json rust make gcc
+            install: pacman -Syu --noconfirm cmake clang llvm bpf libbpf pkgconf systemd nlohmann-json rust make gcc
           # ca-certificates in its own transaction first: the minimal base image ships no
           # CA bundle, and bundling it with everything else leaves crates.io HTTPS broken ([77]).
           - distro: debian:trixie
