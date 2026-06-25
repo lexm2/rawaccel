@@ -12,6 +12,9 @@
 
 char LICENSE[] SEC("license") = "GPL";
 
+#define RA_NS_PER_SEC 1000000000ULL
+#define RA_NS_PER_MS     1000000ULL
+
 /* hid_bpf kfunc prototypes (kernel exports via __ksym). */
 extern __u8 *hid_bpf_get_data(struct hid_bpf_ctx *ctx,
                               unsigned int offset,
@@ -70,13 +73,13 @@ static __always_inline __s32 read_signed(const __u8 *p, __u32 size)
 static __always_inline void write_signed(__u8 *p, __u32 size, __s32 v)
 {
     if (size == 2) {
-        if (v >  32767) v =  32767;
-        if (v < -32768) v = -32768;
+        if (v > RA_S16_MAX) v = RA_S16_MAX;
+        if (v < RA_S16_MIN) v = RA_S16_MIN;
         p[0] = (__u8)(v & 0xff);
         p[1] = (__u8)((v >> 8) & 0xff);
     } else {
-        if (v >  127) v =  127;
-        if (v < -128) v = -128;
+        if (v > RA_S8_MAX) v = RA_S8_MAX;
+        if (v < RA_S8_MIN) v = RA_S8_MIN;
         p[0] = (__u8)v;
     }
 }
@@ -135,8 +138,8 @@ int BPF_PROG(rawaccel_hid_device_event,
         dt_ms_q16 = RA_Q16_ONE;
     } else {
         __u64 dt_ns = now - st->last_ts_ns;
-        if (dt_ns > 1000000000ULL) dt_ns = 1000000000ULL;
-        __s32 dt = (__s32)((dt_ns << RA_Q16_SHIFT) / 1000000ULL);
+        if (dt_ns > RA_NS_PER_SEC) dt_ns = RA_NS_PER_SEC;
+        __s32 dt = (__s32)((dt_ns << RA_Q16_SHIFT) / RA_NS_PER_MS);
         if (dt < cfg->time_min_q16) dt = cfg->time_min_q16;
         if (cfg->time_max_q16 > 0 && dt > cfg->time_max_q16) dt = cfg->time_max_q16;
         dt_ms_q16 = dt;

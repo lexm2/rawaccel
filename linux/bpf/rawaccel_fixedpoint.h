@@ -36,8 +36,8 @@ RA_FP_INLINE __s32 ra_mul_q16(__s32 a, __s32 b)
 /* Saturate s64 into s32 range. */
 RA_FP_INLINE __s32 ra_sat_s32(__s64 v)
 {
-    if (v > 0x7fffffff) return 0x7fffffff;
-    if (v < -0x7fffffff) return -0x7fffffff;
+    if (v > RA_S32_MAX) return RA_S32_MAX;
+    if (v < -RA_S32_MAX) return -RA_S32_MAX;
     return (__s32)v;
 }
 
@@ -111,14 +111,17 @@ RA_FP_INLINE void ra_rotate_q16(__s64 *x, __s64 *y, __s32 cos_q16, __s32 sin_q16
     *y = ry;
 }
 
+/* Largest per-axis magnitude (2^30, Q16.16) so ax*ax + ay*ay stays inside u64. */
+#define RA_MAG_CLAMP_Q16 (1ULL << 30)
+
 /* Q16.16 vector magnitude via Newton (seed max(ax,ay), 4 iters), branchless for the verifier.
- * Inputs clamped to 2^30 so the squared sum stays in u64. */
+ * Inputs clamped to RA_MAG_CLAMP_Q16 so the squared sum stays in u64. */
 RA_FP_NOINLINE __s32 ra_magnitude_q16(__s64 x_q16, __s64 y_q16)
 {
     __u64 ax = (__u64)(x_q16 < 0 ? -x_q16 : x_q16);
     __u64 ay = (__u64)(y_q16 < 0 ? -y_q16 : y_q16);
-    if (ax > 0x40000000ULL) ax = 0x40000000ULL;
-    if (ay > 0x40000000ULL) ay = 0x40000000ULL;
+    if (ax > RA_MAG_CLAMP_Q16) ax = RA_MAG_CLAMP_Q16;
+    if (ay > RA_MAG_CLAMP_Q16) ay = RA_MAG_CLAMP_Q16;
 
     __u64 n = ax * ax + ay * ay;           /* mag^2 << 32 */
     __u64 x = ax > ay ? ax : ay;           /* seed in [mag/sqrt2, mag] */
@@ -129,7 +132,7 @@ RA_FP_NOINLINE __s32 ra_magnitude_q16(__s64 x_q16, __s64 y_q16)
     x = (x + n / x) >> 1;
     x = (x + n / x) >> 1;
 
-    return x > 0x7fffffff ? 0x7fffffff : (__s32)x;
+    return x > RA_S32_MAX ? RA_S32_MAX : (__s32)x;
 }
 
 /* Q16.16 angle constants. */

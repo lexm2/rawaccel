@@ -15,6 +15,13 @@
 #define RA_Q16_SHIFT 16
 #define RA_Q16_ONE   (1 << RA_Q16_SHIFT)
 
+/* Signed-integer saturation bounds (vmlinux.h is BTF-only, no S*_MAX macros). */
+#define RA_S32_MAX   0x7fffffff
+#define RA_S16_MAX   32767
+#define RA_S16_MIN   (-32768)
+#define RA_S8_MAX    127
+#define RA_S8_MIN    (-128)
+
 /* LUT density: 4096 entries -> step <= 0.025 in/s at typical NORMALIZED_DPI. */
 #define RA_LUT_SIZE 4096
 
