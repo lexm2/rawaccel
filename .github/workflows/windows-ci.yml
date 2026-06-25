@@ -28,4 +28,10 @@ jobs:
         # metaproj exposes no :Build, so select it with the SolutionFolder\Project:Rebuild form.
         run: msbuild rawaccel.sln "/t:Tests\wrapper-tests:Rebuild" /p:Configuration=Release /p:Platform=x64 /m
       - name: MSTest suite
-        run: vstest.console.exe wrapper-tests\bin\Release\wrapper-tests.dll /Platform:x64
+        # vstest.console.exe is not on PATH (setup-msbuild only adds msbuild); locate it via vswhere.
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vstest = & $vswhere -latest -products * -find '**\vstest.console.exe' | Select-Object -First 1
+          if (-not $vstest) { throw "vstest.console.exe not found" }
+          & $vstest wrapper-tests\bin\Release\wrapper-tests.dll /Platform:x64
