@@ -18,8 +18,11 @@ jobs:
       - uses: nuget/setup-nuget@v2
       - name: Restore NuGet (legacy packages.config)
         run: nuget restore rawaccel.sln
-      # Explicit x64: C++/CLI has no real AnyCPU config, only x64/ARM64.
+      # Build via the solution, not the csproj: the C# test project is AnyCPU but its
+      # C++/CLI dependency is x64-only. Only the .sln's per-project platform mapping
+      # (solution x64 -> wrapper-tests AnyCPU, wrapper x64) reconciles them. Targeting
+      # wrapper-tests pulls in wrapper/wrapper-deps but skips the WDK-only driver.
       - name: Build wrapper-tests (x64)
-        run: msbuild wrapper-tests\wrapper-tests.csproj /p:Configuration=Release /p:Platform=x64 /m
+        run: msbuild rawaccel.sln /t:wrapper-tests /p:Configuration=Release /p:Platform=x64 /m
       - name: MSTest suite
         run: vstest.console.exe wrapper-tests\bin\Release\wrapper-tests.dll /Platform:x64
