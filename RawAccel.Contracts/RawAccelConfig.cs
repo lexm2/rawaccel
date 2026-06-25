@@ -4,8 +4,7 @@ namespace RawAccel.Contracts
 {
     // Root JSON contract, consumed unchanged by both the Windows wrapper
     // (IOCTL) and Linux agent (socket) paths. Each POCO here mirrors the
-    // same-named wrapper.cpp type
-    // the JsonProperty names are the wire format
+    // same-named wrapper.cpp type the JsonProperty names are the wire format
     // (settings.json + driver), so renaming a field breaks compatibility.
     public class RawAccelConfig
     {

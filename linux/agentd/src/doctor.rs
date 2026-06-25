@@ -11,8 +11,18 @@ use crate::backend;
 #[derive(PartialEq)]
 enum Status {
     Pass,
+    Info,
     Warn,
     Fail,
+}
+
+// Where the kernel config came from. /boot/config-<release> is plaintext we can
+// grep; /proc/config.gz is present but compressed (no gzip dep here) so it's
+// skipped, not an error -- the libbpf probe is authoritative either way.
+enum ConfigSource {
+    Text(String),
+    Compressed,
+    Missing,
 }
 
 struct Check {
@@ -74,7 +84,7 @@ pub fn run(bpf_object_path: &str) -> i32 {
     // it fails these explain why. Unreadable config -> warn, not fail.
     let config = read_kernel_config();
     for flag in ["CONFIG_HID_BPF", "CONFIG_BPF_SYSCALL"] {
-        checks.push(config_check(flag, config.as_deref()));
+        checks.push(config_check(flag, &config));
     }
 
     // The compiled object the daemon loads.
@@ -101,6 +111,7 @@ pub fn run(bpf_object_path: &str) -> i32 {
     for c in &checks {
         let mark = match c.status {
             Status::Pass => "[ ok ]",
+            Status::Info => "[info]",
             Status::Warn => "[warn]",
             Status::Fail => {
                 failed = true;
@@ -120,15 +131,25 @@ pub fn run(bpf_object_path: &str) -> i32 {
 }
 
 // Look for `FLAG=y` / `FLAG=m` in the kernel config; classify against probe truth.
-fn config_check(flag: &str, config: Option<&str>) -> Check {
+fn config_check(flag: &str, config: &ConfigSource) -> Check {
     let name = format!("kernel config {flag}");
     match config {
-        None => Check {
+        // No plaintext config and no /proc/config.gz: can't say, so warn.
+        ConfigSource::Missing => Check {
             name,
             status: Status::Warn,
-            detail: "kernel config not readable (/boot/config-<release>)".into(),
+            detail: "kernel config not readable (no /boot/config-<release> or /proc/config.gz)"
+                .into(),
         },
-        Some(text) => {
+        // Config exists but is gzip'd; we don't decompress here. Not a problem --
+        // the struct_ops probe above is authoritative -- so report it as info.
+        ConfigSource::Compressed => Check {
+            name,
+            status: Status::Info,
+            detail: "present but compressed (/proc/config.gz); skipped, probe is authoritative"
+                .into(),
+        },
+        ConfigSource::Text(text) => {
             let set = text
                 .lines()
                 .any(|l| l == format!("{flag}=y") || l == format!("{flag}=m"));
@@ -141,17 +162,24 @@ fn config_check(flag: &str, config: Option<&str>) -> Check {
     }
 }
 
-// /boot/config-<release> is plaintext on most distros; /proc/config.gz needs gzip
-// (no dep here) so it's skipped -- the libbpf probe already gives ground truth.
-fn read_kernel_config() -> Option<String> {
+// /boot/config-<release> is plaintext on most distros and we grep it directly.
+// Arch/Fedora ship the config gzip'd at /proc/config.gz; decompressing needs a
+// gzip dep we deliberately avoid, so we just note its presence -- the libbpf
+// probe already gives ground truth on whether HID-BPF actually works.
+fn read_kernel_config() -> ConfigSource {
     let mut uts: libc::utsname = unsafe { std::mem::zeroed() };
-    if unsafe { libc::uname(&mut uts) } != 0 {
-        return None;
+    if unsafe { libc::uname(&mut uts) } == 0 {
+        let release = unsafe { CStr::from_ptr(uts.release.as_ptr()) }
+            .to_string_lossy()
+            .into_owned();
+        if let Ok(text) = fs::read_to_string(format!("/boot/config-{release}")) {
+            return ConfigSource::Text(text);
+        }
     }
-    let release = unsafe { CStr::from_ptr(uts.release.as_ptr()) }
-        .to_string_lossy()
-        .into_owned();
-    fs::read_to_string(format!("/boot/config-{release}")).ok()
+    if Path::new("/proc/config.gz").exists() {
+        return ConfigSource::Compressed;
+    }
+    ConfigSource::Missing
 }
 
 #[cfg(test)]
@@ -160,11 +188,15 @@ mod tests {
 
     #[test]
     fn config_flag_classification() {
-        let cfg = "CONFIG_HID_BPF=y\nCONFIG_BPF_SYSCALL=m\n# CONFIG_FOO is not set\n";
-        assert!(config_check("CONFIG_HID_BPF", Some(cfg)).status == Status::Pass);
-        assert!(config_check("CONFIG_BPF_SYSCALL", Some(cfg)).status == Status::Pass);
-        assert!(config_check("CONFIG_FOO", Some(cfg)).status == Status::Fail);
-        // Unreadable config is a warning, never a hard fail (probe is authoritative).
-        assert!(config_check("CONFIG_HID_BPF", None).status == Status::Warn);
+        let cfg = ConfigSource::Text(
+            "CONFIG_HID_BPF=y\nCONFIG_BPF_SYSCALL=m\n# CONFIG_FOO is not set\n".into(),
+        );
+        assert!(config_check("CONFIG_HID_BPF", &cfg).status == Status::Pass);
+        assert!(config_check("CONFIG_BPF_SYSCALL", &cfg).status == Status::Pass);
+        assert!(config_check("CONFIG_FOO", &cfg).status == Status::Fail);
+        // Compressed config (Arch/Fedora) is info, not a warning or fail.
+        assert!(config_check("CONFIG_HID_BPF", &ConfigSource::Compressed).status == Status::Info);
+        // No config source at all is a warning, never a hard fail (probe is authoritative).
+        assert!(config_check("CONFIG_HID_BPF", &ConfigSource::Missing).status == Status::Warn);
     }
 }
