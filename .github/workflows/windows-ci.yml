@@ -23,9 +23,9 @@ jobs:
       # (solution x64 -> wrapper-tests AnyCPU, wrapper x64) reconciles them. Targeting
       # wrapper-tests pulls in wrapper/wrapper-deps but skips the WDK-only driver.
       - name: Build wrapper-tests (x64)
-        # Bare /t:wrapper-tests cascades MSB4057 to every project on VS2019 16.10+; the
-        # metaproj only exposes :Rebuild/:Clean/:Publish colon targets (no :Build), so
-        # select the single project with ProjectName:Rebuild.
-        run: msbuild rawaccel.sln /t:wrapper-tests:Rebuild /p:Configuration=Release /p:Platform=x64 /m
+        # wrapper-tests lives in the "Tests" solution folder, so its metaproj target is
+        # "Tests\wrapper-tests". Bare names cascade MSB4057 on VS2019 16.10+, and the
+        # metaproj exposes no :Build, so select it with the SolutionFolder\Project:Rebuild form.
+        run: msbuild rawaccel.sln "/t:Tests\wrapper-tests:Rebuild" /p:Configuration=Release /p:Platform=x64 /m
       - name: MSTest suite
         run: vstest.console.exe wrapper-tests\bin\Release\wrapper-tests.dll /Platform:x64
